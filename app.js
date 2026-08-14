@@ -412,21 +412,104 @@ function ticketCardHtml(t){
   </div>`;
 }
 
-function renderCalendar(){
-  var wrap = el('<div></div>');
-  var events = [];
-  DB.tickets.forEach(function(t){ if(t.due_date) events.push({date:t.due_date,label:typeIcon(t.type)+' '+t.title+' due',type:'Deadline'}); });
-  DB.meetings.forEach(function(m){ events.push({date:m.date,label:'Meeting: '+m.title,type:'Meeting'}); });
-  DB.projects.forEach(function(p){ events.push({date:p.target_date,label:'Project: '+p.name+' target',type:'Milestone'}); });
-  events.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+var CAL_EVENTS_BY_DATE = {};
 
-  wrap.innerHTML = '<div class="section-title">Agenda - Meetings, Deadlines, Deployments, Releases, Milestones</div>' +
-    '<div class="card"><div id="agendaList"></div></div>';
-  var box = wrap.querySelector('#agendaList');
-  box.innerHTML = events.length ? events.map(function(ev){
-    return '<div class="thin-row"><span class="thin-tag mono" style="width:60px">'+fmtDate(ev.date)+'</span><span class="thin-title">'+ev.label+'</span><span class="thin-tag">'+ev.type+'</span></div>';
-  }).join('') : '<div class="empty">Nothing scheduled.</div>';
+function renderCalendar(){
+  if(!STATE.calendarMonth) STATE.calendarMonth = new Date();
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;">
+      <span id="calMonthLabel" style="font-size:15px;color:var(--text);text-transform:none;letter-spacing:0;"></span>
+      <span style="margin-left:auto;display:flex;gap:6px;">
+        <button class="cal-nav-btn" onclick="shiftCalMonth(-1)">Prev</button>
+        <button class="btn btn-ghost" onclick="shiftCalMonth(0)">Today</button>
+        <button class="cal-nav-btn" onclick="shiftCalMonth(1)">Next</button>
+      </span>
+    </div>
+    <div id="calSyncNote" class="thin-tag" style="margin-bottom:10px;">Checking calendar sync...</div>
+    <div class="card" style="padding:14px;" id="calGridCard"><div class="empty">Loading calendar...</div></div>
+    <div class="section-title">Selected Day</div>
+    <div class="card" id="calAgenda"><div class="empty">Pick a day above.</div></div>
+  `;
+
+  function addEv(map, dateStr, label, type, link){
+    if(!dateStr) return;
+    (map[dateStr] = map[dateStr] || []).push({label:label, type:type, link:link||''});
+  }
+
+  function buildLocalEvents(map){
+    DB.tickets.forEach(function(t){ if(t.due_date) addEv(map, t.due_date.slice(0,10), typeIcon(t.type)+' '+t.title+' due', 'Deadline'); });
+    DB.projects.forEach(function(p){ if(p.target_date) addEv(map, p.target_date.slice(0,10), 'Project: '+p.name+' target', 'Milestone'); });
+    DB.meetings.forEach(function(m){ if(m.date) addEv(map, m.date.slice(0,10), 'Meeting: '+m.title, 'Meeting', m.meeting_link); });
+  }
+
+  function paintGrid(eventsByDate){
+    CAL_EVENTS_BY_DATE = eventsByDate;
+    var month = STATE.calendarMonth;
+    wrap.querySelector('#calMonthLabel').textContent = month.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    var y = month.getFullYear(), m = month.getMonth();
+    var startOffset = new Date(y,m,1).getDay();
+    var daysInMonth = new Date(y,m+1,0).getDate();
+    var todayStr = new Date().toISOString().slice(0,10);
+
+    var html = '<div class="cal-dow-row">' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('') + '</div><div class="cal-cells">';
+    for(var i=0;i<startOffset;i++) html += '<div class="cal-cell cal-cell-empty"></div>';
+    for(var d=1; d<=daysInMonth; d++){
+      var dateStr = y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      var evs = eventsByDate[dateStr] || [];
+      html += `<div class="cal-cell${dateStr===todayStr?' cal-cell-today':''}" id="cal-${dateStr}" onclick="showCalDay('${dateStr}')">
+        <div class="cal-daynum">${d}</div>
+        ${evs.slice(0,3).map(function(e){return '<div class="cal-ev">'+e.label+'</div>';}).join('')}
+        ${evs.length>3 ? '<div class="cal-more">+'+(evs.length-3)+' more</div>' : ''}
+      </div>`;
+    }
+    html += '</div>';
+    wrap.querySelector('#calGridCard').innerHTML = html;
+    showCalDay(todayStr);
+  }
+
+  var eventsByDate = {};
+  buildLocalEvents(eventsByDate);
+
+  if (WORKSPACE_MODE) {
+    api('getCalendarEvents', {}).then(function(res){
+      var note = wrap.querySelector('#calSyncNote');
+      if(res.ok){
+        note.innerHTML = 'Synced with ' + res.calendarUsed + ' - ' + res.events.length + ' event(s) pulled in.';
+        res.events.forEach(function(e){
+          if(!e.start) return;
+          addEv(eventsByDate, e.start.slice(0,10), 'Calendar: '+e.title, 'Calendar', e.htmlLink);
+        });
+      } else {
+        note.innerHTML = '<span style="color:var(--red)">Not synced with Google Calendar: '+res.error+'</span>';
+      }
+      paintGrid(eventsByDate);
+    });
+  } else {
+    wrap.querySelector('#calSyncNote').textContent = 'Calendar sync only applies once this is running through Apps Script.';
+    paintGrid(eventsByDate);
+  }
   return wrap;
+}
+
+function shiftCalMonth(dir){
+  var d = STATE.calendarMonth || new Date();
+  STATE.calendarMonth = (dir === 0) ? new Date() : new Date(d.getFullYear(), d.getMonth()+dir, 1);
+  render();
+}
+
+function showCalDay(dateStr){
+  document.querySelectorAll('.cal-cell').forEach(function(c){ c.classList.remove('cal-cell-selected'); });
+  var cell = document.getElementById('cal-'+dateStr);
+  if(cell) cell.classList.add('cal-cell-selected');
+  var box = document.getElementById('calAgenda');
+  if(!box) return;
+  var evs = CAL_EVENTS_BY_DATE[dateStr] || [];
+  box.innerHTML = '<div class="thin-tag" style="margin-bottom:8px;">'+fmtDate(dateStr)+'</div>' +
+    (evs.length ? evs.map(function(e){
+      var linkHtml = e.link ? ` <a href="${e.link}" target="_blank" style="color:var(--blue);">Open</a>` : '';
+      return `<div class="thin-row"><span class="thin-title">${e.label}</span><span class="thin-tag">${e.type}${linkHtml}</span></div>`;
+    }).join('') : '<div class="empty">Nothing scheduled.</div>');
 }
 
 function renderProjects(){
@@ -521,9 +604,25 @@ function saveScheduledMeeting(){
     if(WORKSPACE_MODE && res.meeting){ DB.meetings.push(res.meeting); }
     closeModal('scheduleMeetingModalBg');
     goTo('meetings');
-    if(res.calendar_status && !res.calendar_status.ok){
-      alert('Meeting scheduled and invitees notified on Slack, but the calendar event could not be created: '+res.calendar_status.error+'\n\nInvitees will NOT get an automatic email invite until this is fixed.');
+
+    var lines = [];
+    if(res.calendar_status && res.calendar_status.ok){
+      lines.push('Calendar: event created on '+res.calendar_status.calendarUsed+'.');
+      lines.push('Attendees on the event: '+(res.calendar_status.attendees||[]).join(', ') || '(none)');
+      lines.push('Event link: '+res.calendar_status.eventLink);
+    } else if(res.calendar_status){
+      lines.push('Calendar: FAILED - '+res.calendar_status.error);
     }
+    if(res.invitee_emails_used){
+      lines.push('Emails looked up for invitees: '+(res.invitee_emails_used.join(', ')||'(none found - check Team tab emails)'));
+    }
+    if(res.slack_statuses && res.slack_statuses.length){
+      lines.push('Slack DMs:');
+      res.slack_statuses.forEach(function(s){
+        lines.push('  - '+s.name+': '+(s.ok ? 'sent' : 'FAILED - '+s.error));
+      });
+    }
+    alert(lines.join('\n'));
   });
 }
 
