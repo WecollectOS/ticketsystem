@@ -521,6 +521,9 @@ function saveScheduledMeeting(){
     if(WORKSPACE_MODE && res.meeting){ DB.meetings.push(res.meeting); }
     closeModal('scheduleMeetingModalBg');
     goTo('meetings');
+    if(res.calendar_status && !res.calendar_status.ok){
+      alert('Meeting scheduled and invitees notified on Slack, but the calendar event could not be created: '+res.calendar_status.error+'\n\nInvitees will NOT get an automatic email invite until this is fixed.');
+    }
   });
 }
 
@@ -852,9 +855,9 @@ function renderOneOnOnes(){
 
 function trackingCardsHtml(cards){
   if(!cards.length) return '<div class="empty">No open tracking cards.</div>';
-  return cards.map(function(t){
-    return `<div class="thin-row"><input type="checkbox" onchange="markTrackingCardDone('${t.ticket_id}',this.checked)"><span class="thin-title">${t.title}</span><span class="thin-tag">${t.priority}</span></div>`;
-  }).join('');
+  return '<div style="display:flex;flex-wrap:wrap;gap:10px;">' +
+    cards.map(function(t){ return `<div style="width:220px;">${ticketCardHtml(t)}</div>`; }).join('') +
+    '</div>';
 }
 
 function sessionsHtml(sessions){
