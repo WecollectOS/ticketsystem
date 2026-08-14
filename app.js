@@ -609,22 +609,128 @@ function showCalDay(dateStr){
     }).join('') : '<div class="empty">Nothing scheduled.</div>');
 }
 
+function departmentPills(departmentsStr){
+  return (departmentsStr||'').split(',').filter(Boolean).map(function(d){
+    return '<span class="pill pill-dept">'+d.trim()+'</span>';
+  }).join(' ');
+}
+
 function renderProjects(){
   var wrap = el('<div></div>');
-  wrap.innerHTML = '<div class="section-title">Projects</div><div class="stat-grid" id="projGrid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>';
+  wrap.innerHTML = '<div class="section-title">Projects <button class="btn btn-ghost" style="margin-left:10px" onclick="openNewProjectModal()">+ New Project</button></div><div class="stat-grid" id="projGrid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>';
   var grid = wrap.querySelector('#projGrid');
   grid.innerHTML = DB.projects.map(function(p){
     var tix = DB.tickets.filter(function(t){return t.project_id===p.project_id;});
     var done = tix.filter(function(t){return t.status==='Done';}).length;
     var pct = tix.length ? Math.round(done/tix.length*100) : 0;
-    return `<div class="card">
-      <div class="card-h">${p.name} <span class="pill pill-dept">${p.department}</span></div>
+    return `<div class="card" style="cursor:pointer;" onclick="openProjectDetail('${p.project_id}')">
+      <div class="card-h">${p.name}</div>
+      <div style="margin-bottom:8px;">${departmentPills(p.departments||p.department)}</div>
       <div class="thin-tag" style="margin-bottom:8px;">Phase: <b>${p.phase}</b> - Target ${fmtDate(p.target_date)}</div>
       <div class="wl-bar-track" style="margin-bottom:6px;"><div class="wl-bar-fill" style="width:${pct}%"></div></div>
       <div class="thin-tag">${done}/${tix.length} tickets done</div>
     </div>`;
-  }).join('') || '<div class="empty">No projects yet.</div>';
+  }).join('') || '<div class="empty">No projects yet. Click "+ New Project" to create one.</div>';
   return wrap;
+}
+
+var NEW_PROJECT_DEPTS = [];
+
+function openNewProjectModal(){
+  NEW_PROJECT_DEPTS = [];
+  document.getElementById('proj_name').value = '';
+  document.getElementById('proj_phase').value = '';
+  document.getElementById('proj_start').value = '';
+  document.getElementById('proj_target').value = '';
+  document.getElementById('proj_status').value = 'Active';
+  renderProjectDeptPicker();
+  renderProjectTicketPicker();
+  openModal('newProjectModalBg');
+}
+
+function renderProjectDeptPicker(){
+  var box = document.getElementById('proj_depts_picker');
+  var depts = ['Engineering','Operations','Growth'];
+  box.innerHTML = depts.map(function(d){
+    var active = NEW_PROJECT_DEPTS.indexOf(d) > -1;
+    return `<span class="ms-chip${active?' ms-chip-active':''}" onclick="toggleProjectDept('${d}')">${d}</span>`;
+  }).join('');
+}
+function toggleProjectDept(d){
+  var i = NEW_PROJECT_DEPTS.indexOf(d);
+  if(i>-1) NEW_PROJECT_DEPTS.splice(i,1); else NEW_PROJECT_DEPTS.push(d);
+  renderProjectDeptPicker();
+}
+
+function renderProjectTicketPicker(){
+  var box = document.getElementById('proj_tickets_picker');
+  var unassigned = visibleTickets().filter(function(t){ return !t.project_id; });
+  box.innerHTML = unassigned.length ? unassigned.map(function(t){
+    return `<label class="thin-row" style="cursor:pointer;"><input type="checkbox" value="${t.ticket_id}" class="proj-ticket-cb" style="margin-right:6px;"><span class="thin-title">${typeIcon(t.type)} ${t.title}</span><span class="thin-tag">${t.department}</span></label>`;
+  }).join('') : '<div class="thin-tag">No unassigned tickets right now - you can attach tickets to this project later too.</div>';
+}
+
+function saveNewProject(){
+  var name = document.getElementById('proj_name').value.trim();
+  if(!name){ alert('Project name is required.'); return; }
+  var linkedIds = Array.from(document.querySelectorAll('.proj-ticket-cb:checked')).map(function(cb){ return cb.value; });
+  var payload = {
+    name: name,
+    department: NEW_PROJECT_DEPTS.join(','),
+    departments: NEW_PROJECT_DEPTS.join(','),
+    phase: document.getElementById('proj_phase').value,
+    start_date: document.getElementById('proj_start').value,
+    target_date: document.getElementById('proj_target').value,
+    status: document.getElementById('proj_status').value,
+    link_ticket_ids: linkedIds
+  };
+  api('createProject', payload).then(function(res){
+    if(!res.ok){ alert('Could not create project: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.project){
+      DB.projects.push(res.project);
+      linkedIds.forEach(function(tid){
+        var t = DB.tickets.filter(function(x){return x.ticket_id===tid;})[0];
+        if(t) t.project_id = res.project.project_id;
+      });
+    }
+    closeModal('newProjectModalBg');
+    render();
+  });
+}
+
+function openProjectDetail(projectId){
+  var p = DB.projects.filter(function(x){return x.project_id===projectId;})[0];
+  if(!p) return;
+  STATE.projectDetailId = projectId;
+  var linked = DB.tickets.filter(function(t){return t.project_id===projectId;});
+  var unassigned = visibleTickets().filter(function(t){return !t.project_id;});
+  var body = document.getElementById('projectDetailModalBody');
+  body.innerHTML = `
+    <div class="modal-h"><h2>${p.name}</h2><button class="close-x" onclick="closeModal('projectDetailModalBg')">X</button></div>
+    <div style="margin-bottom:8px;">${departmentPills(p.departments||p.department)}</div>
+    <div class="thin-tag" style="margin-bottom:14px;">Phase: <b>${p.phase||'-'}</b> - ${fmtDate(p.start_date)} to ${fmtDate(p.target_date)} - Status: ${p.status||'-'}</div>
+    <div class="card-h">Linked Tickets (${linked.length})</div>
+    <div style="margin-bottom:14px;">${linked.length ? linked.map(ticketCardHtml).join('') : '<div class="empty">No tickets linked yet.</div>'}</div>
+    ${unassigned.length ? `
+      <div class="card-h">Attach an unassigned ticket</div>
+      <select id="projAttachTicketSel" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;margin-bottom:8px;">
+        ${unassigned.map(function(t){return `<option value="${t.ticket_id}">${t.title}</option>`;}).join('')}
+      </select>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="attachTicketToProject('${projectId}')">Attach Ticket</button>
+    ` : '<div class="thin-tag">No unassigned tickets available to attach right now.</div>'}
+  `;
+  openModal('projectDetailModalBg');
+}
+
+function attachTicketToProject(projectId){
+  var ticketId = document.getElementById('projAttachTicketSel').value;
+  if(!ticketId) return;
+  api('updateTicket', {ticket_id:ticketId, project_id:projectId, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ alert('Could not attach ticket: '+(res.error||'Unknown error')); return; }
+    var t = DB.tickets.filter(function(x){return x.ticket_id===ticketId;})[0];
+    if(t) t.project_id = projectId;
+    openProjectDetail(projectId);
+  });
 }
 
 function renderMeetings(){
