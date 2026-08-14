@@ -43,7 +43,10 @@ var DB = {
   decisions: [
     {decision_id:'d1',decision_text:'Switch Website Headline',reason:'Brand Positioning',owner:'Sarah',meeting_id:'m1',affected_ticket_ids:'',status:'Active'}
   ],
-  notifications_log: []
+  notifications_log: [],
+  templates: [
+    {template_id:'t1',name:'Bug report checklist',title:'Bug report',description:'',type:'Bug',department:'Engineering',priority:'Medium',checklist_json:'[{"text":"Reproduce the issue","done":false},{"text":"Identify root cause","done":false},{"text":"Write fix","done":false},{"text":"Test fix","done":false}]'}
+  ]
 };
 
 var STATE = { module: 'dashboard', editingTicketId: null };
@@ -120,6 +123,23 @@ function mockApi(action, payload) {
         return true;
       });
       return {ok:true, explanation:'Local keyword match (connect Gemini for real natural-language parsing).', results:results};
+    }
+    case 'createTeamMember': {
+      if(!payload.name || !payload.email) return {ok:false, error:'Name and email are required.'};
+      if(DB.team.some(function(p){return p.email===payload.email;})) return {ok:false, error:'Someone with that email is already on the team.'};
+      var member = {name:payload.name, email:payload.email, slack_handle:payload.slack_handle||'', department:payload.department||'', role:payload.role||'Staff'};
+      DB.team.push(member);
+      return {ok:true, member:member};
+    }
+    case 'saveTemplate': {
+      var tmpl = {template_id:'t'+Math.random(), name:payload.name, title:payload.title||'', description:payload.description||'', type:payload.type||'Task', department:payload.department||'', priority:payload.priority||'Medium', checklist_json:payload.checklist_json||'[]'};
+      DB.templates.push(tmpl);
+      return {ok:true, template:tmpl};
+    }
+    case 'createTicketFromTemplate': {
+      var srcT = DB.templates.filter(function(x){return x.template_id===payload.template_id;})[0];
+      if(!srcT) return {ok:false, error:'Template not found.'};
+      return mockApi('createTicket', Object.assign({}, srcT, payload));
     }
   }
 }
@@ -312,24 +332,46 @@ function renderTickets(){
 }
 
 function renderBoard(){
+  if(!STATE.boardDeptFilter) STATE.boardDeptFilter = 'All';
   var wrap = el('<div></div>');
+  var depts = ['All','Engineering','Operations','Growth'];
+  var filterHtml = '<div style="display:flex;gap:6px;margin-bottom:14px;">' + depts.map(function(d){
+    var active = STATE.boardDeptFilter===d;
+    return `<span class="pill" style="cursor:pointer;padding:5px 12px;${active?'background:var(--ink);color:var(--on-ink);':'background:var(--surface2);color:var(--text-dim);'}" onclick="setBoardFilter('${d}')">${d}</span>`;
+  }).join('') + '</div>';
+
   var cols = STATUS_FLOW.concat(['Blocked']);
   var html = '<div class="board">';
   cols.forEach(function(status){
-    var items = DB.tickets.filter(function(t){return t.status===status;});
+    var items = DB.tickets.filter(function(t){
+      if(t.status!==status) return false;
+      if(STATE.boardDeptFilter!=='All' && t.department!==STATE.boardDeptFilter) return false;
+      return true;
+    });
     html += `<div class="board-col">
       <div class="board-col-h"><span class="board-col-dot" style="background:${STATUS_COLOR[status]}"></span>${status}<span class="board-col-count">${items.length}</span></div>
       <div class="board-drop">${items.map(ticketCardHtml).join('')}</div>
     </div>`;
   });
   html += '</div>';
-  wrap.innerHTML = '<div class="section-title">New -> Triaged -> Assigned -> In Progress -> Waiting -> Review -> Approved -> Done</div>' + html;
+  wrap.innerHTML = '<div class="section-title">New -> Triaged -> Assigned -> In Progress -> Waiting -> Review -> Approved -> Done</div>' + filterHtml + html;
   return wrap;
 }
 
+function setBoardFilter(dept){
+  STATE.boardDeptFilter = dept;
+  render();
+}
+
+function parseChecklist(t){
+  try { return JSON.parse(t.checklist_json || '[]'); } catch(e){ return []; }
+}
+
 function ticketCardHtml(t){
+  var checklist = parseChecklist(t);
+  var checklistBadge = checklist.length ? `<span class="thin-tag mono">[${checklist.filter(c=>c.done).length}/${checklist.length}]</span>` : '';
   return `<div class="ticket" onclick="openTicketDetail('${t.ticket_id}')">
-    <div class="ticket-top"><span class="ticket-id">${t.ticket_id}</span><span class="ticket-type">${typeIcon(t.type)}</span></div>
+    <div class="ticket-top"><span class="ticket-id">${t.ticket_id}</span><span class="ticket-type">${typeIcon(t.type)}</span>${checklistBadge}</div>
     <div class="ticket-title">${t.title}</div>
     <div class="ticket-meta">
       <span class="pill pill-dept">${t.department}</span>
@@ -339,93 +381,21 @@ function ticketCardHtml(t){
   </div>`;
 }
 
-var CAL_EVENTS_BY_DATE = {};
-
 function renderCalendar(){
-  if(!STATE.calendarMonth) STATE.calendarMonth = new Date();
   var wrap = el('<div></div>');
-  wrap.innerHTML = `
-    <div class="section-title" style="display:flex;align-items:center;gap:10px;">
-      <span id="calMonthLabel" style="font-size:15px;color:var(--text);text-transform:none;letter-spacing:0;"></span>
-      <span style="margin-left:auto;display:flex;gap:6px;">
-        <button class="cal-nav-btn" onclick="shiftCalMonth(-1)"><</button>
-        <button class="btn btn-ghost" onclick="shiftCalMonth(0)">Today</button>
-        <button class="cal-nav-btn" onclick="shiftCalMonth(1)">></button>
-      </span>
-    </div>
-    <div class="card" style="padding:14px;" id="calGridCard"><div class="empty">Loading calendar...</div></div>
-    <div class="section-title">Selected Day</div>
-    <div class="card" id="calAgenda"><div class="empty">Pick a day above.</div></div>
-    <div id="calConnError"></div>
-  `;
+  var events = [];
+  DB.tickets.forEach(function(t){ if(t.due_date) events.push({date:t.due_date,label:typeIcon(t.type)+' '+t.title+' due',type:'Deadline'}); });
+  DB.meetings.forEach(function(m){ events.push({date:m.date,label:'Meeting: '+m.title,type:'Meeting'}); });
+  DB.projects.forEach(function(p){ events.push({date:p.target_date,label:'Project: '+p.name+' target',type:'Milestone'}); });
+  events.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
 
-  function buildLocalEvents(map){
-    DB.tickets.forEach(function(t){ if(t.due_date) addEv(map, t.due_date.slice(0,10), typeIcon(t.type)+' '+t.title, 'Deadline'); });
-    DB.projects.forEach(function(p){ if(p.target_date) addEv(map, p.target_date.slice(0,10), '[] '+p.name, 'Milestone'); });
-  }
-  function addEv(map, dateStr, label, type){
-    if(!dateStr) return;
-    (map[dateStr] = map[dateStr] || []).push({label:label, type:type});
-  }
-
-  function paintGrid(eventsByDate){
-    CAL_EVENTS_BY_DATE = eventsByDate;
-    var month = STATE.calendarMonth;
-    wrap.querySelector('#calMonthLabel').textContent = month.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-    var y = month.getFullYear(), m = month.getMonth();
-    var startOffset = new Date(y,m,1).getDay();
-    var daysInMonth = new Date(y,m+1,0).getDate();
-    var todayStr = new Date().toISOString().slice(0,10);
-
-    var html = '<div class="cal-dow-row">' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('') + '</div><div class="cal-cells">';
-    for(var i=0;i<startOffset;i++) html += '<div class="cal-cell cal-cell-empty"></div>';
-    for(var d=1; d<=daysInMonth; d++){
-      var dateStr = y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-      var evs = eventsByDate[dateStr] || [];
-      html += `<div class="cal-cell${dateStr===todayStr?' cal-cell-today':''}" id="cal-${dateStr}" onclick="showCalDay('${dateStr}')">
-        <div class="cal-daynum">${d}</div>
-        ${evs.slice(0,3).map(function(e){return '<div class="cal-ev">'+e.label+'</div>';}).join('')}
-        ${evs.length>3 ? '<div class="cal-more">+'+(evs.length-3)+' more</div>' : ''}
-      </div>`;
-    }
-    html += '</div>';
-    wrap.querySelector('#calGridCard').innerHTML = html;
-    showCalDay(todayStr);
-  }
-
-  var eventsByDate = {};
-  buildLocalEvents(eventsByDate);
-
-  if (WORKSPACE_MODE) {
-    api('getCalendarEvents', {}).then(function(res){
-      if(res.ok){
-        res.events.forEach(function(e){ addEv(eventsByDate, e.start.slice(0,10), 'Talk '+e.title, 'Calendar'); });
-      } else {
-        wrap.querySelector('#calConnError').innerHTML = '<div class="thin-tag" style="margin-top:10px;color:var(--red)">Calendar not connected: '+res.error+'</div>';
-      }
-      paintGrid(eventsByDate);
-    });
-  } else {
-    paintGrid(eventsByDate);
-  }
+  wrap.innerHTML = '<div class="section-title">Agenda - Meetings, Deadlines, Deployments, Releases, Milestones</div>' +
+    '<div class="card"><div id="agendaList"></div></div>';
+  var box = wrap.querySelector('#agendaList');
+  box.innerHTML = events.length ? events.map(function(ev){
+    return '<div class="thin-row"><span class="thin-tag mono" style="width:60px">'+fmtDate(ev.date)+'</span><span class="thin-title">'+ev.label+'</span><span class="thin-tag">'+ev.type+'</span></div>';
+  }).join('') : '<div class="empty">Nothing scheduled.</div>';
   return wrap;
-}
-
-function shiftCalMonth(dir){
-  var d = STATE.calendarMonth || new Date();
-  STATE.calendarMonth = (dir === 0) ? new Date() : new Date(d.getFullYear(), d.getMonth()+dir, 1);
-  render();
-}
-
-function showCalDay(dateStr){
-  document.querySelectorAll('.cal-cell').forEach(function(c){ c.classList.remove('cal-cell-selected'); });
-  var cell = document.getElementById('cal-'+dateStr);
-  if(cell) cell.classList.add('cal-cell-selected');
-  var box = document.getElementById('calAgenda');
-  if(!box) return;
-  var evs = CAL_EVENTS_BY_DATE[dateStr] || [];
-  box.innerHTML = '<div class="thin-tag" style="margin-bottom:8px;">'+fmtDate(dateStr)+'</div>' +
-    (evs.length ? evs.map(function(e){ return `<div class="thin-row"><span class="thin-title">${e.label}</span><span class="thin-tag">${e.type}</span></div>`; }).join('') : '<div class="empty">Nothing scheduled.</div>');
 }
 
 function renderProjects(){
@@ -448,7 +418,7 @@ function renderProjects(){
 
 function renderMeetings(){
   var wrap = el('<div></div>');
-  wrap.innerHTML = `<div class="section-title">Meetings <button class="btn btn-ghost" style="margin-left:10px" onclick="openMeetingModal()">+ Log Meeting</button></div>
+  wrap.innerHTML = `<div class="section-title">Meetings <button class="btn btn-ghost" style="margin-left:10px" onclick="document.getElementById('m_title').value='';document.getElementById('m_notes').value='';document.getElementById('m_people').value='';document.getElementById('m_date').value=new Date().toISOString().slice(0,10);openModal('meetingModalBg')">+ Log Meeting</button></div>
   <div class="section-title" style="margin-top:0;font-size:11px;">Or create a task directly without a meeting  -  use "+ New Ticket" up top anytime.</div>
   <div id="meetingsList"></div>`;
   var box = wrap.querySelector('#meetingsList');
@@ -488,23 +458,66 @@ function reviewMeetingProposals(meetingId){
   var m = DB.meetings.filter(function(x){return x.meeting_id===meetingId;})[0];
   if(!p){ m.processed='no'; render(); return; }
   var target = document.getElementById('ai-'+meetingId);
+
   var decisionsHtml = (p.decisions||[]).map(function(d,i){
-    return `<div class="proposal"><b>Decision:</b> ${d.decision_text}<br><span class="thin-tag">Reason: ${d.reason} - Owner: ${d.owner}</span></div>`;
+    return `<div class="proposal">
+      <div class="field" style="margin-bottom:6px;"><label>Decision</label><input value="${(d.decision_text||'').replace(/"/g,'&quot;')}" oninput="updateProposalDecision('${meetingId}',${i},'decision_text',this.value)"></div>
+      <div class="row2">
+        <div class="field"><label>Reason</label><input value="${(d.reason||'').replace(/"/g,'&quot;')}" oninput="updateProposalDecision('${meetingId}',${i},'reason',this.value)"></div>
+        <div class="field"><label>Owner</label>
+          <select onchange="updateProposalDecision('${meetingId}',${i},'owner',this.value)">
+            <option value="">Unassigned</option>
+            ${DB.team.map(function(person){return `<option ${person.name===d.owner?'selected':''}>${person.name}</option>`;}).join('')}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-ghost" style="color:var(--red);border-color:var(--red-bg);" onclick="removeProposalDecision('${meetingId}',${i})">Remove this decision</button>
+    </div>`;
   }).join('');
+
   var itemsHtml = (p.action_items||[]).map(function(item,i){
     var matchLabel = item.match_ticket_id ? ('Updates existing ticket '+item.match_ticket_id) : 'Creates new ticket';
-    return `<div class="proposal"><b>${item.description}</b><br><span class="thin-tag">${matchLabel} - Owner: ${item.owner||'unassigned'}</span></div>`;
+    return `<div class="proposal">
+      <div class="field" style="margin-bottom:6px;"><label>Action item</label><input value="${(item.description||'').replace(/"/g,'&quot;')}" oninput="updateProposalItem('${meetingId}',${i},'description',this.value)"></div>
+      <div class="thin-tag" style="margin-bottom:6px;">${matchLabel}</div>
+      <div class="row2">
+        <div class="field"><label>Owner</label>
+          <select onchange="updateProposalItem('${meetingId}',${i},'owner',this.value)">
+            <option value="">Unassigned</option>
+            ${DB.team.map(function(person){return `<option ${person.name===item.owner?'selected':''}>${person.name}</option>`;}).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Due Date</label><input type="date" value="${item.due_date||''}" onchange="updateProposalItem('${meetingId}',${i},'due_date',this.value)"></div>
+      </div>
+      <button class="btn btn-ghost" style="color:var(--red);border-color:var(--red-bg);" onclick="removeProposalItem('${meetingId}',${i})">Remove this item</button>
+    </div>`;
   }).join('');
+
   target.innerHTML = `<div class="ai-box">
     <div class="ai-box-h">* AI Summary</div>
     <div style="margin-bottom:10px;">${p.summary}</div>
-    ${decisionsHtml ? '<b style="font-size:12px">Decisions</b>' + decisionsHtml : ''}
-    ${itemsHtml ? '<b style="font-size:12px">Action items</b>' + itemsHtml : ''}
+    ${decisionsHtml ? '<b style="font-size:12px">Decisions - edit or remove before approving</b>' + decisionsHtml : ''}
+    ${itemsHtml ? '<b style="font-size:12px">Action items - edit or remove before approving</b>' + itemsHtml : '<div class="thin-tag">No action items left to approve.</div>'}
     <div class="proposal-actions">
       <button class="btn btn-primary" onclick="approveMeeting('${meetingId}')">Approve & create/update tickets</button>
       <button class="btn btn-ghost" onclick="render()">Discard</button>
     </div>
   </div>`;
+}
+
+function updateProposalItem(meetingId, idx, field, value){
+  MEETING_PROPOSALS[meetingId].action_items[idx][field] = value;
+}
+function updateProposalDecision(meetingId, idx, field, value){
+  MEETING_PROPOSALS[meetingId].decisions[idx][field] = value;
+}
+function removeProposalItem(meetingId, idx){
+  MEETING_PROPOSALS[meetingId].action_items.splice(idx,1);
+  reviewMeetingProposals(meetingId);
+}
+function removeProposalDecision(meetingId, idx){
+  MEETING_PROPOSALS[meetingId].decisions.splice(idx,1);
+  reviewMeetingProposals(meetingId);
 }
 
 function approveMeeting(meetingId){
@@ -514,118 +527,11 @@ function approveMeeting(meetingId){
   });
 }
 
-var SELECTED_PARTICIPANTS = [];
-
-function openMeetingModal(){
-  SELECTED_PARTICIPANTS = [];
-  document.getElementById('m_title').value = '';
-  document.getElementById('m_notes').value = '';
-  document.getElementById('m_date').value = new Date().toISOString().slice(0,10);
-  renderParticipantPicker();
-  openModal('meetingModalBg');
-}
-
-function renderParticipantPicker(){
-  var box = document.getElementById('m_people_picker');
-  if(!box) return;
-  box.innerHTML = DB.team.length ? DB.team.map(function(p){
-    var active = SELECTED_PARTICIPANTS.indexOf(p.name) > -1;
-    return `<span class="ms-chip${active?' ms-chip-active':''}" onclick="toggleParticipant('${p.name}')">${p.name}</span>`;
-  }).join('') : '<div class="thin-tag">No team members in the Team tab yet.</div>';
-}
-
-function toggleParticipant(name){
-  var i = SELECTED_PARTICIPANTS.indexOf(name);
-  if(i > -1) SELECTED_PARTICIPANTS.splice(i,1); else SELECTED_PARTICIPANTS.push(name);
-  renderParticipantPicker();
-}
-
-function loadScriptOnce(url){
-  return new Promise(function(resolve, reject){
-    if (document.querySelector('script[data-lazy-src="'+url+'"]')) { resolve(); return; }
-    var s = document.createElement('script');
-    s.src = url;
-    s.setAttribute('data-lazy-src', url);
-    s.onload = function(){ resolve(); };
-    s.onerror = function(){ reject(new Error('Failed to load '+url)); };
-    document.head.appendChild(s);
-  });
-}
-
-function handleMeetingFileUpload(event){
-  var file = event.target.files[0];
-  if(!file) return;
-  var name = file.name.toLowerCase();
-  var notesBox = document.getElementById('m_notes');
-
-  if(name.endsWith('.txt') || name.endsWith('.md')){
-    var r1 = new FileReader();
-    r1.onload = function(e){ notesBox.value = e.target.result; };
-    r1.onerror = function(){ alert('Could not read that file.'); };
-    r1.readAsText(file);
-    return;
-  }
-
-  if(name.endsWith('.docx')){
-    notesBox.value = 'Loading Word reader...';
-    loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js').then(function(){
-      notesBox.value = 'Reading document...';
-      var r2 = new FileReader();
-      r2.onload = function(e){
-        mammoth.extractRawText({arrayBuffer: e.target.result}).then(function(result){
-          notesBox.value = result.value;
-        }).catch(function(err){ notesBox.value = ''; alert('Could not read that Word file: '+err.message); });
-      };
-      r2.readAsArrayBuffer(file);
-    }).catch(function(){
-      notesBox.value = '';
-      alert('Could not load the Word file reader  -  check your connection and try again.');
-    });
-    return;
-  }
-
-  if(name.endsWith('.pdf')){
-    notesBox.value = 'Loading PDF reader...';
-    loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function(){
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      notesBox.value = 'Reading PDF...';
-      var r3 = new FileReader();
-      r3.onload = function(e){
-        pdfjsLib.getDocument({data: e.target.result}).promise.then(function(pdf){
-          var pagePromises = [];
-          for(var i=1; i<=pdf.numPages; i++){
-            pagePromises.push(pdf.getPage(i).then(function(page){
-              return page.getTextContent().then(function(tc){
-                return tc.items.map(function(it){ return it.str; }).join(' ');
-              });
-            }));
-          }
-          return Promise.all(pagePromises);
-        }).then(function(pages){
-          notesBox.value = pages.join('\n\n');
-        }).catch(function(err){ notesBox.value = ''; alert('Could not read that PDF: '+err.message); });
-      };
-      r3.readAsArrayBuffer(file);
-    }).catch(function(){
-      notesBox.value = '';
-      alert('Could not load the PDF reader  -  check your connection and try again.');
-    });
-    return;
-  }
-
-  if(name.endsWith('.doc')){
-    alert('Old .doc format (pre-2007 Word) isn\'t supported. Please re-save as .docx or PDF, or paste the text directly.');
-    return;
-  }
-
-  alert('Unsupported file type. Use .txt, .md, .docx, or .pdf.');
-}
-
 function saveMeeting(){
   var payload = {
     title: document.getElementById('m_title').value || 'Untitled Meeting',
     date: document.getElementById('m_date').value || new Date().toISOString().slice(0,10),
-    participants: SELECTED_PARTICIPANTS.join(', '),
+    participants: document.getElementById('m_people').value,
     raw_notes: document.getElementById('m_notes').value
   };
   api('submitMeeting', payload).then(function(res){
@@ -639,9 +545,16 @@ function saveMeeting(){
 function renderStandup(){
   var wrap = el('<div></div>');
   var depts = ['Engineering','Operations','Growth'];
+  var norm = function(s){ return (s||'').trim().toLowerCase(); };
   var html = '<div class="section-title">Daily Stand-up  -  Yesterday / Today / Blockers</div>';
+  if(!DB.team.length){
+    html += '<div class="card"><div class="empty">No team members yet. Add people from the Team Spaces page (or ask an admin to) - Stand-up will populate automatically once they are added.</div></div>';
+    wrap.innerHTML = html;
+    return wrap;
+  }
+  var unmatched = DB.team.filter(function(p){ return depts.indexOf(p.department) === -1 && depts.map(norm).indexOf(norm(p.department)) === -1; });
   depts.forEach(function(dept){
-    var people = DB.team.filter(function(p){return p.department===dept;});
+    var people = DB.team.filter(function(p){return norm(p.department)===norm(dept);});
     var block = `<div class="dept-block"><div class="dept-h">${dept}</div>`;
     if(!people.length){ block += '<div class="empty">No one on this team yet.</div>'; }
     people.forEach(function(person){
@@ -661,6 +574,9 @@ function renderStandup(){
     block += '</div>';
     html += block;
   });
+  if(unmatched.length){
+    html += '<div class="thin-tag" style="margin-top:6px;">Not shown: '+unmatched.map(p=>p.name+' (department: "'+(p.department||'blank')+'")').join(', ')+' - department must be exactly Engineering, Operations, or Growth.</div>';
+  }
   wrap.innerHTML = html;
   return wrap;
 }
@@ -698,7 +614,8 @@ function renderWorkload(){
 function renderTeamSpaces(){
   var wrap = el('<div></div>');
   var depts = ['Engineering','Operations','Growth'];
-  var html = '<div class="section-title">Team Spaces</div><div class="dash-grid" style="grid-template-columns:repeat(3,1fr)">';
+  var html = '<div class="section-title">Team Spaces <button class="btn btn-ghost" style="margin-left:10px" onclick="openAddMemberModal()">+ Add Team Member</button></div>';
+  html += '<div class="dash-grid" style="grid-template-columns:repeat(3,1fr)">';
   depts.forEach(function(dept){
     var tix = DB.tickets.filter(function(t){return t.department===dept;});
     var members = DB.team.filter(function(p){return p.department===dept;});
@@ -711,8 +628,41 @@ function renderTeamSpaces(){
     </div>`;
   });
   html += '</div>';
+
+  html += '<div class="section-title">All Team Members</div><div class="card" style="padding:0;"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th></tr></thead><tbody>' +
+    (DB.team.length ? DB.team.map(function(p){
+      return `<tr><td>${p.name}</td><td>${p.email}</td><td>${p.department||' - '}</td><td>${p.role||' - '}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" class="empty">No team members yet.</td></tr>') +
+    '</tbody></table></div>';
+
   wrap.innerHTML = html;
   return wrap;
+}
+
+function openAddMemberModal(){
+  document.getElementById('tm_name').value = '';
+  document.getElementById('tm_email').value = '';
+  document.getElementById('tm_slack').value = '';
+  document.getElementById('tm_dept').value = 'Engineering';
+  document.getElementById('tm_role').value = 'Staff';
+  openModal('addMemberModalBg');
+}
+
+function saveTeamMember(){
+  var payload = {
+    name: document.getElementById('tm_name').value,
+    email: document.getElementById('tm_email').value,
+    slack_handle: document.getElementById('tm_slack').value,
+    department: document.getElementById('tm_dept').value,
+    role: document.getElementById('tm_role').value
+  };
+  if(!payload.name || !payload.email){ alert('Name and email are required.'); return; }
+  api('createTeamMember', payload).then(function(res){
+    if(!res.ok){ alert('Could not add team member: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.member){ DB.team.push(res.member); }
+    closeModal('addMemberModalBg');
+    render();
+  });
 }
 
 function renderCommand(){
@@ -769,31 +719,11 @@ function renderAdminLog(){
 
 function renderNotifications(){
   var wrap = el('<div></div>');
-  wrap.innerHTML = `<div class="section-title">Connections</div>
-  <div class="card" id="connCard"><div class="empty">Checking...</div></div>
-  <div class="section-title">Notifications</div>
+  wrap.innerHTML = `<div class="section-title">Notifications</div>
   <div class="card">
-    <div class="thin-tag" style="margin-bottom:10px;">Slack notifications fire from Apps Script (assigned, mentioned, due tomorrow, overdue, blocked, review needed, completed).</div>
+    <div class="thin-tag" style="margin-bottom:10px;">Live Slack notifications fire from Apps Script (assigned, mentioned, due tomorrow, overdue, blocked, review needed, completed). Configure SLACK_WEBHOOK_URL in Script Properties to activate.</div>
     <div id="notifLog"></div>
   </div>`;
-
-  if(WORKSPACE_MODE){
-    api('checkConnections', {}).then(function(res){
-      var card = wrap.querySelector('#connCard');
-      if(!res.ok){ card.innerHTML = '<div class="empty">Could not check connections.</div>'; return; }
-      var rows = [
-        {label:'Gemini (AI meeting parsing)', c:res.gemini},
-        {label:'Slack (notifications)', c:res.slack},
-        {label:'Google Calendar', c:res.calendar}
-      ];
-      card.innerHTML = rows.map(function(r){
-        return `<div class="conn-row"><span class="conn-dot ${r.c.connected?'ok':'bad'}"></span><b>${r.label}</b><span class="thin-tag" style="margin-left:auto;">${r.c.note}</span></div>`;
-      }).join('');
-    });
-  } else {
-    wrap.querySelector('#connCard').innerHTML = '<div class="empty">Connections only apply once this is running through Apps Script.</div>';
-  }
-
   var box = wrap.querySelector('#notifLog');
   box.innerHTML = DB.notifications_log && DB.notifications_log.length ? DB.notifications_log.slice().reverse().map(function(n){
     return `<div class="thin-row"><span class="thin-title">${n.message}</span><span class="thin-tag">${n.status}</span></div>`;
@@ -804,20 +734,43 @@ function renderNotifications(){
 function populateSelects(){
   var ownerSel = document.getElementById('f_owner');
   var projSel = document.getElementById('f_project');
+  var tmplSel = document.getElementById('f_template');
   if(ownerSel){
     ownerSel.innerHTML = '<option value="">Unassigned</option>' + DB.team.map(function(p){return `<option value="${p.name}">${p.name}</option>`;}).join('');
   }
   if(projSel){
     projSel.innerHTML = '<option value="">None</option>' + DB.projects.map(function(p){return `<option value="${p.project_id}">${p.name}</option>`;}).join('');
   }
+  if(tmplSel){
+    var templates = DB.templates || [];
+    tmplSel.innerHTML = '<option value="">Start from scratch</option>' + templates.map(function(tmpl){return `<option value="${tmpl.template_id}">${tmpl.name}</option>`;}).join('');
+  }
+}
+
+var NEW_TICKET_CHECKLIST = [];
+
+function applyTemplateToForm(){
+  var tmplId = document.getElementById('f_template').value;
+  NEW_TICKET_CHECKLIST = [];
+  if(!tmplId){ return; }
+  var tmpl = (DB.templates||[]).filter(function(t){return t.template_id===tmplId;})[0];
+  if(!tmpl) return;
+  document.getElementById('f_title').value = tmpl.title || '';
+  document.getElementById('f_desc').value = tmpl.description || '';
+  document.getElementById('f_type').value = tmpl.type || 'Task';
+  document.getElementById('f_dept').value = tmpl.department || '';
+  document.getElementById('f_prio').value = tmpl.priority || 'Medium';
+  try { NEW_TICKET_CHECKLIST = JSON.parse(tmpl.checklist_json || '[]'); } catch(e){ NEW_TICKET_CHECKLIST = []; }
 }
 
 function openNewTicket(){
   STATE.editingTicketId = null;
+  NEW_TICKET_CHECKLIST = [];
   document.getElementById('ticketModalTitle').textContent = 'New Ticket';
   ['f_title','f_desc'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('f_due').value='';
   populateSelects();
+  if(document.getElementById('f_template')) document.getElementById('f_template').value='';
   openModal('ticketModalBg');
 }
 
@@ -831,7 +784,8 @@ function saveTicket(){
     owner: document.getElementById('f_owner').value,
     due_date: document.getElementById('f_due').value,
     project_id: document.getElementById('f_project').value,
-    reporter: CURRENT_USER
+    reporter: CURRENT_USER,
+    checklist_json: JSON.stringify(NEW_TICKET_CHECKLIST || [])
   };
   api('createTicket', payload).then(function(res){
     if(!res.ok){
@@ -848,6 +802,7 @@ function openTicketDetail(id){
   var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
   if(!t) return;
   var acts = DB.activities.filter(function(a){return a.ticket_id===id;});
+  var checklist = parseChecklist(t);
   var body = document.getElementById('detailModalBody');
   body.innerHTML = `
     <div class="modal-h"><h2>${typeIcon(t.type)} ${t.title}</h2><button class="close-x" onclick="closeModal('detailModalBg')">X</button></div>
@@ -877,22 +832,85 @@ function openTicketDetail(id){
     <div style="display:flex;gap:12px;font-size:12px;color:var(--text-dim);margin-top:4px;">
       <span><b>Department:</b> ${t.department}</span><span><b>Reporter:</b> ${t.reporter}</span>
     </div>
+
+    <div class="card-h" style="margin-top:16px;">Checklist <span class="thin-tag">${checklist.filter(c=>c.done).length}/${checklist.length}</span></div>
+    <div id="checklistBox">${checklistHtml(checklist)}</div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <input id="newChecklistItem" placeholder="Add a checklist item..." style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;" onkeydown="if(event.key==='Enter'){addChecklistItem('${id}');}">
+      <button class="btn btn-ghost" onclick="addChecklistItem('${id}')">Add</button>
+    </div>
+
     <div class="card-h" style="margin-top:16px;">Activity</div>
     <div class="timeline">
       ${acts.length ? acts.map(function(a){return `<div class="tl-item"><div class="tl-time">${fmtDateTime(a.timestamp)}</div><b>${a.actor}</b> ${a.action.toLowerCase()} ${a.new_value?('-> '+a.new_value):''}</div>`;}).join('') : '<div class="empty">No activity yet.</div>'}
     </div>
-    <button class="btn btn-ghost" style="margin-top:18px;color:var(--red);border-color:var(--red-bg);width:100%;justify-content:center;" onclick="deleteTicket('${id}','${(t.title||'').replace(/'/g,"\\'")}')">Delete Delete Ticket</button>
+
+    <div style="display:flex;gap:8px;margin-top:18px;">
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="saveAsTemplate('${id}')">Save as Template</button>
+    </div>
   `;
   openModal('detailModalBg');
 }
 
-function deleteTicket(id, title){
-  if(!confirm('Delete "'+title+'"? This cannot be undone.')) return;
-  api('deleteTicket', {ticket_id:id}).then(function(res){
-    if(!res.ok){ alert('Could not delete: '+(res.error||'Unknown error')); return; }
-    DB.tickets = DB.tickets.filter(function(t){return t.ticket_id!==id;});
-    closeModal('detailModalBg');
-    render();
+function checklistHtml(checklist){
+  if(!checklist.length) return '<div class="empty" style="padding:14px;">No checklist items yet.</div>';
+  return checklist.map(function(item,i){
+    return `<div class="thin-row"><input type="checkbox" ${item.done?'checked':''} onchange="toggleChecklistItem(${i},this.checked)"><span class="thin-title" style="${item.done?'text-decoration:line-through;color:var(--text-faint);':''}">${item.text}</span><span class="thin-tag" style="cursor:pointer;color:var(--red);" onclick="removeChecklistItem(${i})">Remove</span></div>`;
+  }).join('');
+}
+
+var CURRENT_TICKET_ID = null;
+
+function addChecklistItem(id){
+  CURRENT_TICKET_ID = id;
+  var input = document.getElementById('newChecklistItem');
+  var text = input.value.trim();
+  if(!text) return;
+  var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
+  var checklist = parseChecklist(t);
+  checklist.push({text:text, done:false});
+  input.value = '';
+  saveChecklist(id, checklist);
+}
+
+function toggleChecklistItem(idx, done){
+  var t = DB.tickets.filter(function(x){return x.ticket_id===CURRENT_TICKET_ID;})[0];
+  var checklist = parseChecklist(t);
+  checklist[idx].done = done;
+  saveChecklist(CURRENT_TICKET_ID, checklist);
+}
+
+function removeChecklistItem(idx){
+  var t = DB.tickets.filter(function(x){return x.ticket_id===CURRENT_TICKET_ID;})[0];
+  var checklist = parseChecklist(t);
+  checklist.splice(idx,1);
+  saveChecklist(CURRENT_TICKET_ID, checklist);
+}
+
+function saveChecklist(id, checklist){
+  CURRENT_TICKET_ID = id;
+  var json = JSON.stringify(checklist);
+  api('updateTicket', {ticket_id:id, checklist_json:json, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ alert('Could not save checklist: '+(res.error||'Unknown error')); return; }
+    var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
+    if(t) t.checklist_json = json;
+    document.getElementById('checklistBox').innerHTML = checklistHtml(checklist);
+  });
+}
+
+function saveAsTemplate(id){
+  var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
+  if(!t) return;
+  var name = prompt('Name this template (e.g. "Bug report checklist"):', t.title);
+  if(!name) return;
+  api('saveTemplate', {
+    name: name, title: t.title, description: t.description, type: t.type,
+    department: t.department, priority: t.priority, checklist_json: t.checklist_json || '[]',
+    created_by: CURRENT_USER
+  }).then(function(res){
+    if(!res.ok){ alert('Could not save template: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.template){ DB.templates = DB.templates || []; DB.templates.push(res.template); }
+    alert('Template saved. You can reuse it from "+ New Ticket" next time.');
   });
 }
 
@@ -986,6 +1004,7 @@ if (WORKSPACE_MODE) {
       DB.decisions = res.data.decisions || [];
       DB.projects = res.data.projects || [];
       DB.team = res.data.team || [];
+      DB.templates = res.data.templates || [];
       boot();
     } else {
       document.getElementById('loginSub').textContent = 'Could not load your data';
