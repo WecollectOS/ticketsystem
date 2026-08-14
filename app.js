@@ -913,7 +913,7 @@ function renderNotifications(){
   var wrap = el('<div></div>');
   wrap.innerHTML = `<div class="section-title">Notifications</div>
   <div class="card">
-    <div class="thin-tag" style="margin-bottom:10px;">Live Slack notifications fire from Apps Script (assigned, mentioned, due tomorrow, overdue, blocked, review needed, completed). Configure SLACK_WEBHOOK_URL in Script Properties to activate.</div>
+    <div class="thin-tag" style="margin-bottom:10px;">Private Slack DMs fire from Apps Script (welcome, assigned, due tomorrow, overdue, blocked, review needed, completed, meeting invites). Configure SLACK_BOT_TOKEN in Script Properties to activate - each person also needs their Slack Member ID saved in the Team tab.</div>
     <div id="notifLog"></div>
   </div>`;
   var box = wrap.querySelector('#notifLog');
