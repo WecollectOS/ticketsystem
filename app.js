@@ -53,12 +53,22 @@ var DB = {
 
 var STATE = { module: 'dashboard', editingTicketId: null };
 
+var LOADING_COUNT = 0;
+function setLoading(isLoading){
+  LOADING_COUNT += isLoading ? 1 : -1;
+  if(LOADING_COUNT < 0) LOADING_COUNT = 0;
+  var ind = document.getElementById('loadingIndicator');
+  if(ind) ind.style.display = LOADING_COUNT > 0 ? 'inline-flex' : 'none';
+}
+
 function api(action, payload) {
-  if (!WORKSPACE_MODE) return Promise.resolve(mockApi(action, payload));
+  setLoading(true);
+  var finish = function(res){ setLoading(false); return res; };
+  if (!WORKSPACE_MODE) return Promise.resolve(finish(mockApi(action, payload)));
   return new Promise(function(resolve){
     google.script.run
-      .withSuccessHandler(function(res){ resolve(res); })
-      .withFailureHandler(function(err){ resolve({ ok:false, error: (err && err.message) || String(err) }); })
+      .withSuccessHandler(function(res){ resolve(finish(res)); })
+      .withFailureHandler(function(err){ resolve(finish({ ok:false, error: (err && err.message) || String(err) })); })
       .apiCall(action, payload || {});
   });
 }
@@ -338,9 +348,72 @@ function renderDashboard(){
   return wrap;
 }
 
+var TICKET_TABLE_COLS = [
+  {key:'ticket_id', label:'ID'}, {key:'title', label:'Title'}, {key:'department', label:'Department'},
+  {key:'priority', label:'Priority'}, {key:'status', label:'Status'}, {key:'owner', label:'Owner'}, {key:'due_date', label:'Due'}
+];
+
 function renderTickets(){
+  if(!STATE.ticketFilters) STATE.ticketFilters = {q:'', dept:'All', status:'All', sortBy:'updated_at', sortDir:'desc'};
+  var f = STATE.ticketFilters;
   var wrap = el('<div></div>');
-  var rows = visibleTickets().map(function(t){
+  var depts = ['All','Engineering','Operations','Growth'];
+  var statuses = ['All'].concat(STATUS_FLOW).concat(['Blocked']);
+
+  wrap.innerHTML = `
+    <div class="section-title">All Tickets - filterable, sortable list (use Workflow Board for the visual flow view)</div>
+    <div class="card" style="margin-bottom:12px;padding:12px 16px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <input id="ticketFilterQ" placeholder="Filter by title or ID..." value="${f.q}" style="flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;">
+        <select id="ticketFilterDept" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;">
+          ${depts.map(function(d){return `<option ${d===f.dept?'selected':''}>${d}</option>`;}).join('')}
+        </select>
+        <select id="ticketFilterStatus" style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;">
+          ${statuses.map(function(s){return `<option ${s===f.status?'selected':''}>${s}</option>`;}).join('')}
+        </select>
+        <span class="thin-tag" id="ticketFilterCount"></span>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table>
+        <thead><tr id="ticketTableHead"></tr></thead>
+        <tbody id="ticketTableBody"></tbody>
+      </table>
+    </div>`;
+
+  wrap.querySelector('#ticketFilterQ').addEventListener('input', function(e){ STATE.ticketFilters.q = e.target.value; renderTicketRows(); });
+  wrap.querySelector('#ticketFilterDept').addEventListener('change', function(e){ STATE.ticketFilters.dept = e.target.value; renderTicketRows(); });
+  wrap.querySelector('#ticketFilterStatus').addEventListener('change', function(e){ STATE.ticketFilters.status = e.target.value; renderTicketRows(); });
+
+  renderTicketRows();
+  return wrap;
+}
+
+function renderTicketRows(){
+  var f = STATE.ticketFilters;
+  var headEl = document.getElementById('ticketTableHead');
+  var bodyEl = document.getElementById('ticketTableBody');
+  var countEl = document.getElementById('ticketFilterCount');
+  if(!headEl || !bodyEl) return;
+
+  headEl.innerHTML = TICKET_TABLE_COLS.map(function(c){
+    var arrow = f.sortBy===c.key ? (f.sortDir==='asc'?' (asc)':' (desc)') : '';
+    return `<th style="cursor:pointer;user-select:none;" onclick="sortTickets('${c.key}')">${c.label}${arrow}</th>`;
+  }).join('');
+
+  var list = visibleTickets().filter(function(t){
+    if(f.dept!=='All' && t.department!==f.dept) return false;
+    if(f.status!=='All' && t.status!==f.status) return false;
+    if(f.q && t.title.toLowerCase().indexOf(f.q.toLowerCase())===-1 && t.ticket_id.toLowerCase().indexOf(f.q.toLowerCase())===-1) return false;
+    return true;
+  });
+  list.sort(function(a,b){
+    var av=(a[f.sortBy]||''), bv=(b[f.sortBy]||'');
+    var cmp = String(av).localeCompare(String(bv));
+    return f.sortDir==='asc' ? cmp : -cmp;
+  });
+
+  bodyEl.innerHTML = list.map(function(t){
     return `<tr onclick="openTicketDetail('${t.ticket_id}')" style="cursor:pointer">
       <td class="mono">${t.ticket_id}</td>
       <td>${typeIcon(t.type)} ${t.title}</td>
@@ -350,16 +423,16 @@ function renderTickets(){
       <td>${t.owner||' - '}</td>
       <td>${fmtDate(t.due_date)}</td>
     </tr>`;
-  }).join('');
-  wrap.innerHTML = `
-    <div class="section-title">All Tickets</div>
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead><tr><th>ID</th><th>Title</th><th>Department</th><th>Priority</th><th>Status</th><th>Owner</th><th>Due</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" class="empty">No tickets yet.</td></tr>'}</tbody>
-      </table>
-    </div>`;
-  return wrap;
+  }).join('') || '<tr><td colspan="7" class="empty">No tickets match these filters.</td></tr>';
+
+  if(countEl) countEl.textContent = list.length + ' of ' + visibleTickets().length;
+}
+
+function sortTickets(key){
+  var f = STATE.ticketFilters;
+  if(f.sortBy===key){ f.sortDir = f.sortDir==='asc' ? 'desc' : 'asc'; }
+  else { f.sortBy = key; f.sortDir = 'asc'; }
+  renderTicketRows();
 }
 
 function renderBoard(){
@@ -401,15 +474,39 @@ function parseChecklist(t){
 function ticketCardHtml(t){
   var checklist = parseChecklist(t);
   var checklistBadge = checklist.length ? `<span class="thin-tag mono">[${checklist.filter(c=>c.done).length}/${checklist.length}]</span>` : '';
+  var VISIBLE_ITEMS = 3;
+  var checklistItemsHtml = '';
+  if(checklist.length){
+    checklistItemsHtml = '<div class="ticket-checklist" onclick="event.stopPropagation()">' +
+      checklist.slice(0, VISIBLE_ITEMS).map(function(item, i){
+        return `<label class="ticket-checklist-item"><input type="checkbox" ${item.done?'checked':''} onchange="toggleCardChecklistItem('${t.ticket_id}',${i},this.checked)"><span style="${item.done?'text-decoration:line-through;color:var(--text-faint);':''}">${item.text}</span></label>`;
+      }).join('') +
+      (checklist.length > VISIBLE_ITEMS ? `<div class="thin-tag">+${checklist.length - VISIBLE_ITEMS} more</div>` : '') +
+      '</div>';
+  }
   return `<div class="ticket" onclick="openTicketDetail('${t.ticket_id}')">
     <div class="ticket-top"><span class="ticket-id">${t.ticket_id}</span><span class="ticket-type">${typeIcon(t.type)}</span>${checklistBadge}</div>
     <div class="ticket-title">${t.title}</div>
+    ${checklistItemsHtml}
     <div class="ticket-meta">
       <span class="pill pill-dept">${t.department}</span>
       <span class="pill pill-prio-${t.priority}">${t.priority}</span>
       <span class="owner-chip" title="${t.owner}">${initials(t.owner)}</span>
     </div>
   </div>`;
+}
+
+function toggleCardChecklistItem(ticketId, idx, done){
+  var t = DB.tickets.filter(function(x){return x.ticket_id===ticketId;})[0];
+  if(!t) return;
+  var checklist = parseChecklist(t);
+  checklist[idx].done = done;
+  var json = JSON.stringify(checklist);
+  api('updateTicket', {ticket_id:ticketId, checklist_json:json, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ alert('Could not update checklist: '+(res.error||'Unknown error')); return; }
+    t.checklist_json = json;
+    render();
+  });
 }
 
 var CAL_EVENTS_BY_DATE = {};
@@ -965,7 +1062,19 @@ function sessionsHtml(sessions){
     return `<div class="proposal">
       <div style="display:flex;justify-content:space-between;"><b>${fmtDate(s.date)}</b><span class="pill" style="background:var(--surface2);">${s.status||'Scheduled'}</span></div>
       <div class="thin-tag" style="margin:6px 0;white-space:pre-line;"><b>Agenda:</b>\n${s.agenda||'(none)'}</div>
+      ${s.meeting_link ? `<div class="thin-tag" style="margin-bottom:6px;">Link: <a href="${s.meeting_link}" target="_blank">${s.meeting_link}</a></div>` : ''}
       <div class="field"><label>Notes (admin only)</label><textarea id="notes-${s.session_id}" style="min-height:70px;" placeholder="Add notes from this session...">${s.notes||''}</textarea></div>
+      <div class="row2" style="margin-bottom:8px;">
+        <div class="field"><label>Upload notes file (.txt, .md, .docx, .pdf)</label>
+          <input type="file" accept=".txt,.md,.docx,.pdf" onchange="handleOneOnOneFileUpload(event,'${s.session_id}')">
+        </div>
+        <div class="field"><label>Or paste a Google Doc link</label>
+          <div style="display:flex;gap:6px;">
+            <input id="docLink-${s.session_id}" placeholder="https://docs.google.com/document/d/...">
+            <button class="btn btn-ghost" onclick="importGoogleDocForSession('${s.session_id}')">Import</button>
+          </div>
+        </div>
+      </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost" onclick="saveOneOnOneNotes('${s.session_id}')">Save Notes</button>
         ${s.notes ? `<button class="btn btn-ghost" onclick="processOneOnOneAI('${s.session_id}')">* Process with AI</button>` : ''}
@@ -974,6 +1083,81 @@ function sessionsHtml(sessions){
       <div id="oneOnOneAi-${s.session_id}"></div>
     </div>`;
   }).join('');
+}
+
+function importGoogleDocForSession(sessionId){
+  var url = document.getElementById('docLink-'+sessionId).value.trim();
+  if(!url){ alert('Paste a Google Doc link first.'); return; }
+  api('readGoogleDocUrl', {url:url}).then(function(res){
+    if(!res.ok){ alert('Could not read that doc: '+(res.error||'Unknown error')+'\n\nMake sure the signed-in account has view access to it.'); return; }
+    var box = document.getElementById('notes-'+sessionId);
+    box.value = (box.value ? box.value+'\n\n' : '') + res.text;
+  });
+}
+
+function handleOneOnOneFileUpload(event, sessionId){
+  var file = event.target.files[0];
+  if(!file) return;
+  var name = file.name.toLowerCase();
+  var notesBox = document.getElementById('notes-'+sessionId);
+
+  if(name.endsWith('.txt') || name.endsWith('.md')){
+    var r1 = new FileReader();
+    r1.onload = function(e){ notesBox.value = (notesBox.value?notesBox.value+'\n\n':'') + e.target.result; };
+    r1.onerror = function(){ alert('Could not read that file.'); };
+    r1.readAsText(file);
+    return;
+  }
+  if(name.endsWith('.docx')){
+    var origVal = notesBox.value;
+    notesBox.value = origVal + '\n\n[Loading Word reader...]';
+    loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js').then(function(){
+      var r2 = new FileReader();
+      r2.onload = function(e){
+        mammoth.extractRawText({arrayBuffer: e.target.result}).then(function(result){
+          notesBox.value = (origVal?origVal+'\n\n':'') + result.value;
+        }).catch(function(err){ notesBox.value = origVal; alert('Could not read that Word file: '+err.message); });
+      };
+      r2.readAsArrayBuffer(file);
+    }).catch(function(){ notesBox.value = origVal; alert('Could not load the Word file reader.'); });
+    return;
+  }
+  if(name.endsWith('.pdf')){
+    var origVal2 = notesBox.value;
+    notesBox.value = origVal2 + '\n\n[Loading PDF reader...]';
+    loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function(){
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      var r3 = new FileReader();
+      r3.onload = function(e){
+        pdfjsLib.getDocument({data: e.target.result}).promise.then(function(pdf){
+          var pagePromises = [];
+          for(var i=1; i<=pdf.numPages; i++){
+            pagePromises.push(pdf.getPage(i).then(function(page){
+              return page.getTextContent().then(function(tc){ return tc.items.map(function(it){ return it.str; }).join(' '); });
+            }));
+          }
+          return Promise.all(pagePromises);
+        }).then(function(pages){
+          notesBox.value = (origVal2?origVal2+'\n\n':'') + pages.join('\n\n');
+        }).catch(function(err){ notesBox.value = origVal2; alert('Could not read that PDF: '+err.message); });
+      };
+      r3.readAsArrayBuffer(file);
+    }).catch(function(){ notesBox.value = origVal2; alert('Could not load the PDF reader.'); });
+    return;
+  }
+  alert('Unsupported file type. Use .txt, .md, .docx, or .pdf.');
+}
+
+function loadScriptOnce(url){
+  return new Promise(function(resolve, reject){
+    if (document.querySelector('script[data-lazy-src="'+url+'"]')) { resolve(); return; }
+    var s = document.createElement('script');
+    s.src = url;
+    s.setAttribute('data-lazy-src', url);
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){ reject(new Error('Failed to load '+url)); };
+    document.head.appendChild(s);
+  });
 }
 
 function processOneOnOneAI(sessionId){
@@ -1013,7 +1197,14 @@ function openOneOnOneSpace(name){
 }
 
 function openAddTrackingCard(person){
-  var title = prompt('Tracking card title (a quick note to revisit next 1:1):');
+  STATE.trackingCardPerson = person;
+  document.getElementById('tc_title').value = '';
+  openModal('addTrackingCardModalBg');
+}
+
+function saveTrackingCard(){
+  var person = STATE.trackingCardPerson;
+  var title = document.getElementById('tc_title').value.trim();
   if(!title) return;
   var personObj = DB.team.filter(function(p){return p.name===person;})[0];
   api('createTicket', {
@@ -1023,6 +1214,7 @@ function openAddTrackingCard(person){
   }).then(function(res){
     if(!res.ok){ alert('Could not add card: '+(res.error||'Unknown error')); return; }
     if(WORKSPACE_MODE && res.ticket){ DB.tickets.push(res.ticket); }
+    closeModal('addTrackingCardModalBg');
     render();
   });
 }
@@ -1037,12 +1229,34 @@ function markTrackingCardDone(id, checked){
 }
 
 function openScheduleOneOnOne(person){
-  var date = prompt('Date for this 1:1 (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
-  if(!date) return;
-  api('createOneOnOne', {team_member_name: person, date: date, created_by: CURRENT_USER}).then(function(res){
+  STATE.oneOnOneSchedulePerson = person;
+  document.getElementById('oo_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('oo_time').value = '';
+  document.getElementById('oo_agenda').value = '';
+  openModal('scheduleOneOnOneModalBg');
+}
+
+function saveScheduledOneOnOne(){
+  var person = STATE.oneOnOneSchedulePerson;
+  var payload = {
+    team_member_name: person,
+    date: document.getElementById('oo_date').value || new Date().toISOString().slice(0,10),
+    time: document.getElementById('oo_time').value,
+    agenda: document.getElementById('oo_agenda').value,
+    created_by: CURRENT_USER
+  };
+  api('createOneOnOne', payload).then(function(res){
     if(!res.ok){ alert('Could not schedule: '+(res.error||'Unknown error')); return; }
     if(WORKSPACE_MODE && res.session){ DB.oneOnOnes = DB.oneOnOnes || []; DB.oneOnOnes.push(res.session); }
+    closeModal('scheduleOneOnOneModalBg');
     render();
+    if(res.calendar_status){
+      if(res.calendar_status.ok){
+        alert('1:1 scheduled. Calendar event created on '+res.calendar_status.calendarUsed+'. '+person+' should also get a Slack DM and calendar invite email.');
+      } else {
+        alert('1:1 saved, but the calendar event could not be created: '+res.calendar_status.error);
+      }
+    }
   });
 }
 
@@ -1152,9 +1366,22 @@ function openTicketDetail(id){
   var checklist = parseChecklist(t);
   var body = document.getElementById('detailModalBody');
   body.innerHTML = `
-    <div class="modal-h"><h2>${typeIcon(t.type)} ${t.title}</h2><button class="close-x" onclick="closeModal('detailModalBg')">X</button></div>
+    <div class="modal-h"><h2 id="d_titleHeader">${typeIcon(t.type)} ${t.title}</h2><button class="close-x" onclick="closeModal('detailModalBg')">X</button></div>
     <div class="thin-tag mono" style="margin-bottom:12px;">${t.ticket_id}</div>
-    <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">${t.description || 'No description.'}</div>
+    <div class="field"><label>Title</label><input id="d_title" value="${(t.title||'').replace(/"/g,'&quot;')}" onchange="changeTicketField('${id}','title',this.value)"></div>
+    <div class="field"><label>Description</label><textarea id="d_desc" onchange="changeTicketField('${id}','description',this.value)">${t.description||''}</textarea></div>
+    <div class="row2">
+      <div class="field"><label>Type</label>
+        <select id="d_type" onchange="changeTicketField('${id}','type',this.value)">
+          ${['Bug','Feature','Task','Idea','Incident','Customer Request','Growth','Documentation','Research','Deployment'].map(function(ty){return `<option ${ty===t.type?'selected':''}>${ty}</option>`;}).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Department</label>
+        <select id="d_dept" onchange="changeTicketField('${id}','department',this.value)">
+          ${['Engineering','Operations','Growth'].map(function(dp){return `<option ${dp===t.department?'selected':''}>${dp}</option>`;}).join('')}
+        </select>
+      </div>
+    </div>
     <div class="row2">
       <div class="field"><label>Status</label>
         <select id="d_status" onchange="changeTicketField('${id}','status',this.value)">
@@ -1177,7 +1404,7 @@ function openTicketDetail(id){
       <div class="field"><label>Due Date</label><input type="date" id="d_due" value="${t.due_date||''}" onchange="changeTicketField('${id}','due_date',this.value)"></div>
     </div>
     <div style="display:flex;gap:12px;font-size:12px;color:var(--text-dim);margin-top:4px;">
-      <span><b>Department:</b> ${t.department}</span><span><b>Reporter:</b> ${t.reporter}</span>
+      <span><b>Reporter:</b> ${t.reporter}</span>
     </div>
 
     <div class="card-h" style="margin-top:16px;">Checklist <span class="thin-tag">${checklist.filter(c=>c.done).length}/${checklist.length}</span></div>
@@ -1194,9 +1421,20 @@ function openTicketDetail(id){
 
     <div style="display:flex;gap:8px;margin-top:18px;">
       <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="saveAsTemplate('${id}')">Save as Template</button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;color:var(--red);border-color:var(--red-bg);" onclick="deleteTicket('${id}','${(t.title||'').replace(/'/g,"\\'")}')">Delete Ticket</button>
     </div>
   `;
   openModal('detailModalBg');
+}
+
+function deleteTicket(id, title){
+  if(!confirm('Delete "'+title+'"? This cannot be undone.')) return;
+  api('deleteTicket', {ticket_id:id}).then(function(res){
+    if(!res.ok){ alert('Could not delete: '+(res.error||'Unknown error')); return; }
+    DB.tickets = DB.tickets.filter(function(t){return t.ticket_id!==id;});
+    closeModal('detailModalBg');
+    render();
+  });
 }
 
 function checklistHtml(checklist){
@@ -1246,9 +1484,18 @@ function saveChecklist(id, checklist){
 }
 
 function saveAsTemplate(id){
+  STATE.templateSourceTicketId = id;
   var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
   if(!t) return;
-  var name = prompt('Name this template (e.g. "Bug report checklist"):', t.title);
+  document.getElementById('tpl_name').value = t.title;
+  openModal('saveTemplateModalBg');
+}
+
+function confirmSaveTemplate(){
+  var id = STATE.templateSourceTicketId;
+  var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
+  if(!t) return;
+  var name = document.getElementById('tpl_name').value.trim();
   if(!name) return;
   api('saveTemplate', {
     name: name, title: t.title, description: t.description, type: t.type,
@@ -1257,6 +1504,7 @@ function saveAsTemplate(id){
   }).then(function(res){
     if(!res.ok){ alert('Could not save template: '+(res.error||'Unknown error')); return; }
     if(WORKSPACE_MODE && res.template){ DB.templates = DB.templates || []; DB.templates.push(res.template); }
+    closeModal('saveTemplateModalBg');
     alert('Template saved. You can reuse it from "+ New Ticket" next time.');
   });
 }
@@ -1322,6 +1570,61 @@ function switchUser(){
   document.getElementById('loginScreen').classList.remove('hidden');
   renderLoginPeople();
 }
+
+// ── Global Search ─────────────────────────────────────────────────────
+function runGlobalSearch(query){
+  var box = document.getElementById('searchResults');
+  query = (query||'').trim().toLowerCase();
+  if(!query){ box.classList.remove('open'); box.innerHTML=''; return; }
+
+  var results = [];
+  visibleTickets().filter(function(t){
+    return t.title.toLowerCase().indexOf(query)>-1 || t.ticket_id.toLowerCase().indexOf(query)>-1;
+  }).slice(0,5).forEach(function(t){
+    results.push({group:'Tickets', label: typeIcon(t.type)+' '+t.title, action:"closeSearch();openTicketDetail('"+t.ticket_id+"')"});
+  });
+  DB.meetings.filter(function(m){
+    return (m.title||'').toLowerCase().indexOf(query)>-1;
+  }).slice(0,5).forEach(function(m){
+    results.push({group:'Meetings', label: m.title, action:"closeSearch();goTo('meetings')"});
+  });
+  DB.team.filter(function(p){
+    return (p.name||'').toLowerCase().indexOf(query)>-1;
+  }).slice(0,5).forEach(function(p){
+    results.push({group:'People', label: p.name+(p.department?' - '+p.department:''), action:"closeSearch();goTo('teamspaces')"});
+  });
+  DB.decisions.filter(function(d){
+    return (d.decision_text||'').toLowerCase().indexOf(query)>-1;
+  }).slice(0,5).forEach(function(d){
+    results.push({group:'Decisions', label: d.decision_text, action:"closeSearch();goTo('decisions')"});
+  });
+
+  if(!results.length){
+    box.innerHTML = '<div class="search-result-item" style="color:var(--text-faint);">No matches for "'+query+'"</div>';
+    box.classList.add('open');
+    return;
+  }
+
+  var lastGroup = '';
+  box.innerHTML = results.map(function(r){
+    var groupHtml = r.group !== lastGroup ? '<div class="search-result-group">'+r.group+'</div>' : '';
+    lastGroup = r.group;
+    return groupHtml + '<div class="search-result-item" onclick="'+r.action+'">'+r.label+'</div>';
+  }).join('');
+  box.classList.add('open');
+}
+
+function closeSearch(){
+  document.getElementById('searchResults').classList.remove('open');
+  document.getElementById('globalSearch').value = '';
+}
+
+document.getElementById('globalSearch').addEventListener('input', function(e){
+  runGlobalSearch(e.target.value);
+});
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.search-wrap')) closeSearch();
+});
 
 document.getElementById('greetDate').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
 
