@@ -46,7 +46,8 @@ var DB = {
   notifications_log: [],
   templates: [
     {template_id:'t1',name:'Bug report checklist',title:'Bug report',description:'',type:'Bug',department:'Engineering',priority:'Medium',checklist_json:'[{"text":"Reproduce the issue","done":false},{"text":"Identify root cause","done":false},{"text":"Write fix","done":false},{"text":"Test fix","done":false}]'}
-  ]
+  ],
+  oneOnOnes: []
 };
 
 var STATE = { module: 'dashboard', editingTicketId: null };
@@ -141,6 +142,29 @@ function mockApi(action, payload) {
       if(!srcT) return {ok:false, error:'Template not found.'};
       return mockApi('createTicket', Object.assign({}, srcT, payload));
     }
+    case 'scheduleMeeting': {
+      if(!payload.description) return {ok:false, error:'A meeting description is required so an agenda can be generated.'};
+      var meeting = {
+        meeting_id:'m'+(DB.meetings.length+1), title:payload.title||'Meeting', date:payload.date, time:payload.time||'',
+        participants:(payload.invitees||[]).join(', '), invitees_json:JSON.stringify(payload.invitees||[]),
+        description:payload.description, agenda:'- Discuss: '+payload.description.slice(0,60)+'\n- Next steps\n- Q&A',
+        meeting_link:payload.meeting_link||'', raw_notes:'', ai_summary:'', ai_decisions_json:'', processed:'no', scheduled_by:CURRENT_USER
+      };
+      DB.meetings.push(meeting);
+      return {ok:true, meeting:meeting};
+    }
+    case 'createOneOnOne': {
+      var session = {session_id:'s'+Math.random(), team_member_name:payload.team_member_name, date:payload.date, agenda:payload.agenda||'', notes:'', status:'Scheduled', created_by:CURRENT_USER};
+      DB.oneOnOnes.push(session);
+      return {ok:true, session:session};
+    }
+    case 'updateOneOnOne': {
+      var s = DB.oneOnOnes.filter(function(x){return x.session_id===payload.session_id;})[0];
+      if(!s) return {ok:false, error:'Session not found.'};
+      if(payload.hasOwnProperty('notes')) s.notes = payload.notes;
+      if(payload.hasOwnProperty('status')) s.status = payload.status;
+      return {ok:true, updated:true};
+    }
   }
 }
 
@@ -172,6 +196,7 @@ var MODULES = [
   {group:'Team', items:[
     {id:'meetings',label:'Meetings',ico:'Talk'},
     {id:'standup',label:'Stand-up Mode',ico:'*'},
+    {id:'oneonones',label:'One-on-Ones',ico:'2'},
     {id:'feed',label:'Activity Feed',ico:'~'},
     {id:'workload',label:'Workload',ico:'|'},
     {id:'teamspaces',label:'Team Spaces',ico:'#'}
@@ -217,15 +242,19 @@ function render(){
     calendar: renderCalendar, projects: renderProjects, meetings: renderMeetings,
     standup: renderStandup, feed: renderFeed, workload: renderWorkload,
     teamspaces: renderTeamSpaces, command: renderCommand, decisions: renderDecisions,
-    adminlog: renderAdminLog, notifications: renderNotifications
+    adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes
   };
   c.innerHTML = '';
   c.appendChild(renderers[STATE.module]());
   populateSelects();
 }
 
+function visibleTickets(){
+  return DB.tickets.filter(function(t){ return t.source !== 'OneOnOne'; });
+}
+
 function renderDashboard(){
-  var t = DB.tickets;
+  var t = visibleTickets();
   var blocked = t.filter(function(x){return x.status==='Blocked';});
   var review = t.filter(function(x){return x.status==='Review';});
   var dueToday = t.filter(function(x){return x.due_date===new Date().toISOString().slice(0,10);});
@@ -309,7 +338,7 @@ function renderDashboard(){
 
 function renderTickets(){
   var wrap = el('<div></div>');
-  var rows = DB.tickets.map(function(t){
+  var rows = visibleTickets().map(function(t){
     return `<tr onclick="openTicketDetail('${t.ticket_id}')" style="cursor:pointer">
       <td class="mono">${t.ticket_id}</td>
       <td>${typeIcon(t.type)} ${t.title}</td>
@@ -343,7 +372,7 @@ function renderBoard(){
   var cols = STATUS_FLOW.concat(['Blocked']);
   var html = '<div class="board">';
   cols.forEach(function(status){
-    var items = DB.tickets.filter(function(t){
+    var items = visibleTickets().filter(function(t){
       if(t.status!==status) return false;
       if(STATE.boardDeptFilter!=='All' && t.department!==STATE.boardDeptFilter) return false;
       return true;
@@ -418,26 +447,79 @@ function renderProjects(){
 
 function renderMeetings(){
   var wrap = el('<div></div>');
-  wrap.innerHTML = `<div class="section-title">Meetings <button class="btn btn-ghost" style="margin-left:10px" onclick="document.getElementById('m_title').value='';document.getElementById('m_notes').value='';document.getElementById('m_people').value='';document.getElementById('m_date').value=new Date().toISOString().slice(0,10);openModal('meetingModalBg')">+ Log Meeting</button></div>
-  <div class="section-title" style="margin-top:0;font-size:11px;">Or create a task directly without a meeting  -  use "+ New Ticket" up top anytime.</div>
+  wrap.innerHTML = `<div class="section-title">Meetings
+    <button class="btn btn-ghost" style="margin-left:10px" onclick="openScheduleMeetingModal()">+ Schedule Meeting</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('m_title').value='';document.getElementById('m_notes').value='';document.getElementById('m_people').value='';document.getElementById('m_date').value=new Date().toISOString().slice(0,10);openModal('meetingModalBg')">+ Log Past Meeting Notes</button>
+  </div>
+  <div class="section-title" style="margin-top:0;font-size:11px;">Schedule invites a team, logs an agenda, and DMs invitees on Slack. Logging notes is for meetings that already happened - use "+ New Ticket" directly for standalone tasks.</div>
   <div id="meetingsList"></div>`;
   var box = wrap.querySelector('#meetingsList');
   box.innerHTML = DB.meetings.slice().reverse().map(function(m){
     var statusLabel = m.processed==='yes' ? 'Processed' : (m.processed==='pending_review' ? 'Review AI proposals' : 'Not processed');
     var statusColor = m.processed==='yes' ? 'var(--green)' : (m.processed==='pending_review' ? 'var(--violet)' : 'var(--text-faint)');
+    var isScheduled = !!m.agenda;
     return `<div class="card" style="margin-bottom:12px;">
-      <div class="card-h">${m.title} <span class="thin-tag">${fmtDate(m.date)}</span></div>
-      <div class="thin-tag" style="margin-bottom:8px;">Participants: ${m.participants}</div>
-      <div style="font-size:12.5px;color:var(--text-dim);margin-bottom:10px;">${(m.raw_notes||'').slice(0,180)}${(m.raw_notes||'').length>180?'...':''}</div>
+      <div class="card-h">${m.title} <span class="thin-tag">${fmtDate(m.date)}${m.time?' '+m.time:''}</span></div>
+      <div class="thin-tag" style="margin-bottom:8px;">${isScheduled ? 'Invitees' : 'Participants'}: ${m.participants}</div>
+      ${isScheduled ? `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:10px;white-space:pre-line;"><b>Agenda:</b>\n${m.agenda}</div>${m.meeting_link?`<div class="thin-tag" style="margin-bottom:10px;">Link: ${m.meeting_link}</div>`:''}` : ''}
+      ${!isScheduled ? `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:10px;">${(m.raw_notes||'').slice(0,180)}${(m.raw_notes||'').length>180?'...':''}</div>` : ''}
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="pill" style="background:${statusColor}22;color:${statusColor}">${statusLabel}</span>
-        ${m.processed==='no' ? `<button class="btn btn-ghost" onclick="runMeetingAI('${m.meeting_id}')">* Process with AI</button>` : ''}
+        ${!isScheduled ? `<span class="pill" style="background:${statusColor}22;color:${statusColor}">${statusLabel}</span>` : '<span class="pill" style="background:var(--blue-bg);color:var(--blue)">Scheduled</span>'}
+        ${m.processed==='no' && !isScheduled ? `<button class="btn btn-ghost" onclick="runMeetingAI('${m.meeting_id}')">* Process with AI</button>` : ''}
         ${m.processed==='pending_review' ? `<button class="btn btn-ghost" onclick="reviewMeetingProposals('${m.meeting_id}')">Review proposals</button>` : ''}
       </div>
       <div id="ai-${m.meeting_id}"></div>
     </div>`;
   }).join('') || '<div class="empty">No meetings logged yet.</div>';
   return wrap;
+}
+
+var SCHEDULE_INVITEES = [];
+
+function openScheduleMeetingModal(){
+  SCHEDULE_INVITEES = [];
+  document.getElementById('sm_title').value = '';
+  document.getElementById('sm_desc').value = '';
+  document.getElementById('sm_link').value = '';
+  document.getElementById('sm_date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sm_time').value = '';
+  renderInviteePicker();
+  openModal('scheduleMeetingModalBg');
+}
+
+function renderInviteePicker(){
+  var box = document.getElementById('sm_invitees');
+  if(!box) return;
+  box.innerHTML = DB.team.length ? DB.team.map(function(p){
+    var active = SCHEDULE_INVITEES.indexOf(p.name) > -1;
+    return `<span class="ms-chip${active?' ms-chip-active':''}" onclick="toggleInvitee('${p.name}')">${p.name}</span>`;
+  }).join('') : '<div class="thin-tag">No team members yet - add some from Team Spaces first.</div>';
+}
+
+function toggleInvitee(name){
+  var i = SCHEDULE_INVITEES.indexOf(name);
+  if(i > -1) SCHEDULE_INVITEES.splice(i,1); else SCHEDULE_INVITEES.push(name);
+  renderInviteePicker();
+}
+
+function saveScheduledMeeting(){
+  var description = document.getElementById('sm_desc').value.trim();
+  if(!description){ alert('A meeting description is required so an agenda can be generated.'); return; }
+  var payload = {
+    title: document.getElementById('sm_title').value || 'Meeting',
+    date: document.getElementById('sm_date').value || new Date().toISOString().slice(0,10),
+    time: document.getElementById('sm_time').value,
+    description: description,
+    meeting_link: document.getElementById('sm_link').value,
+    invitees: SCHEDULE_INVITEES,
+    scheduled_by: CURRENT_USER
+  };
+  api('scheduleMeeting', payload).then(function(res){
+    if(!res.ok){ alert('Could not schedule meeting: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.meeting){ DB.meetings.push(res.meeting); }
+    closeModal('scheduleMeetingModalBg');
+    goTo('meetings');
+  });
 }
 
 var MEETING_PROPOSALS = {};
@@ -715,6 +797,116 @@ function renderAdminLog(){
       <tbody>${rows || '<tr><td colspan="5" class="empty">No activity yet.</td></tr>'}</tbody></table>
     </div>`;
   return wrap;
+}
+
+function renderOneOnOnes(){
+  var wrap = el('<div></div>');
+  if(!STATE.oneOnOnePerson){
+    var html = '<div class="section-title">One-on-Ones</div>';
+    if(!DB.team.length){
+      html += '<div class="card"><div class="empty">Add team members from Team Spaces first, then come back here to schedule 1:1s.</div></div>';
+    } else {
+      html += '<div class="dash-grid" style="grid-template-columns:repeat(3,1fr)">' + DB.team.map(function(p){
+        var sessions = (DB.oneOnOnes||[]).filter(function(s){return s.team_member_name===p.name;});
+        var openCards = DB.tickets.filter(function(t){return t.source==='OneOnOne' && t.source_ref===p.name && t.status!=='Done';});
+        return `<div class="card" style="cursor:pointer;" onclick="openOneOnOneSpace('${p.name}')">
+          <div class="card-h">${p.name}</div>
+          <div class="thin-tag" style="margin-bottom:8px;">${p.role||''} ${p.department?'- '+p.department:''}</div>
+          <div class="thin-tag">${sessions.length} session${sessions.length===1?'':'s'} - ${openCards.length} open tracking card${openCards.length===1?'':'s'}</div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+    wrap.innerHTML = html;
+    return wrap;
+  }
+
+  var person = STATE.oneOnOnePerson;
+  var sessions = (DB.oneOnOnes||[]).filter(function(s){return s.team_member_name===person;}).sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  var trackingCards = DB.tickets.filter(function(t){return t.source==='OneOnOne' && t.source_ref===person;});
+  var openCards = trackingCards.filter(function(t){return t.status!=='Done';});
+  var doneCards = trackingCards.filter(function(t){return t.status==='Done';});
+
+  var html = `<div class="section-title"><span style="cursor:pointer;color:var(--text-dim);" onclick="STATE.oneOnOnePerson=null;render();">One-on-Ones</span> / ${person}</div>
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-h">Tracking Cards <button class="btn btn-ghost" onclick="openAddTrackingCard('${person}')">+ Add Card</button></div>
+      <div class="thin-tag" style="margin-bottom:8px;">Carried forward between sessions - review these before discussing anything new.</div>
+      <div id="trackingCardsBox">${trackingCardsHtml(openCards)}</div>
+      ${doneCards.length ? `<div class="thin-tag" style="margin-top:10px;">${doneCards.length} completed card${doneCards.length===1?'':'s'} (hidden)</div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-h">Sessions <button class="btn btn-ghost" onclick="openScheduleOneOnOne('${person}')">+ Schedule 1:1</button></div>
+      <div id="sessionsBox">${sessionsHtml(sessions)}</div>
+    </div>`;
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function trackingCardsHtml(cards){
+  if(!cards.length) return '<div class="empty">No open tracking cards.</div>';
+  return cards.map(function(t){
+    return `<div class="thin-row"><input type="checkbox" onchange="markTrackingCardDone('${t.ticket_id}',this.checked)"><span class="thin-title">${t.title}</span><span class="thin-tag">${t.priority}</span></div>`;
+  }).join('');
+}
+
+function sessionsHtml(sessions){
+  if(!sessions.length) return '<div class="empty">No 1:1 sessions yet.</div>';
+  return sessions.map(function(s){
+    return `<div class="proposal">
+      <div style="display:flex;justify-content:space-between;"><b>${fmtDate(s.date)}</b><span class="pill" style="background:var(--surface2);">${s.status||'Scheduled'}</span></div>
+      <div class="thin-tag" style="margin:6px 0;white-space:pre-line;"><b>Agenda:</b>\n${s.agenda||'(none)'}</div>
+      <div class="field"><label>Notes</label><textarea id="notes-${s.session_id}" style="min-height:70px;" placeholder="Add notes from this session...">${s.notes||''}</textarea></div>
+      <button class="btn btn-ghost" onclick="saveOneOnOneNotes('${s.session_id}')">Save Notes</button>
+    </div>`;
+  }).join('');
+}
+
+function openOneOnOneSpace(name){
+  STATE.oneOnOnePerson = name;
+  render();
+}
+
+function openAddTrackingCard(person){
+  var title = prompt('Tracking card title (a quick note to revisit next 1:1):');
+  if(!title) return;
+  var personObj = DB.team.filter(function(p){return p.name===person;})[0];
+  api('createTicket', {
+    title: title, type: 'Task', department: personObj ? personObj.department : '',
+    priority: 'Medium', owner: person, reporter: CURRENT_USER,
+    source: 'OneOnOne', source_ref: person
+  }).then(function(res){
+    if(!res.ok){ alert('Could not add card: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.ticket){ DB.tickets.push(res.ticket); }
+    render();
+  });
+}
+
+function markTrackingCardDone(id, checked){
+  api('updateTicket', {ticket_id:id, status: checked?'Done':'New', actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ alert('Could not update card: '+(res.error||'Unknown error')); return; }
+    var t = DB.tickets.filter(function(x){return x.ticket_id===id;})[0];
+    if(t) t.status = checked?'Done':'New';
+    render();
+  });
+}
+
+function openScheduleOneOnOne(person){
+  var date = prompt('Date for this 1:1 (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
+  if(!date) return;
+  api('createOneOnOne', {team_member_name: person, date: date, created_by: CURRENT_USER}).then(function(res){
+    if(!res.ok){ alert('Could not schedule: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.session){ DB.oneOnOnes = DB.oneOnOnes || []; DB.oneOnOnes.push(res.session); }
+    render();
+  });
+}
+
+function saveOneOnOneNotes(sessionId){
+  var notes = document.getElementById('notes-'+sessionId).value;
+  api('updateOneOnOne', {session_id: sessionId, notes: notes, status: 'Completed'}).then(function(res){
+    if(!res.ok){ alert('Could not save notes: '+(res.error||'Unknown error')); return; }
+    var s = (DB.oneOnOnes||[]).filter(function(x){return x.session_id===sessionId;})[0];
+    if(s){ s.notes = notes; s.status = 'Completed'; }
+    render();
+  });
 }
 
 function renderNotifications(){
@@ -1005,6 +1197,7 @@ if (WORKSPACE_MODE) {
       DB.projects = res.data.projects || [];
       DB.team = res.data.team || [];
       DB.templates = res.data.templates || [];
+      DB.oneOnOnes = res.data.oneOnOnes || [];
       boot();
     } else {
       document.getElementById('loginSub').textContent = 'Could not load your data';
