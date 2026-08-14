@@ -1,6 +1,7 @@
 var WORKSPACE_MODE = (typeof google !== 'undefined' && !!google.script && !!google.script.run);
 
 var CURRENT_USER = 'Oreoluwa';
+var CURRENT_USER_ROLE = 'Admin';
 
 var STATUS_FLOW = ['New','Triaged','Assigned','In Progress','Waiting','Review','Approved','Done'];
 var STATUS_COLOR = {
@@ -214,6 +215,7 @@ function renderNav(){
   MODULES.forEach(function(g){
     if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
     g.items.forEach(function(m){
+      if(m.id==='oneonones' && CURRENT_USER_ROLE!=='Admin') return;
       var active = STATE.module===m.id ? ' active' : '';
       html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+m.ico+'</span>'+m.label+'</div>';
     });
@@ -741,9 +743,16 @@ function saveTeamMember(){
   if(!payload.name || !payload.email){ alert('Name and email are required.'); return; }
   api('createTeamMember', payload).then(function(res){
     if(!res.ok){ alert('Could not add team member: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE && res.member){ DB.team.push(res.member); }
+    if(WORKSPACE_MODE){
+      var existing = DB.team.filter(function(p){return p.email===res.member.email;})[0];
+      if(existing){ Object.assign(existing, res.member); } else { DB.team.push(res.member); }
+    }
     closeModal('addMemberModalBg');
     render();
+    var lines = [res.isNew ? (payload.name+' added.') : (payload.name+' updated.')];
+    lines.push('Email: ' + (res.email_status && res.email_status.ok ? 'sent' : (res.email_status && res.email_status.skipped ? 'skipped (existing member)' : 'FAILED - '+(res.email_status && res.email_status.error))));
+    lines.push('Slack DM: ' + (res.slack_status && res.slack_status.ok ? 'sent' : 'FAILED - '+(res.slack_status && res.slack_status.error)));
+    alert(lines.join('\n'));
   });
 }
 
@@ -854,10 +863,46 @@ function sessionsHtml(sessions){
     return `<div class="proposal">
       <div style="display:flex;justify-content:space-between;"><b>${fmtDate(s.date)}</b><span class="pill" style="background:var(--surface2);">${s.status||'Scheduled'}</span></div>
       <div class="thin-tag" style="margin:6px 0;white-space:pre-line;"><b>Agenda:</b>\n${s.agenda||'(none)'}</div>
-      <div class="field"><label>Notes</label><textarea id="notes-${s.session_id}" style="min-height:70px;" placeholder="Add notes from this session...">${s.notes||''}</textarea></div>
-      <button class="btn btn-ghost" onclick="saveOneOnOneNotes('${s.session_id}')">Save Notes</button>
+      <div class="field"><label>Notes (admin only)</label><textarea id="notes-${s.session_id}" style="min-height:70px;" placeholder="Add notes from this session...">${s.notes||''}</textarea></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" onclick="saveOneOnOneNotes('${s.session_id}')">Save Notes</button>
+        ${s.notes ? `<button class="btn btn-ghost" onclick="processOneOnOneAI('${s.session_id}')">* Process with AI</button>` : ''}
+        ${s.drive_doc_url ? `<a class="btn btn-ghost" href="${s.drive_doc_url}" target="_blank" style="text-decoration:none;">Open in Drive</a>` : ''}
+      </div>
+      <div id="oneOnOneAi-${s.session_id}"></div>
     </div>`;
   }).join('');
+}
+
+function processOneOnOneAI(sessionId){
+  var target = document.getElementById('oneOnOneAi-'+sessionId);
+  target.innerHTML = '<div class="ai-box"><div class="ai-box-h">* Reading notes...</div></div>';
+  api('processOneOnOneWithAI', {session_id: sessionId}).then(function(res){
+    if(!res.ok){ target.innerHTML = '<div class="ai-box">Could not process: '+(res.error||'unknown error')+'</div>'; return; }
+    var itemsHtml = (res.activities||[]).map(function(item,i){
+      return `<div class="proposal"><b>${item.description}</b>
+        <div class="proposal-actions"><button class="btn btn-primary" onclick="pushOneOnOneItemAsTicket('${sessionId}',${i},'${(item.description||'').replace(/'/g,"\\'")}')">Push as Ticket</button></div>
+      </div>`;
+    }).join('');
+    target.innerHTML = `<div class="ai-box">
+      <div class="ai-box-h">* Activities discussed</div>
+      ${itemsHtml || '<div class="thin-tag">Nothing actionable found in these notes.</div>'}
+    </div>`;
+  });
+}
+
+function pushOneOnOneItemAsTicket(sessionId, idx, description){
+  var s = (DB.oneOnOnes||[]).filter(function(x){return x.session_id===sessionId;})[0];
+  var person = s ? s.team_member_name : STATE.oneOnOnePerson;
+  var personObj = DB.team.filter(function(p){return p.name===person;})[0];
+  api('createTicket', {
+    title: description, type: 'Task', department: personObj ? personObj.department : '',
+    priority: 'Medium', owner: person, reporter: CURRENT_USER, source: 'Manual'
+  }).then(function(res){
+    if(!res.ok){ alert('Could not create ticket: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.ticket){ DB.tickets.push(res.ticket); }
+    alert('Pushed to the main ticket system, assigned to '+person+'.');
+  });
 }
 
 function openOneOnOneSpace(name){
@@ -904,7 +949,7 @@ function saveOneOnOneNotes(sessionId){
   api('updateOneOnOne', {session_id: sessionId, notes: notes, status: 'Completed'}).then(function(res){
     if(!res.ok){ alert('Could not save notes: '+(res.error||'Unknown error')); return; }
     var s = (DB.oneOnOnes||[]).filter(function(x){return x.session_id===sessionId;})[0];
-    if(s){ s.notes = notes; s.status = 'Completed'; }
+    if(s){ s.notes = notes; s.status = 'Completed'; if(res.updated && res.updated.drive_doc_url) s.drive_doc_url = res.updated.drive_doc_url; }
     render();
   });
 }
@@ -914,13 +959,21 @@ function renderNotifications(){
   wrap.innerHTML = `<div class="section-title">Notifications</div>
   <div class="card">
     <div class="thin-tag" style="margin-bottom:10px;">Private Slack DMs fire from Apps Script (welcome, assigned, due tomorrow, overdue, blocked, review needed, completed, meeting invites). Configure SLACK_BOT_TOKEN in Script Properties to activate - each person also needs their Slack Member ID saved in the Team tab.</div>
-    <div id="notifLog"></div>
+    <button class="btn btn-ghost" onclick="sendTestDM()">Send Test DM to Myself</button>
+    <div id="notifLog" style="margin-top:14px;"></div>
   </div>`;
   var box = wrap.querySelector('#notifLog');
   box.innerHTML = DB.notifications_log && DB.notifications_log.length ? DB.notifications_log.slice().reverse().map(function(n){
     return `<div class="thin-row"><span class="thin-title">${n.message}</span><span class="thin-tag">${n.status}</span></div>`;
   }).join('') : '<div class="empty">No notifications sent yet in this session.</div>';
   return wrap;
+}
+
+function sendTestDM(){
+  api('testSlackDM', {}).then(function(res){
+    if(!res.ok){ alert('Test DM failed: '+(res.error||'Unknown error')+'\n\nCheck: SLACK_BOT_TOKEN is set correctly, the chat:write scope was added, and your own Team tab row has the right slack_handle.'); return; }
+    alert('Test DM sent - check Slack. If nothing arrived within a minute even though this said success, double check the slack_handle is a real Member ID (starts with U), not a username.');
+  });
 }
 
 function populateSelects(){
@@ -1147,10 +1200,11 @@ function renderLoginPeople(){
 
 function selectUser(name){
   CURRENT_USER = name;
+  var person = DB.team.filter(function(p){return p.name===name;})[0];
+  CURRENT_USER_ROLE = person ? (person.role || '') : '';
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('footAvatar').textContent = initials(name);
-  var person = DB.team.filter(function(p){return p.name===name;})[0];
   document.getElementById('footLabel').textContent = person ? (name + ' - ' + person.role) : name;
   document.getElementById('greetName').textContent = 'Good Morning, ' + name;
   renderNav();
