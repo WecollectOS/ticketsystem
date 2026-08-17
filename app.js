@@ -917,11 +917,16 @@ function approveMeeting(meetingId){
 }
 
 function saveMeeting(){
+  var notes = document.getElementById('m_notes').value;
+  if(/\[Loading (Word|PDF) reader\.\.\.\]/.test(notes)){
+    alert('The file is still being read - please wait a moment for it to finish before saving.');
+    return;
+  }
   var payload = {
     title: document.getElementById('m_title').value || 'Untitled Meeting',
     date: document.getElementById('m_date').value || new Date().toISOString().slice(0,10),
     participants: document.getElementById('m_people').value,
-    raw_notes: document.getElementById('m_notes').value
+    raw_notes: notes
   };
   api('submitMeeting', payload).then(function(res){
     if(!res.ok){ alert('Could not save meeting: '+(res.error||'Unknown error')); return; }
@@ -1201,35 +1206,50 @@ function importGoogleDocForSession(sessionId){
   });
 }
 
-function handleOneOnOneFileUpload(event, sessionId){
+// Generic notes-file reader used by BOTH the main "Log Past Meeting Notes"
+// modal and each 1:1 session. Disables the given save button (if provided)
+// for the whole duration of reading/parsing, so it is physically impossible
+// to click Save while a placeholder like "[Loading Word reader...]" is
+// still sitting in the textarea instead of the real extracted content -
+// that exact race is what caused Gemini to report "no notes provided"
+// on a previous upload.
+function handleNotesFileUpload(event, textareaId, saveButtonId){
   var file = event.target.files[0];
   if(!file) return;
   var name = file.name.toLowerCase();
-  var notesBox = document.getElementById('notes-'+sessionId);
+  var notesBox = document.getElementById(textareaId);
+  var saveBtn = saveButtonId ? document.getElementById(saveButtonId) : null;
+
+  function lock(){ if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Reading file...'; } }
+  function unlock(label){ if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = label; } }
 
   if(name.endsWith('.txt') || name.endsWith('.md')){
+    lock();
     var r1 = new FileReader();
-    r1.onload = function(e){ notesBox.value = (notesBox.value?notesBox.value+'\n\n':'') + e.target.result; };
-    r1.onerror = function(){ alert('Could not read that file.'); };
+    r1.onload = function(e){ notesBox.value = (notesBox.value?notesBox.value+'\n\n':'') + e.target.result; unlock(saveBtn?saveBtn.dataset.label:''); };
+    r1.onerror = function(){ alert('Could not read that file.'); unlock(saveBtn?saveBtn.dataset.label:''); };
     r1.readAsText(file);
     return;
   }
   if(name.endsWith('.docx')){
     var origVal = notesBox.value;
+    lock();
     notesBox.value = origVal + '\n\n[Loading Word reader...]';
     loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js').then(function(){
       var r2 = new FileReader();
       r2.onload = function(e){
         mammoth.extractRawText({arrayBuffer: e.target.result}).then(function(result){
           notesBox.value = (origVal?origVal+'\n\n':'') + result.value;
-        }).catch(function(err){ notesBox.value = origVal; alert('Could not read that Word file: '+err.message); });
+          unlock(saveBtn?saveBtn.dataset.label:'');
+        }).catch(function(err){ notesBox.value = origVal; alert('Could not read that Word file: '+err.message); unlock(saveBtn?saveBtn.dataset.label:''); });
       };
       r2.readAsArrayBuffer(file);
-    }).catch(function(){ notesBox.value = origVal; alert('Could not load the Word file reader.'); });
+    }).catch(function(){ notesBox.value = origVal; alert('Could not load the Word file reader.'); unlock(saveBtn?saveBtn.dataset.label:''); });
     return;
   }
   if(name.endsWith('.pdf')){
     var origVal2 = notesBox.value;
+    lock();
     notesBox.value = origVal2 + '\n\n[Loading PDF reader...]';
     loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function(){
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -1245,13 +1265,22 @@ function handleOneOnOneFileUpload(event, sessionId){
           return Promise.all(pagePromises);
         }).then(function(pages){
           notesBox.value = (origVal2?origVal2+'\n\n':'') + pages.join('\n\n');
-        }).catch(function(err){ notesBox.value = origVal2; alert('Could not read that PDF: '+err.message); });
+          unlock(saveBtn?saveBtn.dataset.label:'');
+        }).catch(function(err){ notesBox.value = origVal2; alert('Could not read that PDF: '+err.message); unlock(saveBtn?saveBtn.dataset.label:''); });
       };
       r3.readAsArrayBuffer(file);
-    }).catch(function(){ notesBox.value = origVal2; alert('Could not load the PDF reader.'); });
+    }).catch(function(){ notesBox.value = origVal2; alert('Could not load the PDF reader.'); unlock(saveBtn?saveBtn.dataset.label:''); });
     return;
   }
   alert('Unsupported file type. Use .txt, .md, .docx, or .pdf.');
+}
+
+// Thin wrappers so existing HTML onchange calls keep working unchanged.
+function handleMeetingFileUpload(event){
+  handleNotesFileUpload(event, 'm_notes', 'm_save_btn');
+}
+function handleOneOnOneFileUpload(event, sessionId){
+  handleNotesFileUpload(event, 'notes-'+sessionId, null);
 }
 
 function loadScriptOnce(url){
