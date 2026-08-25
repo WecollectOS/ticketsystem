@@ -834,11 +834,31 @@ var MEETING_PROPOSALS = {};
 function runMeetingAI(meetingId){
   var target = document.getElementById('ai-'+meetingId);
   target.innerHTML = '<div class="ai-box"><div class="ai-box-h">* Reading meeting notes...</div></div>';
+
+  var slowNoticeTimer = setTimeout(function(){
+    target.innerHTML = '<div class="ai-box"><div class="ai-box-h">* Still working...</div>This is a long transcript, so it can take up to a minute. Please keep this tab open.</div>';
+  }, 8000);
+
+  var gaveUp = false;
+  var giveUpTimer = setTimeout(function(){
+    gaveUp = true;
+    target.innerHTML = '<div class="ai-box">This is taking unusually long and may have timed out in transit. Check Apps Script Executions for the actual result, or try again - it sometimes completes on a retry even if the first attempt seems to hang.<div class="proposal-actions"><button class="btn btn-ghost" onclick="runMeetingAI(\'' + meetingId + '\')">Try Again</button></div></div>';
+  }, 100000);
+
   api('processMeetingWithAI', {meeting_id: meetingId}).then(function(res){
+    clearTimeout(slowNoticeTimer);
+    clearTimeout(giveUpTimer);
+    if(gaveUp) return; // already showed the give-up message, don't overwrite a fresh retry
     if(!res.ok){ target.innerHTML = '<div class="ai-box">Couldn\'t process: '+(res.error||'unknown error')+'</div>'; return; }
     MEETING_PROPOSALS[meetingId] = res.proposals;
     render();
-    setTimeout(function(){ reviewMeetingProposals(meetingId); }, 50);
+    setTimeout(function(){
+      reviewMeetingProposals(meetingId);
+      if(res.was_truncated){
+        var note = document.getElementById('ai-'+meetingId);
+        if(note) note.innerHTML = '<div class="thin-tag" style="margin-bottom:6px;">Note: this transcript was long, so only the first part was used for extraction. The full text is still saved.</div>' + note.innerHTML;
+      }
+    }, 50);
   });
 }
 
