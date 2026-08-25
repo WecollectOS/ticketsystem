@@ -1460,6 +1460,7 @@ function newsDigestHtml(digest){
     </div>`;
   }
   return `<div class="thin-tag" style="margin-bottom:10px;">Generated ${fmtDateTime(digest.generated_at)}</div>` +
+    section('Funding & Opportunities', digest.funding_news_json) +
     section('Industry', digest.industry_news_json) +
     section('Competitors', digest.competitor_news_json) +
     section('Customers', digest.customer_news_json);
