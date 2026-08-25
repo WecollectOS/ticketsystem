@@ -214,6 +214,7 @@ var MODULES = [
   ]},
   {group:'Intelligence', items:[
     {id:'command',label:'AI Command Center',ico:'*'},
+    {id:'newsdigest',label:'Industry News',ico:'N'},
     {id:'decisions',label:'Decision Register',ico:'!'},
     {id:'adminlog',label:'Admin Activity Log',ico:'='},
     {id:'notifications',label:'Notifications',ico:'!'}
@@ -225,7 +226,7 @@ function renderNav(){
   MODULES.forEach(function(g){
     if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
     g.items.forEach(function(m){
-      if(m.id==='oneonones' && CURRENT_USER_ROLE!=='Admin') return;
+      if((m.id==='oneonones' || m.id==='newsdigest') && CURRENT_USER_ROLE!=='Admin') return;
       var active = STATE.module===m.id ? ' active' : '';
       html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+m.ico+'</span>'+m.label+'</div>';
     });
@@ -254,7 +255,7 @@ function render(){
     calendar: renderCalendar, projects: renderProjects, meetings: renderMeetings,
     standup: renderStandup, feed: renderFeed, workload: renderWorkload,
     teamspaces: renderTeamSpaces, command: renderCommand, decisions: renderDecisions,
-    adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes
+    adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes, newsdigest: renderNewsDigest
   };
   c.innerHTML = '';
   c.appendChild(renderers[STATE.module]());
@@ -1422,6 +1423,54 @@ function saveOneOnOneNotes(sessionId){
     var s = (DB.oneOnOnes||[]).filter(function(x){return x.session_id===sessionId;})[0];
     if(s){ s.notes = notes; s.status = 'Completed'; if(res.updated && res.updated.drive_doc_url) s.drive_doc_url = res.updated.drive_doc_url; }
     render();
+  });
+}
+
+function renderNewsDigest(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title">Industry News <button class="btn btn-ghost" style="margin-left:10px" onclick="runNewsDigestNow()">Refresh Now</button></div>
+  <div class="thin-tag" style="margin-bottom:14px;">Auto-generated from live web search - covers WeCollect's industry, competitors, and customer sectors across Africa. Also DMs admins on Slack when it runs on schedule.</div>
+  <div id="newsDigestBox"><div class="empty">Loading...</div></div>`;
+
+  api('getLatestNewsDigest', {}).then(function(res){
+    var box = document.getElementById('newsDigestBox');
+    if(!box) return;
+    if(!res.ok){ box.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    if(!res.digest){ box.innerHTML = '<div class="empty">No digest generated yet. Click "Refresh Now" to generate the first one, or set up the weekly trigger in Apps Script.</div>'; return; }
+    box.innerHTML = newsDigestHtml(res.digest);
+  });
+
+  return wrap;
+}
+
+function newsDigestHtml(digest){
+  function section(title, jsonStr){
+    var items = [];
+    try { items = JSON.parse(jsonStr || '[]'); } catch(e){ items = []; }
+    if(!items.length) return '';
+    return `<div class="card" style="margin-bottom:14px;">
+      <div class="card-h">${title}</div>
+      ${items.map(function(n){
+        return `<div class="proposal">
+          <b>${n.title}</b>
+          <div class="thin-tag" style="margin:6px 0;">${n.summary||''}</div>
+          ${n.source_url ? `<a href="${n.source_url}" target="_blank" style="font-size:11.5px;color:var(--blue);">${n.source_name||'Source'}</a>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  return `<div class="thin-tag" style="margin-bottom:10px;">Generated ${fmtDateTime(digest.generated_at)}</div>` +
+    section('Industry', digest.industry_news_json) +
+    section('Competitors', digest.competitor_news_json) +
+    section('Customers', digest.customer_news_json);
+}
+
+function runNewsDigestNow(){
+  var box = document.getElementById('newsDigestBox');
+  if(box) box.innerHTML = '<div class="empty">Searching the web and generating your digest - this can take 20-30 seconds...</div>';
+  api('runNewsDigestNow', {}).then(function(res){
+    if(!res.ok){ if(box) box.innerHTML = '<div class="empty">Could not generate digest: '+(res.error||'Unknown error')+'</div>'; return; }
+    if(box) box.innerHTML = newsDigestHtml(res.digest);
   });
 }
 
