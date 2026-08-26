@@ -204,6 +204,10 @@ var MODULES = [
     {id:'calendar',label:'Calendar',ico:'#'},
     {id:'projects',label:'Projects',ico:'[]'}
   ]},
+  {group:'Training', items:[
+    {id:'training',label:'My Training',ico:'V'},
+    {id:'trainingadmin',label:'Training Admin',ico:'V'}
+  ]},
   {group:'Team', items:[
     {id:'meetings',label:'Meetings',ico:'Talk'},
     {id:'standup',label:'Stand-up Mode',ico:'*'},
@@ -226,7 +230,7 @@ function renderNav(){
   MODULES.forEach(function(g){
     if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
     g.items.forEach(function(m){
-      if((m.id==='oneonones' || m.id==='newsdigest') && CURRENT_USER_ROLE!=='Admin') return;
+      if((m.id==='oneonones' || m.id==='newsdigest' || m.id==='trainingadmin') && CURRENT_USER_ROLE!=='Admin') return;
       var active = STATE.module===m.id ? ' active' : '';
       html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+m.ico+'</span>'+m.label+'</div>';
     });
@@ -255,7 +259,8 @@ function render(){
     calendar: renderCalendar, projects: renderProjects, meetings: renderMeetings,
     standup: renderStandup, feed: renderFeed, workload: renderWorkload,
     teamspaces: renderTeamSpaces, command: renderCommand, decisions: renderDecisions,
-    adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes, newsdigest: renderNewsDigest
+    adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes, newsdigest: renderNewsDigest,
+    training: renderTraining, trainingadmin: renderTrainingAdmin
   };
   c.innerHTML = '';
   c.appendChild(renderers[STATE.module]());
@@ -1473,6 +1478,552 @@ function runNewsDigestNow(){
     if(!res.ok){ if(box) box.innerHTML = '<div class="empty">Could not generate digest: '+(res.error||'Unknown error')+'</div>'; return; }
     if(box) box.innerHTML = newsDigestHtml(res.digest);
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TRAINING MODULE
+// ═══════════════════════════════════════════════════════════════════════
+
+var TRAINING_POLL_TIMER = null;
+var TRAINING_PLAYER = null;
+
+function renderTraining(){
+  var wrap = el('<div></div>');
+  var view = STATE.trainingView || 'catalog';
+  clearInterval(TRAINING_POLL_TIMER);
+
+  if(view === 'video' && STATE.trainingVideoId){
+    wrap.appendChild(buildTrainingVideoView(STATE.trainingVideoId));
+  } else if(view === 'quiz' && STATE.trainingVideoId){
+    wrap.appendChild(buildTrainingQuizView(STATE.trainingVideoId));
+  } else {
+    wrap.appendChild(buildTrainingCatalogView());
+  }
+  return wrap;
+}
+
+function goToTraining(view, videoId){
+  STATE.trainingView = view;
+  STATE.trainingVideoId = videoId || null;
+  render();
+}
+
+// ── Catalog / "My Training" ─────────────────────────────────────────────
+
+function buildTrainingCatalogView(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = '<div class="section-title">My Training</div><div class="thin-tag" style="margin-bottom:14px;">Watch each video fully to unlock its quiz - skipping ahead is checked server-side, not just in this window.</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">' +
+    '<input id="trg_search" placeholder="Search videos..." style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;">' +
+    '<select id="trg_status" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;"><option value="all">All</option><option value="not-started">Not started</option><option value="in-progress">In progress</option><option value="completed">Completed</option></select>' +
+    '</div><div id="trg_tags" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;"></div>' +
+    '<div id="trg_grid" class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));"><div class="empty">Loading...</div></div>';
+
+  api('getTrainingDashboardData', {}).then(function(res){
+    var grid = document.getElementById('trg_grid');
+    if(!res.ok){ if(grid) grid.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    TRAINING_CATALOG = res.videos || [];
+    renderTrainingTagChips();
+    renderTrainingGrid();
+  });
+
+  var searchEl = wrap.querySelector('#trg_search');
+  var statusEl = wrap.querySelector('#trg_status');
+  if(searchEl) searchEl.addEventListener('input', renderTrainingGrid);
+  if(statusEl) statusEl.addEventListener('change', renderTrainingGrid);
+  return wrap;
+}
+
+var TRAINING_CATALOG = [];
+var TRAINING_ACTIVE_TAG = null;
+
+function renderTrainingTagChips(){
+  var box = document.getElementById('trg_tags');
+  if(!box) return;
+  var tagSet = {};
+  TRAINING_CATALOG.forEach(function(v){ (v.tags||[]).forEach(function(t){ tagSet[t]=true; }); });
+  var tags = Object.keys(tagSet).sort();
+  if(!tags.length){ box.style.display='none'; return; }
+  box.innerHTML = tags.map(function(t){
+    var active = TRAINING_ACTIVE_TAG===t;
+    return `<span class="pill" style="cursor:pointer;padding:5px 12px;${active?'background:var(--ink);color:var(--on-ink);':'background:var(--surface2);color:var(--text-dim);'}" onclick="toggleTrainingTag('${t}')">${t}</span>`;
+  }).join('');
+}
+
+function toggleTrainingTag(t){
+  TRAINING_ACTIVE_TAG = TRAINING_ACTIVE_TAG===t ? null : t;
+  renderTrainingTagChips();
+  renderTrainingGrid();
+}
+
+function renderTrainingGrid(){
+  var grid = document.getElementById('trg_grid');
+  if(!grid) return;
+  var query = (document.getElementById('trg_search')||{}).value || '';
+  query = query.trim().toLowerCase();
+  var status = (document.getElementById('trg_status')||{}).value || 'all';
+
+  var list = TRAINING_CATALOG.filter(function(v){
+    var statusKey = v.completed ? 'completed' : (v.pct>0 ? 'in-progress' : 'not-started');
+    if(status!=='all' && statusKey!==status) return false;
+    if(query && v.title.toLowerCase().indexOf(query)===-1) return false;
+    if(TRAINING_ACTIVE_TAG && (v.tags||[]).indexOf(TRAINING_ACTIVE_TAG)===-1) return false;
+    return true;
+  });
+
+  if(!TRAINING_CATALOG.length){ grid.innerHTML = '<div class="empty">No training videos published yet.</div>'; return; }
+  if(!list.length){ grid.innerHTML = '<div class="empty">No videos match your search.</div>'; return; }
+
+  grid.innerHTML = list.map(function(v){
+    var statusLabel = v.completed ? 'Completed' : (v.pct>0 ? v.pct+'% watched' : 'Not started');
+    var target = (v.completed && v.quizAvailable) ? 'quiz' : 'video';
+    return `<div class="card" style="cursor:pointer;" onclick="goToTraining('${target}','${v.id}')">
+      <img src="${v.thumbnailUrl}" style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;margin-bottom:8px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px;">${v.title}</div>
+      <div class="thin-tag">${statusLabel}${v.bestScore!==null?' - Best score: '+v.bestScore+'%':''}</div>
+      ${(v.tags||[]).length ? '<div style="margin-top:6px;">'+v.tags.map(function(t){return '<span class="pill" style="background:var(--surface2);margin-right:4px;">'+t+'</span>';}).join('')+'</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Video player with server-enforced anti-skip ────────────────────────
+
+function buildTrainingVideoView(videoId){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title"><span style="cursor:pointer;color:var(--text-dim);" onclick="goToTraining('catalog')">My Training</span> / Video</div>
+    <div class="card" id="trg_video_card"><div class="empty">Loading...</div></div>`;
+
+  api('getVideoPageData', {videoId: videoId}).then(function(res){
+    var card = document.getElementById('trg_video_card');
+    if(!card) return;
+    if(!res.ok){ card.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var data = res.data;
+    var pct = Math.round((data.progress.maxContiguousSec / data.video.durationSec) * 100);
+    card.innerHTML = `
+      <h2 style="font-family:'Space Grotesk';font-size:16px;margin-bottom:6px;">${data.video.title}</h2>
+      <div class="thin-tag" style="margin-bottom:14px;">Watch the full video to unlock the quiz - skipping ahead isn't possible, progress is checked on the server.</div>
+      <div style="max-width:640px;">
+        <div style="position:relative;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;">
+          <div id="trg_player" style="position:absolute;inset:0;"></div>
+          <div style="position:absolute;bottom:0;left:0;right:0;height:40px;" onclick="event.stopPropagation()"></div>
+        </div>
+        <div class="wl-bar-track" style="margin-top:10px;"><div class="wl-bar-fill" id="trg_fill" style="width:${data.progress.completed?100:pct}%"></div></div>
+        <div class="thin-tag" id="trg_pct_label" style="margin-top:4px;">${pct}% watched</div>
+        <div id="trg_message"></div>
+        <div id="trg_quiz_link"></div>
+      </div>
+    `;
+    initTrainingPlayer(videoId, data);
+  });
+
+  return wrap;
+}
+
+function initTrainingPlayer(videoId, data){
+  var allowedMax = data.progress.maxContiguousSec;
+  var completed = data.progress.completed;
+  var quizAvailable = data.quizAvailable;
+  var durationSec = data.video.durationSec;
+  var lastSent = 0;
+
+  if(completed && quizAvailable){
+    var linkBox = document.getElementById('trg_quiz_link');
+    if(linkBox) linkBox.innerHTML = '<button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center;padding:10px;" onclick="goToTraining(\'quiz\',\''+videoId+'\')">Start Quiz</button>';
+  }
+
+  function startPlayer(){
+    TRAINING_PLAYER = new YT.Player('trg_player', {
+      videoId: data.video.youtubeId,
+      playerVars: { controls: 0, disablekb: 1, fs: 0, modestbranding: 1, rel: 0, iv_load_policy: 3, enablejsapi: 1 },
+      events: {
+        onReady: function(){ if(allowedMax > 0) TRAINING_PLAYER.seekTo(allowedMax, true); },
+        onStateChange: onTrainingStateChange
+      }
+    });
+  }
+
+  function onTrainingStateChange(e){
+    if(e.data === YT.PlayerState.PLAYING){
+      clearInterval(TRAINING_POLL_TIMER);
+      TRAINING_POLL_TIMER = setInterval(function(){
+        var t = TRAINING_PLAYER.getCurrentTime();
+        if(Math.abs(t - lastSent) >= 0.5){ lastSent = t; sendTrainingPing('PLAYING'); }
+      }, 1500);
+    } else if(e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.BUFFERING){
+      clearInterval(TRAINING_POLL_TIMER);
+      sendTrainingPing(e.data === YT.PlayerState.PAUSED ? 'PAUSED' : 'BUFFERING');
+    } else if(e.data === YT.PlayerState.ENDED){
+      clearInterval(TRAINING_POLL_TIMER);
+      sendTrainingPing('ENDED');
+    }
+  }
+
+  function sendTrainingPing(state){
+    var currentTime = TRAINING_PLAYER.getCurrentTime();
+    var rate = TRAINING_PLAYER.getPlaybackRate();
+    var loadedFraction = TRAINING_PLAYER.getVideoLoadedFraction ? TRAINING_PLAYER.getVideoLoadedFraction() : undefined;
+
+    api('trainingRecordProgress', {videoId: videoId, currentTime: currentTime, playbackRate: rate, playerState: state, loadedFraction: loadedFraction}).then(function(res){
+      if(!res.ok) return;
+      var r = res.data;
+      allowedMax = r.allowedSeekTarget;
+      updateTrainingBar();
+      if(!r.accepted){
+        TRAINING_PLAYER.seekTo(r.allowedSeekTarget, true);
+        showTrainingMessage('Skipping is not allowed. Please watch the full video.', 'warn');
+      }
+      if(r.completed && !completed){
+        completed = true;
+        showTrainingMessage('Video complete! You can now take the quiz.', 'ok');
+        var linkBox = document.getElementById('trg_quiz_link');
+        if(linkBox && quizAvailable) linkBox.innerHTML = '<button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center;padding:10px;" onclick="goToTraining(\'quiz\',\''+videoId+'\')">Start Quiz</button>';
+      }
+    });
+  }
+
+  function updateTrainingBar(){
+    var pct = Math.min(100, Math.round((allowedMax / durationSec) * 100));
+    var fill = document.getElementById('trg_fill');
+    var label = document.getElementById('trg_pct_label');
+    if(fill) fill.style.width = pct + '%';
+    if(label) label.textContent = pct + '% watched';
+  }
+
+  function showTrainingMessage(text, kind){
+    var elBox = document.getElementById('trg_message');
+    if(!elBox) return;
+    elBox.innerHTML = '<div class="thin-tag" style="margin-top:8px;color:'+(kind==='warn'?'var(--red)':'var(--green)')+';">'+text+'</div>';
+    if(kind==='warn') setTimeout(function(){ if(elBox) elBox.innerHTML=''; }, 3000);
+  }
+
+  if(window.YT && window.YT.Player){
+    startPlayer();
+  } else {
+    window.onYouTubeIframeAPIReady = startPlayer;
+    loadScriptOnce('https://www.youtube.com/iframe_api');
+  }
+}
+
+// ── Quiz taking ──────────────────────────────────────────────────────────
+
+function buildTrainingQuizView(videoId){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title"><span style="cursor:pointer;color:var(--text-dim);" onclick="goToTraining('catalog')">My Training</span> / Quiz</div>
+    <div class="card" id="trg_quiz_card"><div class="empty">Loading...</div></div>`;
+
+  api('getQuizPageData', {videoId: videoId}).then(function(res){
+    var card = document.getElementById('trg_quiz_card');
+    if(!card) return;
+    if(!res.ok){ card.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var data = res.data;
+    if(data.notReady){
+      card.innerHTML = `<div class="empty" style="padding:40px 20px;">
+        <div style="font-size:15px;margin-bottom:10px;">${data.reason==='no_quiz' ? "This quiz isn't published yet." : 'You need to finish watching the video before the quiz unlocks.'}</div>
+        <button class="btn btn-primary" onclick="goToTraining('video','${videoId}')">Go to video</button>
+      </div>`;
+      return;
+    }
+    renderTrainingQuizQuestions(card, videoId, data);
+  });
+
+  return wrap;
+}
+
+var TRAINING_QUIZ_ANSWERS = {};
+var TRAINING_QUIZ_SECONDS_LEFT = 0;
+var TRAINING_QUIZ_SUBMITTED = false;
+var TRAINING_QUIZ_TIMER = null;
+
+function renderTrainingQuizQuestions(card, videoId, data){
+  TRAINING_QUIZ_ANSWERS = {};
+  TRAINING_QUIZ_SECONDS_LEFT = data.timeLimitSec;
+  TRAINING_QUIZ_SUBMITTED = false;
+  var startedAt = new Date().toISOString();
+
+  card.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <b>Quiz</b><span class="pill" id="trg_timer" style="background:var(--surface2);font-family:'IBM Plex Mono';">--:--</span>
+    </div>
+    <div id="trg_quiz_body"></div>
+    <button class="btn btn-primary" id="trg_submit_btn" style="width:100%;justify-content:center;padding:10px;margin-top:12px;">Submit Quiz</button>
+    <div id="trg_quiz_result"></div>`;
+
+  var body = document.getElementById('trg_quiz_body');
+  body.innerHTML = data.questions.map(function(q, i){
+    var choicesHtml = '';
+    if(q.type === 'MCQ'){
+      choicesHtml = (q.choices||[]).map(function(c){
+        return `<label class="thin-row" style="cursor:pointer;"><input type="radio" name="${q.id}" value="${c.replace(/"/g,'&quot;')}" onchange="TRAINING_QUIZ_ANSWERS['${q.id}']=this.value" style="margin-right:8px;">${c}</label>`;
+      }).join('');
+    } else {
+      choicesHtml = `<textarea rows="3" style="width:100%;margin-top:6px;" onchange="TRAINING_QUIZ_ANSWERS['${q.id}']=this.value"></textarea>`;
+    }
+    return `<div class="card" style="margin-bottom:10px;"><div style="font-weight:600;margin-bottom:8px;">${i+1}. ${q.prompt}</div>${choicesHtml}</div>`;
+  }).join('');
+
+  document.getElementById('trg_submit_btn').addEventListener('click', function(){
+    submitTrainingQuiz(videoId, data.quizId, startedAt);
+  });
+
+  clearInterval(TRAINING_QUIZ_TIMER);
+  tickTrainingQuizTimer(videoId, data.quizId, startedAt);
+}
+
+function tickTrainingQuizTimer(videoId, quizId, startedAt){
+  if(TRAINING_QUIZ_SUBMITTED) return;
+  TRAINING_QUIZ_SECONDS_LEFT -= 1;
+  var mm = String(Math.floor(Math.max(0,TRAINING_QUIZ_SECONDS_LEFT)/60)).padStart(2,'0');
+  var ss = String(Math.max(0,TRAINING_QUIZ_SECONDS_LEFT)%60).padStart(2,'0');
+  var timerEl = document.getElementById('trg_timer');
+  if(timerEl){
+    timerEl.textContent = mm+':'+ss;
+    if(TRAINING_QUIZ_SECONDS_LEFT <= 30) timerEl.style.color = 'var(--red)';
+  }
+  if(TRAINING_QUIZ_SECONDS_LEFT <= 0){ submitTrainingQuiz(videoId, quizId, startedAt); return; }
+  TRAINING_QUIZ_TIMER = setTimeout(function(){ tickTrainingQuizTimer(videoId, quizId, startedAt); }, 1000);
+}
+
+function submitTrainingQuiz(videoId, quizId, startedAt){
+  if(TRAINING_QUIZ_SUBMITTED) return;
+  TRAINING_QUIZ_SUBMITTED = true;
+  clearInterval(TRAINING_QUIZ_TIMER);
+  var btn = document.getElementById('trg_submit_btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Submitting...'; }
+
+  api('trainingSubmitQuizAnswers', {videoId: videoId, quizId: quizId, startedAt: startedAt, answers: TRAINING_QUIZ_ANSWERS}).then(function(res){
+    if(!res.ok){
+      TRAINING_QUIZ_SUBMITTED = false;
+      if(btn){ btn.disabled = false; btn.textContent = 'Submit Quiz'; }
+      var resultBox = document.getElementById('trg_quiz_result');
+      if(String(res.error||'').indexOf('VIDEO_NOT_COMPLETED') > -1){
+        if(resultBox) resultBox.innerHTML = '<div class="empty">Video completion could not be verified. Redirecting...</div>';
+        setTimeout(function(){ goToTraining('video', videoId); }, 1500);
+      } else if(resultBox){
+        resultBox.innerHTML = '<div class="empty">Could not submit: '+(res.error||'Unknown error')+'</div>';
+      }
+      return;
+    }
+    var r = res.result;
+    document.getElementById('trg_quiz_body').style.display = 'none';
+    if(btn) btn.style.display = 'none';
+    document.getElementById('trg_quiz_result').innerHTML = `<div class="card" style="text-align:center;padding:32px;">
+      <div style="font-family:'Space Grotesk';font-size:18px;font-weight:600;">${r.passed ? 'Passed' : 'Not Passed'}</div>
+      <div style="font-size:40px;font-weight:700;margin:10px 0;">${r.scorePercent}%</div>
+      <button class="btn btn-primary" onclick="goToTraining('catalog')">Back to My Training</button>
+    </div>`;
+  });
+}
+
+// ── Training: Admin ─────────────────────────────────────────────────────
+
+function renderTrainingAdmin(){
+  var wrap = el('<div></div>');
+  var view = STATE.trainingAdminView || 'list';
+
+  if(view === 'new'){
+    wrap.appendChild(buildTrainingAdminNew());
+  } else if(view === 'review' && STATE.trainingAdminVideoId){
+    wrap.appendChild(buildTrainingAdminReview(STATE.trainingAdminVideoId));
+  } else if(view === 'reports'){
+    wrap.appendChild(buildTrainingAdminReports());
+  } else {
+    wrap.appendChild(buildTrainingAdminList());
+  }
+  return wrap;
+}
+
+function goToTrainingAdmin(view, videoId){
+  STATE.trainingAdminView = view;
+  STATE.trainingAdminVideoId = videoId || null;
+  render();
+}
+
+function buildTrainingAdminList(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title">Training Admin
+    <button class="btn btn-ghost" style="margin-left:10px" onclick="goToTrainingAdmin('reports')">Reports</button>
+    <button class="btn btn-ghost" onclick="goToTrainingAdmin('new')">+ Add Video</button>
+  </div>
+  <div id="trg_admin_list"><div class="empty">Loading...</div></div>`;
+
+  api('getAdminVideoList', {}).then(function(res){
+    var box = document.getElementById('trg_admin_list');
+    if(!box) return;
+    if(!res.ok){ box.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var videos = res.videos || [];
+    if(!videos.length){ box.innerHTML = '<div class="empty">No videos yet. Click "+ Add Video" to add your first one.</div>'; return; }
+    box.innerHTML = videos.map(function(v){
+      var tagsHtml = v.tags
+        ? v.tags.split(',').map(function(t){ return '<span class="pill" style="background:var(--surface2);margin-right:4px;">'+t.trim()+'</span>'; }).join('')
+        : '<span class="thin-tag">no tags yet</span>';
+      return `<div class="card" style="display:flex;gap:14px;align-items:center;margin-bottom:10px;">
+        <img src="${v.thumbnailUrl}" style="width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;flex-shrink:0;">
+        <div style="flex:1;">
+          <div style="font-weight:600;">${v.title}</div>
+          <div class="thin-tag" style="margin:4px 0;">${v.status} - ${Math.round(v.durationSec/60)} min - ${v.questionCount} questions${!v.hasTranscript?' - no transcript':''}${v.published?' - <span style="color:var(--green)">published</span>':''}</div>
+          <div>${tagsHtml} <span style="color:var(--blue);font-size:11px;cursor:pointer;" onclick="regenerateTrainingTags('${v.id}',this)">regenerate</span></div>
+        </div>
+        <button class="btn btn-ghost" onclick="goToTrainingAdmin('review','${v.id}')">Review</button>
+      </div>`;
+    }).join('');
+  });
+
+  return wrap;
+}
+
+function regenerateTrainingTags(videoId, linkEl){
+  linkEl.textContent = 'working...';
+  api('trainingRegenerateTags', {videoId: videoId}).then(function(res){
+    if(!res.ok){ linkEl.textContent = 'failed'; return; }
+    goToTrainingAdmin('list');
+  });
+}
+
+function buildTrainingAdminNew(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title"><span style="cursor:pointer;color:var(--text-dim);" onclick="goToTrainingAdmin('list')">Training Admin</span> / Add Video</div>
+  <div class="card">
+    <div class="thin-tag" style="margin-bottom:10px;">Paste a YouTube URL. This fetches the title, thumbnail, duration, and (if available) captions for quiz generation - and auto-generates topic tags. No manual tagging needed.</div>
+    <input type="url" id="trg_new_url" placeholder="https://www.youtube.com/watch?v=..." style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;margin-bottom:10px;">
+    <div id="trg_new_msg"></div>
+    <button class="btn btn-primary" id="trg_new_btn" style="width:100%;justify-content:center;padding:10px;">Add Video</button>
+  </div>`;
+
+  wrap.querySelector('#trg_new_btn').addEventListener('click', function(){
+    var url = document.getElementById('trg_new_url').value.trim();
+    if(!url) return;
+    var btn = document.getElementById('trg_new_btn');
+    btn.disabled = true; btn.textContent = 'Fetching...';
+    document.getElementById('trg_new_msg').innerHTML = '';
+
+    api('trainingAddVideo', {url: url}).then(function(res){
+      if(!res.ok){
+        btn.disabled = false; btn.textContent = 'Add Video';
+        document.getElementById('trg_new_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
+        return;
+      }
+      goToTrainingAdmin('list');
+    });
+  });
+
+  return wrap;
+}
+
+var TRG_REVIEW_QUESTIONS = [];
+
+function buildTrainingAdminReview(videoId){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title"><span style="cursor:pointer;color:var(--text-dim);" onclick="goToTrainingAdmin('list')">Training Admin</span> / Review</div>
+  <div class="card" id="trg_review_card"><div class="empty">Loading...</div></div>`;
+
+  api('getQuizForReview', {videoId: videoId}).then(function(res){
+    var card = document.getElementById('trg_review_card');
+    if(!card) return;
+    if(!res.ok){ card.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var review = res.review;
+    card.innerHTML = `<h2 style="font-family:'Space Grotesk';font-size:16px;margin-bottom:12px;">${review.video ? review.video.title : ''}</h2>`;
+
+    if(!review.quiz){
+      card.innerHTML += `<div class="thin-tag" style="margin-bottom:10px;">No quiz generated yet.</div>
+        <button class="btn btn-primary" id="trg_gen_btn">Generate Quiz</button>
+        <div id="trg_review_msg"></div>`;
+      wireTrainingGenerate(videoId);
+      return;
+    }
+
+    TRG_REVIEW_QUESTIONS = review.questions || [];
+    card.innerHTML += `<div class="thin-tag" style="margin-bottom:10px;">Edit questions below, then save as draft or save & publish.</div>
+      <div id="trg_review_questions"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-ghost" id="trg_gen_btn">Regenerate from transcript</button>
+        <button class="btn btn-ghost" id="trg_draft_btn">Save Draft</button>
+        <button class="btn btn-primary" id="trg_publish_btn">Save & Publish</button>
+      </div>
+      <div id="trg_review_msg"></div>`;
+
+    renderTrainingReviewQuestions();
+    wireTrainingGenerate(videoId);
+    document.getElementById('trg_draft_btn').addEventListener('click', function(){ saveTrainingQuiz(videoId, false); });
+    document.getElementById('trg_publish_btn').addEventListener('click', function(){ saveTrainingQuiz(videoId, true); });
+  });
+
+  return wrap;
+}
+
+function wireTrainingGenerate(videoId){
+  var btn = document.getElementById('trg_gen_btn');
+  if(!btn) return;
+  btn.addEventListener('click', function(){
+    btn.disabled = true; btn.textContent = 'Generating... (may take ~30s)';
+    api('trainingGenerateQuiz', {videoId: videoId}).then(function(res){
+      if(!res.ok){
+        btn.disabled = false; btn.textContent = 'Generate Quiz';
+        document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
+        return;
+      }
+      goToTrainingAdmin('review', videoId);
+    });
+  });
+}
+
+function renderTrainingReviewQuestions(){
+  var box = document.getElementById('trg_review_questions');
+  if(!box) return;
+  box.innerHTML = TRG_REVIEW_QUESTIONS.map(function(q, i){
+    var choicesHtml = '';
+    if(q.type === 'MCQ'){
+      choicesHtml = (q.choices||[]).map(function(c, ci){
+        return `<input value="${(c||'').replace(/"/g,'&quot;')}" style="margin-top:6px;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" onchange="TRG_REVIEW_QUESTIONS[${i}].choices[${ci}]=this.value">`;
+      }).join('');
+    }
+    return `<div class="proposal">
+      <textarea style="width:100%;margin-bottom:6px;" onchange="TRG_REVIEW_QUESTIONS[${i}].prompt=this.value">${q.prompt}</textarea>
+      ${choicesHtml}
+      <label class="thin-tag" style="display:block;margin-top:6px;">Correct answer</label>
+      <input value="${String(q.correctAnswer||'').replace(/"/g,'&quot;')}" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" onchange="TRG_REVIEW_QUESTIONS[${i}].correctAnswer=this.value">
+      <label class="thin-tag" style="display:block;margin-top:6px;">Explanation</label>
+      <textarea style="width:100%;" onchange="TRG_REVIEW_QUESTIONS[${i}].explanation=this.value">${q.explanation||''}</textarea>
+    </div>`;
+  }).join('');
+}
+
+function saveTrainingQuiz(videoId, publish){
+  document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag">Saving...</div>';
+  api('trainingSaveQuiz', {videoId: videoId, publish: publish, questions: TRG_REVIEW_QUESTIONS}).then(function(res){
+    if(!res.ok){
+      document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
+      return;
+    }
+    goToTrainingAdmin('list');
+  });
+}
+
+function buildTrainingAdminReports(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title"><span style="cursor:pointer;color:var(--text-dim);" onclick="goToTrainingAdmin('list')">Training Admin</span> / Reports</div>
+  <div id="trg_reports_box"><div class="empty">Loading...</div></div>`;
+
+  api('getTrainingReportsData', {}).then(function(res){
+    var box = document.getElementById('trg_reports_box');
+    if(!box) return;
+    if(!res.ok){ box.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var data = res.data;
+    var perVideoRows = (data.perVideo||[]).map(function(v){
+      return `<tr><td>${v.title}</td><td>${v.count}</td><td>${v.avgScore}%</td><td>${v.passRate}%</td></tr>`;
+    }).join('') || '<tr><td colspan="4" class="empty">No attempts yet.</td></tr>';
+    var recentRows = (data.recent||[]).map(function(a){
+      return `<tr><td>${a.userEmail}</td><td>${a.videoTitle}</td><td>${a.scorePercent}%</td><td>${a.passed?'Yes':'No'}</td><td>${Math.round(a.timeTakenSec/60)}m</td><td>${fmtDate(a.submittedAt)}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty">No attempts yet.</td></tr>';
+
+    box.innerHTML = `<div class="card" style="padding:0;margin-bottom:16px;">
+        <table><thead><tr><th>Video</th><th>Attempts</th><th>Avg Score</th><th>Pass Rate</th></tr></thead><tbody>${perVideoRows}</tbody></table>
+      </div>
+      <div class="section-title">Recent Attempts</div>
+      <div class="card" style="padding:0;">
+        <table><thead><tr><th>User</th><th>Video</th><th>Score</th><th>Passed</th><th>Time</th><th>Date</th></tr></thead><tbody>${recentRows}</tbody></table>
+      </div>`;
+  });
+
+  return wrap;
 }
 
 function renderNotifications(){
