@@ -1187,12 +1187,58 @@ function renderOneOnOnes(){
       <div id="trackingCardsBox">${trackingCardsHtml(openCards)}</div>
       ${doneCards.length ? `<div class="thin-tag" style="margin-top:10px;">${doneCards.length} completed card${doneCards.length===1?'':'s'} (hidden)</div>` : ''}
     </div>
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-h">KPI History</div>
+      <div id="kpiHistoryBox"><div class="empty">Loading...</div></div>
+    </div>
     <div class="card">
       <div class="card-h">Sessions <button class="btn btn-ghost" onclick="openScheduleOneOnOne('${person}')">+ Schedule 1:1</button></div>
       <div id="sessionsBox">${sessionsHtml(sessions)}</div>
     </div>`;
   wrap.innerHTML = html;
+  loadKPIHistory(person);
   return wrap;
+}
+
+function loadKPIHistory(person){
+  api('getKPIHistoryForPerson', {team_member_name: person}).then(function(res){
+    var box = document.getElementById('kpiHistoryBox');
+    if(!box) return;
+    if(!res.ok){ box.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var history = res.history || [];
+    if(!history.length){ box.innerHTML = '<div class="empty">No KPI scores recorded yet - rate this month during your next 1:1 session below.</div>'; return; }
+    box.innerHTML = '<table><thead><tr><th>Date</th><th>Overall</th>'+KPI_CATEGORIES.map(function(c){return '<th>'+c+'</th>';}).join('')+'<th>Notes</th></tr></thead><tbody>' +
+      history.map(function(r){
+        var scores = {};
+        try { scores = JSON.parse(r.manual_scores_json || '{}'); } catch(e){}
+        return '<tr><td>'+fmtDate(r.review_date)+'</td><td><b>'+r.overall_score+'%</b></td>' +
+          KPI_CATEGORIES.map(function(c){ return '<td>'+(scores[c]||'-')+'</td>'; }).join('') +
+          '<td>'+(r.admin_notes||'-')+'</td></tr>';
+      }).join('') + '</tbody></table>';
+  });
+}
+
+function saveKPIScoreForSession(sessionId){
+  var person = STATE.oneOnOnePerson;
+  var s = (DB.oneOnOnes||[]).filter(function(x){return x.session_id===sessionId;})[0];
+  var scores = {};
+  KPI_CATEGORIES.forEach(function(cat){
+    var fieldId = 'kpi-'+sessionId+'-'+cat.replace(/[^a-zA-Z0-9]/g,'');
+    var val = document.getElementById(fieldId).value;
+    if(val) scores[cat] = Number(val);
+  });
+  if(!Object.keys(scores).length){ alert('Rate at least one category before saving.'); return; }
+  var notes = document.getElementById('kpiNotes-'+sessionId).value;
+
+  api('saveKPIReview', {
+    team_member_name: person, session_id: sessionId,
+    review_date: s ? s.date : new Date().toISOString().slice(0,10),
+    manual_scores: scores, admin_notes: notes, created_by: CURRENT_USER
+  }).then(function(res){
+    if(!res.ok){ alert('Could not save KPI score: '+(res.error||'Unknown error')); return; }
+    alert('KPI score saved - overall: '+res.review.overall_score+'%');
+    loadKPIHistory(person);
+  });
 }
 
 function trackingCardsHtml(cards){
@@ -1201,6 +1247,8 @@ function trackingCardsHtml(cards){
     cards.map(function(t){ return `<div style="width:220px;">${ticketCardHtml(t)}</div>`; }).join('') +
     '</div>';
 }
+
+var KPI_CATEGORIES = ['Quality of Work', 'Productivity', 'Communication', 'Ownership & Reliability', 'Teamwork'];
 
 function sessionsHtml(sessions){
   if(!sessions.length) return '<div class="empty">No 1:1 sessions yet.</div>';
@@ -1227,6 +1275,26 @@ function sessionsHtml(sessions){
         ${s.drive_doc_url ? `<a class="btn btn-ghost" href="${s.drive_doc_url}" target="_blank" style="text-decoration:none;">Open in Drive</a>` : ''}
       </div>
       <div id="oneOnOneAi-${s.session_id}"></div>
+
+      <div class="card-h" style="margin-top:14px;">KPI Score for this session</div>
+      <div id="kpiScoreBox-${s.session_id}">
+        ${KPI_CATEGORIES.map(function(cat){
+          var fieldId = 'kpi-'+s.session_id+'-'+cat.replace(/[^a-zA-Z0-9]/g,'');
+          return `<div class="row2" style="align-items:center;margin-bottom:6px;">
+            <label class="thin-tag" style="margin:0;">${cat}</label>
+            <select id="${fieldId}" style="padding:6px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit;">
+              <option value="">Not rated</option>
+              <option value="1">1 - Needs improvement</option>
+              <option value="2">2 - Below expectations</option>
+              <option value="3">3 - Meets expectations</option>
+              <option value="4">4 - Exceeds expectations</option>
+              <option value="5">5 - Outstanding</option>
+            </select>
+          </div>`;
+        }).join('')}
+        <div class="field"><label>KPI Notes</label><textarea id="kpiNotes-${s.session_id}" placeholder="Context for this month's rating..."></textarea></div>
+        <button class="btn btn-primary" onclick="saveKPIScoreForSession('${s.session_id}')">Save KPI Score</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1874,12 +1942,21 @@ function buildTrainingAdminList(){
       var tagsHtml = v.tags
         ? v.tags.split(',').map(function(t){ return '<span class="pill" style="background:var(--surface2);margin-right:4px;">'+t.trim()+'</span>'; }).join('')
         : '<span class="thin-tag">no tags yet</span>';
+      var deptOptions = ['','Engineering','Operations','Growth'].map(function(d){
+        var label = d || 'Everyone';
+        var selected = (v.department==='Everyone' ? '' : v.department) === d ? 'selected' : '';
+        return `<option value="${d}" ${selected}>${label}</option>`;
+      }).join('');
       return `<div class="card" style="display:flex;gap:14px;align-items:center;margin-bottom:10px;">
         <img src="${v.thumbnailUrl}" style="width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;flex-shrink:0;">
         <div style="flex:1;">
           <div style="font-weight:600;">${v.title}</div>
           <div class="thin-tag" style="margin:4px 0;">${v.status} - ${Math.round(v.durationSec/60)} min - ${v.questionCount} questions${!v.hasTranscript?' - no transcript':''}${v.published?' - <span style="color:var(--green)">published</span>':''}</div>
           <div>${tagsHtml} <span style="color:var(--blue);font-size:11px;cursor:pointer;" onclick="regenerateTrainingTags('${v.id}',this)">regenerate</span></div>
+          <div style="margin-top:6px;">
+            <label class="thin-tag" style="margin-right:6px;">Assigned to</label>
+            <select style="padding:4px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit;font-size:11.5px;" onchange="setTrainingVideoDept('${v.id}',this.value)">${deptOptions}</select>
+          </div>
         </div>
         <button class="btn btn-ghost" onclick="goToTrainingAdmin('review','${v.id}')">Review</button>
       </div>`;
@@ -1887,6 +1964,12 @@ function buildTrainingAdminList(){
   });
 
   return wrap;
+}
+
+function setTrainingVideoDept(videoId, department){
+  api('trainingSetVideoDepartment', {videoId: videoId, department: department}).then(function(res){
+    if(!res.ok){ alert('Could not update: '+(res.error||'Unknown error')); return; }
+  });
 }
 
 function regenerateTrainingTags(videoId, linkEl){
@@ -1903,6 +1986,14 @@ function buildTrainingAdminNew(){
   <div class="card">
     <div class="thin-tag" style="margin-bottom:10px;">Paste a YouTube URL. This fetches the title, thumbnail, duration, and (if available) captions for quiz generation - and auto-generates topic tags. No manual tagging needed.</div>
     <input type="url" id="trg_new_url" placeholder="https://www.youtube.com/watch?v=..." style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;margin-bottom:10px;">
+    <div class="field"><label>Assign to</label>
+      <select id="trg_new_dept" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;">
+        <option value="">Everyone</option>
+        <option value="Engineering">Engineering only</option>
+        <option value="Operations">Operations only</option>
+        <option value="Growth">Growth only</option>
+      </select>
+    </div>
     <div id="trg_new_msg"></div>
     <button class="btn btn-primary" id="trg_new_btn" style="width:100%;justify-content:center;padding:10px;">Add Video</button>
   </div>`;
@@ -1910,11 +2001,12 @@ function buildTrainingAdminNew(){
   wrap.querySelector('#trg_new_btn').addEventListener('click', function(){
     var url = document.getElementById('trg_new_url').value.trim();
     if(!url) return;
+    var department = document.getElementById('trg_new_dept').value;
     var btn = document.getElementById('trg_new_btn');
     btn.disabled = true; btn.textContent = 'Fetching...';
     document.getElementById('trg_new_msg').innerHTML = '';
 
-    api('trainingAddVideo', {url: url}).then(function(res){
+    api('trainingAddVideo', {url: url, department: department}).then(function(res){
       if(!res.ok){
         btn.disabled = false; btn.textContent = 'Add Video';
         document.getElementById('trg_new_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
