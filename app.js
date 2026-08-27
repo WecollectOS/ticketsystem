@@ -796,7 +796,7 @@ function toggleInvitee(name){
   renderInviteePicker();
 }
 
-function saveScheduledMeeting(){
+function saveScheduledMeeting(force){
   var description = document.getElementById('sm_desc').value.trim();
   if(!description){ alert('A meeting description is required so an agenda can be generated.'); return; }
   var payload = {
@@ -806,9 +806,17 @@ function saveScheduledMeeting(){
     description: description,
     meeting_link: document.getElementById('sm_link').value,
     invitees: SCHEDULE_INVITEES,
-    scheduled_by: CURRENT_USER
+    scheduled_by: CURRENT_USER,
+    force: !!force
   };
   api('scheduleMeeting', payload).then(function(res){
+    if(res.conflict){
+      var list = (res.conflicts||[]).map(function(c){ return '- '+c.title+' ('+c.start+')'; }).join('\n');
+      if(confirm('This time conflicts with an existing event:\n\n'+list+'\n\nSchedule anyway?')){
+        saveScheduledMeeting(true);
+      }
+      return;
+    }
     if(!res.ok){ alert('Could not schedule meeting: '+(res.error||'Unknown error')); return; }
     if(WORKSPACE_MODE && res.meeting){ DB.meetings.push(res.meeting); }
     closeModal('scheduleMeetingModalBg');
@@ -1397,16 +1405,24 @@ function openScheduleOneOnOne(person){
   openModal('scheduleOneOnOneModalBg');
 }
 
-function saveScheduledOneOnOne(){
+function saveScheduledOneOnOne(force){
   var person = STATE.oneOnOneSchedulePerson;
   var payload = {
     team_member_name: person,
     date: document.getElementById('oo_date').value || new Date().toISOString().slice(0,10),
     time: document.getElementById('oo_time').value,
     agenda: document.getElementById('oo_agenda').value,
-    created_by: CURRENT_USER
+    created_by: CURRENT_USER,
+    force: !!force
   };
   api('createOneOnOne', payload).then(function(res){
+    if(res.conflict){
+      var list = (res.conflicts||[]).map(function(c){ return '- '+c.title+' ('+c.start+')'; }).join('\n');
+      if(confirm('This time conflicts with an existing event:\n\n'+list+'\n\nSchedule anyway?')){
+        saveScheduledOneOnOne(true);
+      }
+      return;
+    }
     if(!res.ok){ alert('Could not schedule: '+(res.error||'Unknown error')); return; }
     if(WORKSPACE_MODE && res.session){ DB.oneOnOnes = DB.oneOnOnes || []; DB.oneOnOnes.push(res.session); }
     closeModal('scheduleOneOnOneModalBg');
@@ -1730,12 +1746,14 @@ function buildTrainingQuizView(videoId){
 }
 
 var TRAINING_QUIZ_ANSWERS = {};
+var TRAINING_QUIZ_QUESTION_IDS = [];
 var TRAINING_QUIZ_SECONDS_LEFT = 0;
 var TRAINING_QUIZ_SUBMITTED = false;
 var TRAINING_QUIZ_TIMER = null;
 
 function renderTrainingQuizQuestions(card, videoId, data){
   TRAINING_QUIZ_ANSWERS = {};
+  TRAINING_QUIZ_QUESTION_IDS = data.questions.map(function(q){ return q.id; });
   TRAINING_QUIZ_SECONDS_LEFT = data.timeLimitSec;
   TRAINING_QUIZ_SUBMITTED = false;
   var startedAt = new Date().toISOString();
@@ -1789,7 +1807,7 @@ function submitTrainingQuiz(videoId, quizId, startedAt){
   var btn = document.getElementById('trg_submit_btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Submitting...'; }
 
-  api('trainingSubmitQuizAnswers', {videoId: videoId, quizId: quizId, startedAt: startedAt, answers: TRAINING_QUIZ_ANSWERS}).then(function(res){
+  api('trainingSubmitQuizAnswers', {videoId: videoId, quizId: quizId, startedAt: startedAt, answers: TRAINING_QUIZ_ANSWERS, questionIds: TRAINING_QUIZ_QUESTION_IDS}).then(function(res){
     if(!res.ok){
       TRAINING_QUIZ_SUBMITTED = false;
       if(btn){ btn.disabled = false; btn.textContent = 'Submit Quiz'; }
@@ -1931,10 +1949,13 @@ function buildTrainingAdminReview(videoId){
     }
 
     TRG_REVIEW_QUESTIONS = review.questions || [];
-    card.innerHTML += `<div class="thin-tag" style="margin-bottom:10px;">Edit questions below, then save as draft or save & publish.</div>
+    var perAttempt = Number(review.quiz.questionsPerAttempt) || 8;
+    card.innerHTML += `<div class="thin-tag" style="margin-bottom:10px;">Pool of ${TRG_REVIEW_QUESTIONS.length} questions. Each attempt shows a random subset in a random order, so people who take it more than once (or compare notes) see a different mix each time.</div>
+      <div class="field" style="max-width:220px;"><label>Questions shown per attempt</label><input type="number" id="trg_per_attempt" value="${perAttempt}" min="1" max="${TRG_REVIEW_QUESTIONS.length}"></div>
       <div id="trg_review_questions"></div>
-      <div style="display:flex;gap:8px;margin-top:14px;">
-        <button class="btn btn-ghost" id="trg_gen_btn">Regenerate from transcript</button>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="trg_more_btn">+ Generate More Questions</button>
+        <button class="btn btn-ghost" id="trg_gen_btn">Regenerate from transcript (replaces all)</button>
         <button class="btn btn-ghost" id="trg_draft_btn">Save Draft</button>
         <button class="btn btn-primary" id="trg_publish_btn">Save & Publish</button>
       </div>
@@ -1942,6 +1963,7 @@ function buildTrainingAdminReview(videoId){
 
     renderTrainingReviewQuestions();
     wireTrainingGenerate(videoId);
+    wireTrainingGenerateMore(videoId);
     document.getElementById('trg_draft_btn').addEventListener('click', function(){ saveTrainingQuiz(videoId, false); });
     document.getElementById('trg_publish_btn').addEventListener('click', function(){ saveTrainingQuiz(videoId, true); });
   });
@@ -1953,10 +1975,27 @@ function wireTrainingGenerate(videoId){
   var btn = document.getElementById('trg_gen_btn');
   if(!btn) return;
   btn.addEventListener('click', function(){
+    if(!confirm('This replaces the ENTIRE question pool, including any edits you made. Continue?')) return;
     btn.disabled = true; btn.textContent = 'Generating... (may take ~30s)';
     api('trainingGenerateQuiz', {videoId: videoId}).then(function(res){
       if(!res.ok){
-        btn.disabled = false; btn.textContent = 'Generate Quiz';
+        btn.disabled = false; btn.textContent = 'Regenerate from transcript (replaces all)';
+        document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
+        return;
+      }
+      goToTrainingAdmin('review', videoId);
+    });
+  });
+}
+
+function wireTrainingGenerateMore(videoId){
+  var btn = document.getElementById('trg_more_btn');
+  if(!btn) return;
+  btn.addEventListener('click', function(){
+    btn.disabled = true; btn.textContent = 'Generating... (may take ~30s)';
+    api('trainingGenerateMoreQuestions', {videoId: videoId}).then(function(res){
+      if(!res.ok){
+        btn.disabled = false; btn.textContent = '+ Generate More Questions';
         document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
         return;
       }
@@ -1988,7 +2027,9 @@ function renderTrainingReviewQuestions(){
 
 function saveTrainingQuiz(videoId, publish){
   document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag">Saving...</div>';
-  api('trainingSaveQuiz', {videoId: videoId, publish: publish, questions: TRG_REVIEW_QUESTIONS}).then(function(res){
+  var perAttemptEl = document.getElementById('trg_per_attempt');
+  var perAttempt = perAttemptEl ? Number(perAttemptEl.value) : undefined;
+  api('trainingSaveQuiz', {videoId: videoId, publish: publish, questions: TRG_REVIEW_QUESTIONS, questionsPerAttempt: perAttempt}).then(function(res){
     if(!res.ok){
       document.getElementById('trg_review_msg').innerHTML = '<div class="thin-tag" style="color:var(--red);">'+(res.error||'Unknown error')+'</div>';
       return;
