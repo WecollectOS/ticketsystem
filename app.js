@@ -202,7 +202,8 @@ var MODULES = [
     {id:'tickets',label:'Ticket System',ico:'Tix'},
     {id:'board',label:'Workflow Board',ico:'='},
     {id:'calendar',label:'Calendar',ico:'#'},
-    {id:'projects',label:'Projects',ico:'[]'}
+    {id:'projects',label:'Projects',ico:'[]'},
+    {id:'filemanager',label:'Files',ico:'F'}
   ]},
   {group:'Training', items:[
     {id:'training',label:'My Training',ico:'V'},
@@ -260,7 +261,7 @@ function render(){
     standup: renderStandup, feed: renderFeed, workload: renderWorkload,
     teamspaces: renderTeamSpaces, command: renderCommand, decisions: renderDecisions,
     adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes, newsdigest: renderNewsDigest,
-    training: renderTraining, trainingadmin: renderTrainingAdmin
+    training: renderTraining, trainingadmin: renderTrainingAdmin, filemanager: renderFileManager
   };
   c.innerHTML = '';
   c.appendChild(renderers[STATE.module]());
@@ -2062,6 +2063,29 @@ function buildTrainingAdminReports(){
       <div class="card" style="padding:0;">
         <table><thead><tr><th>User</th><th>Video</th><th>Score</th><th>Passed</th><th>Time</th><th>Date</th></tr></thead><tbody>${recentRows}</tbody></table>
       </div>`;
+  });
+
+  return wrap;
+}
+
+function renderFileManager(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = `<div class="section-title">Files</div>
+  <div class="thin-tag" style="margin-bottom:14px;">Actual file uploads, folders, and organizing happen directly in Google Drive - these links just take you to the right folder. Everyone sees General plus their own team's folder; admins see every team's folder.</div>
+  <div id="fm_grid" class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));"><div class="empty">Loading...</div></div>`;
+
+  api('getFileManagerData', {}).then(function(res){
+    var grid = document.getElementById('fm_grid');
+    if(!grid) return;
+    if(!res.ok){ grid.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+    var folders = res.folders || [];
+    if(!folders.length){ grid.innerHTML = '<div class="empty">No folders yet.</div>'; return; }
+    grid.innerHTML = folders.map(function(f){
+      return `<a href="${f.url}" target="_blank" class="card" style="text-decoration:none;color:inherit;display:block;cursor:pointer;">
+        <div class="card-h">${f.name}</div>
+        <div class="thin-tag">Open in Google Drive</div>
+      </a>`;
+    }).join('');
   });
 
   return wrap;
