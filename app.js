@@ -2068,10 +2068,31 @@ function buildTrainingAdminReports(){
   return wrap;
 }
 
+function fileTypeLabel(mimeType){
+  if(!mimeType) return 'File';
+  if(mimeType.indexOf('folder')>-1) return 'Folder';
+  if(mimeType.indexOf('spreadsheet')>-1) return 'Sheet';
+  if(mimeType.indexOf('document')>-1) return 'Doc';
+  if(mimeType.indexOf('presentation')>-1) return 'Slides';
+  if(mimeType.indexOf('pdf')>-1) return 'PDF';
+  if(mimeType.indexOf('image')>-1) return 'Image';
+  return 'File';
+}
+
 function renderFileManager(){
   var wrap = el('<div></div>');
+  if(STATE.fmFolderId){
+    wrap.appendChild(buildFileManagerBrowseView(STATE.fmFolderId, STATE.fmFolderName, STATE.fmBreadcrumb || []));
+  } else {
+    wrap.appendChild(buildFileManagerRootView());
+  }
+  return wrap;
+}
+
+function buildFileManagerRootView(){
+  var wrap = el('<div></div>');
   wrap.innerHTML = `<div class="section-title">Files</div>
-  <div class="thin-tag" style="margin-bottom:14px;">Actual file uploads, folders, and organizing happen directly in Google Drive - these links just take you to the right folder. Everyone sees General plus their own team's folder; admins see every team's folder.</div>
+  <div class="thin-tag" style="margin-bottom:14px;">Browse and open files here - uploading and organizing still happens in Google Drive. Everyone sees General plus their own team's folder; admins see every team's folder.</div>
   <div id="fm_grid" class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));"><div class="empty">Loading...</div></div>`;
 
   api('getFileManagerData', {}).then(function(res){
@@ -2081,11 +2102,60 @@ function renderFileManager(){
     var folders = res.folders || [];
     if(!folders.length){ grid.innerHTML = '<div class="empty">No folders yet.</div>'; return; }
     grid.innerHTML = folders.map(function(f){
-      return `<a href="${f.url}" target="_blank" class="card" style="text-decoration:none;color:inherit;display:block;cursor:pointer;">
+      return `<div class="card" style="cursor:pointer;" onclick="openFileManagerFolder('${f.id}','${f.name.replace(/'/g,"\\'")}',[])">
         <div class="card-h">${f.name}</div>
-        <div class="thin-tag">Open in Google Drive</div>
-      </a>`;
+        <div class="thin-tag">Open folder</div>
+      </div>`;
     }).join('');
+  });
+
+  return wrap;
+}
+
+function openFileManagerFolder(folderId, folderName, breadcrumb){
+  STATE.fmFolderId = folderId;
+  STATE.fmFolderName = folderName;
+  STATE.fmBreadcrumb = breadcrumb;
+  render();
+}
+
+function closeFileManagerFolder(){
+  STATE.fmFolderId = null;
+  STATE.fmFolderName = null;
+  STATE.fmBreadcrumb = [];
+  render();
+}
+
+function buildFileManagerBrowseView(folderId, folderName, breadcrumb){
+  var wrap = el('<div></div>');
+  var crumbHtml = '<span style="cursor:pointer;color:var(--text-dim);" onclick="closeFileManagerFolder()">Files</span>' +
+    breadcrumb.map(function(b){ return ' / <span style="cursor:pointer;color:var(--text-dim);" onclick=\'openFileManagerFolder("'+b.id+'","'+b.name.replace(/'/g,"\\'")+'",'+JSON.stringify(breadcrumb.slice(0,breadcrumb.indexOf(b)))+')\'>'+b.name+'</span>'; }).join('') +
+    ' / '+folderName;
+
+  wrap.innerHTML = `<div class="section-title">${crumbHtml}</div>
+  <div id="fm_browse_box"><div class="empty">Loading...</div></div>`;
+
+  api('listDriveFolderContents', {folderId: folderId}).then(function(res){
+    var box = document.getElementById('fm_browse_box');
+    if(!box) return;
+    if(!res.ok){ box.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
+
+    var newCrumb = breadcrumb.concat([{id: folderId, name: folderName}]);
+    var subfolderCards = (res.subfolders||[]).map(function(sf){
+      return `<div class="card" style="cursor:pointer;" onclick='openFileManagerFolder("${sf.id}","${sf.name.replace(/'/g,"\\'")}",${JSON.stringify(newCrumb)})'>
+        <div class="card-h">${sf.name}</div>
+        <div class="thin-tag">Folder</div>
+      </div>`;
+    }).join('');
+
+    var fileRows = (res.files||[]).length ? res.files.map(function(f){
+      return `<div class="thin-row"><a href="${f.url}" target="_blank" class="thin-title" style="color:var(--text);">${f.name}</a><span class="thin-tag">${fileTypeLabel(f.mimeType)}</span></div>`;
+    }).join('') : '<div class="empty">No files in this folder yet.</div>';
+
+    box.innerHTML =
+      (subfolderCards ? '<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px;">'+subfolderCards+'</div>' : '') +
+      '<div class="card">'+fileRows+'</div>' +
+      '<a href="'+res.folderUrl+'" target="_blank" class="btn btn-ghost" style="margin-top:12px;text-decoration:none;display:inline-flex;">Open this folder in Drive to upload</a>';
   });
 
   return wrap;
