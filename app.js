@@ -25,13 +25,14 @@ var DB = {
     {project_id:'p2',name:'Dashboard Revamp',department:'Engineering',phase:'In Progress',start_date:'2026-07-01',target_date:'2026-08-20',status:'Active'}
   ],
   tickets: [
-    {ticket_id:'WC-1042',title:'Dashboard Export Bug',description:'CSV export fails for boards over 500 rows.',type:'Bug',department:'Engineering',priority:'High',status:'In Progress',owner:'Chidi',reporter:'Oreoluwa',project_id:'p2',due_date:'2026-08-08',created_at:'2026-08-01T09:00:00Z',updated_at:'2026-08-04T10:20:00Z',source:'Manual',tags:'export,csv'},
-    {ticket_id:'WC-1043',title:'GPS points drifting on Kano dataset',description:'Several records show coordinates offshore.',type:'Bug',department:'Engineering',priority:'Urgent',status:'Blocked',owner:'Chidi',reporter:'Tunde',project_id:'p1',due_date:'2026-08-07',created_at:'2026-08-02T09:00:00Z',updated_at:'2026-08-05T14:10:00Z',source:'Manual',tags:'gps'},
-    {ticket_id:'WC-1044',title:'Questionnaire translation review',description:'Hausa translation needs a second pass.',type:'Task',department:'Operations',priority:'Medium',status:'Waiting',owner:'Tunde',reporter:'Oreoluwa',project_id:'p1',due_date:'2026-08-10',created_at:'2026-08-03T09:00:00Z',updated_at:'2026-08-03T09:00:00Z',source:'Manual',tags:''},
-    {ticket_id:'WC-1045',title:'August newsletter draft',description:'',type:'Growth',department:'Growth',priority:'Medium',status:'Review',owner:'Sarah',reporter:'Sarah',project_id:'',due_date:'2026-08-06',created_at:'2026-08-01T09:00:00Z',updated_at:'2026-08-06T08:00:00Z',source:'Manual',tags:''},
-    {ticket_id:'WC-1046',title:'Client proposal  -  FSD Africa follow-up',description:'',type:'Customer Request',department:'Growth',priority:'High',status:'New',owner:'Sarah',reporter:'Oreoluwa',project_id:'',due_date:'2026-08-12',created_at:'2026-08-05T09:00:00Z',updated_at:'2026-08-05T09:00:00Z',source:'Manual',tags:''},
-    {ticket_id:'WC-1047',title:'Deploy Delta build to staging',description:'',type:'Deployment',department:'Operations',priority:'Medium',status:'Approved',owner:'Tunde',reporter:'Chidi',project_id:'p2',due_date:'2026-08-06',created_at:'2026-08-04T09:00:00Z',updated_at:'2026-08-05T16:00:00Z',source:'Manual',tags:''},
-    {ticket_id:'WC-1048',title:'Authentication module',description:'',type:'Feature',department:'Engineering',priority:'High',status:'In Progress',owner:'Chidi',reporter:'Oreoluwa',project_id:'p2',due_date:'2026-08-09',created_at:'2026-08-02T09:00:00Z',updated_at:'2026-08-05T11:00:00Z',source:'Manual',tags:''}
+    {ticket_id:'WC-1042',title:'Dashboard Export Bug',description:'CSV export fails for boards over 500 rows.',type:'Bug',department:'Engineering',system:'Super Admin',parent_ticket_id:'',priority:'High',status:'In Progress',owner:'Chidi',reporter:'Oreoluwa',project_id:'p2',due_date:'2026-08-08',created_at:'2026-08-01T09:00:00Z',updated_at:'2026-08-04T10:20:00Z',source:'Manual',tags:'export,csv'},
+    {ticket_id:'WC-1043',title:'Login button unresponsive on OTG',description:'Button does nothing on empty-field submit, no validation shown.',type:'Bug',department:'Engineering',system:'Mobile App',parent_ticket_id:'',priority:'Urgent',status:'Blocked',owner:'Chidi',reporter:'Tunde',project_id:'p1',due_date:'2026-08-07',created_at:'2026-08-02T09:00:00Z',updated_at:'2026-08-05T14:10:00Z',source:'UAT',source_ref:'tc2',tags:'gps'},
+    {ticket_id:'WC-1044',title:'Questionnaire translation review',description:'Hausa translation needs a second pass.',type:'Task',department:'Operations',system:'PMD',parent_ticket_id:'WC-1049',priority:'Medium',status:'Waiting',owner:'Tunde',reporter:'Oreoluwa',project_id:'p1',due_date:'2026-08-10',created_at:'2026-08-03T09:00:00Z',updated_at:'2026-08-03T09:00:00Z',source:'Manual',tags:''},
+    {ticket_id:'WC-1045',title:'August newsletter draft',description:'',type:'Growth',department:'Growth',system:'',parent_ticket_id:'',priority:'Medium',status:'Review',owner:'Sarah',reporter:'Sarah',project_id:'',due_date:'2026-08-06',created_at:'2026-08-01T09:00:00Z',updated_at:'2026-08-06T08:00:00Z',source:'Manual',tags:''},
+    {ticket_id:'WC-1046',title:'Client proposal  -  FSD Africa follow-up',description:'',type:'Customer Request',department:'Growth',system:'',parent_ticket_id:'',priority:'High',status:'New',owner:'Sarah',reporter:'Oreoluwa',project_id:'',due_date:'2026-08-12',created_at:'2026-08-05T09:00:00Z',updated_at:'2026-08-05T09:00:00Z',source:'Manual',tags:''},
+    {ticket_id:'WC-1047',title:'Deploy Delta build to staging',description:'',type:'Deployment',department:'Operations',system:'OTG',parent_ticket_id:'',priority:'Medium',status:'Approved',owner:'Tunde',reporter:'Chidi',project_id:'p2',due_date:'2026-08-06',created_at:'2026-08-04T09:00:00Z',updated_at:'2026-08-05T16:00:00Z',source:'Manual',tags:''},
+    {ticket_id:'WC-1048',title:'Authentication module',description:'',type:'Feature',department:'Engineering',system:'Super Admin',parent_ticket_id:'',priority:'High',status:'In Progress',owner:'Chidi',reporter:'Oreoluwa',project_id:'p2',due_date:'2026-08-09',created_at:'2026-08-02T09:00:00Z',updated_at:'2026-08-05T11:00:00Z',source:'Manual',tags:''},
+    {ticket_id:'WC-1049',title:'Q4 Field Ops Revamp',description:'Overall direction for modernizing field data capture this quarter.',type:'Direction',department:'Operations',system:'PMD',parent_ticket_id:'',priority:'High',status:'In Progress',owner:'Oreoluwa',reporter:'Oreoluwa',project_id:'',due_date:'',created_at:'2026-07-20T09:00:00Z',updated_at:'2026-08-01T09:00:00Z',source:'Manual',tags:''}
   ],
   activities: [
     {activity_id:'a1',ticket_id:'WC-1042',timestamp:'2026-08-01T09:00:00Z',actor:'Oreoluwa',action:'Created',old_value:'',new_value:'New'},
@@ -44,11 +45,37 @@ var DB = {
   decisions: [
     {decision_id:'d1',decision_text:'Switch Website Headline',reason:'Brand Positioning',owner:'Sarah',meeting_id:'m1',affected_ticket_ids:'',status:'Active'}
   ],
-  notifications_log: [],
+  notifications_log: [
+    {log_id:'n1',timestamp:'2026-10-02T08:00:00Z',trigger_type:'uat_fail',ticket_id:'',recipient:CURRENT_USER,message:'A UAT test failed and was logged as a new Bug ticket: *Login button unresponsive on OTG* [Mobile App]',status:'sent'},
+    {log_id:'n2',timestamp:'2026-10-01T15:30:00Z',trigger_type:'lead_followup',ticket_id:'',recipient:CURRENT_USER,message:'Lead *Amaka Obi* has been in "Follow Up" for 3 days with no update - time for a follow-up.',status:'sent'},
+    {log_id:'n3',timestamp:'2026-09-30T09:10:00Z',trigger_type:'content_weekly_pool',ticket_id:'',recipient:CURRENT_USER,message:"This week's content pool is ready (6 ideas).",status:'sent'}
+  ],
   templates: [
     {template_id:'t1',name:'Bug report checklist',title:'Bug report',description:'',type:'Bug',department:'Engineering',priority:'Medium',checklist_json:'[{"text":"Reproduce the issue","done":false},{"text":"Identify root cause","done":false},{"text":"Write fix","done":false},{"text":"Test fix","done":false}]'}
   ],
-  oneOnOnes: []
+  oneOnOnes: [],
+  testCases: [
+    {test_id:'tc1',module:'Mobile App',flow:'Login',test_case:'Login with valid credentials',type:'Functional',priority:'High',steps:'Open app, enter valid email/password, tap Login',expected_result:'User lands on home dashboard',result:'Pass',actual_notes:'',tester:'Tunde',tested_at:'2026-09-28T10:00:00Z',linked_ticket_id:''},
+    {test_id:'tc2',module:'Mobile App',flow:'Login',test_case:'Login button responds to tap',type:'Functional',priority:'High',steps:'Tap Login button with empty fields',expected_result:'Inline validation error shown',result:'Fail',actual_notes:'Button does nothing, no error shown',tester:'Tunde',tested_at:'2026-09-29T11:00:00Z',linked_ticket_id:'WC-1043'},
+    {test_id:'tc3',module:'PMD',flow:'Data sync',test_case:'Offline records sync when back online',type:'Functional',priority:'Medium',steps:'Go offline, record data, reconnect',expected_result:'Records upload automatically',result:'',actual_notes:'',tester:'',tested_at:'',linked_ticket_id:''}
+  ],
+  leads: [
+    {lead_id:'l1',name:'Amaka Obi',organization:'FSD Africa',position:'Program Lead',email:'amaka@fsdafrica.org',linkedin_url:'',offering:'M&E Platform',stage:'Follow Up',owner:'Sarah',source:'Outreach',created_at:'2026-09-10T09:00:00Z',updated_at:'2026-09-27T09:00:00Z',stage_history_json:'[{"stage":"Prospecting Pool","at":"2026-09-10T09:00:00Z"},{"stage":"Follow Up","at":"2026-09-27T09:00:00Z"}]',meeting_notes_json:'[]',follow_up_count:1,last_follow_up_at:'2026-09-27T09:00:00Z',next_follow_up_due:'',decline_category:'',competitor:'',demo_date:'',demo_meeting_booked:'',meeting_date:'',meeting_booked:''},
+    {lead_id:'l2',name:'Biodun Fashola',organization:'Guinness Nigeria',position:'Insights Manager',email:'biodun@guinness.com',linkedin_url:'',offering:'Field Data Collection',stage:'Demo Session',owner:'Oreoluwa',source:'Referral',created_at:'2026-09-05T09:00:00Z',updated_at:'2026-09-20T09:00:00Z',stage_history_json:'[]',meeting_notes_json:'[]',follow_up_count:0,last_follow_up_at:'',next_follow_up_due:'',decline_category:'',competitor:'',demo_date:'',demo_meeting_booked:'',meeting_date:'',meeting_booked:''}
+  ],
+  contentCalendar: [
+    {content_id:'c1',title:'5 signs your field data has a GPS problem',type:'Carousel',platform:'LinkedIn',stage:'Idea',owner:'',notes:'',scheduled_date:'',created_at:'2026-09-29T09:00:00Z',created_by:'AI (weekly content pool)',source:'AI (weekly pool)'},
+    {content_id:'c2',title:'Behind the scenes: a WeCollect field day',type:'Video',platform:'Instagram',stage:'Drafting',owner:'Sarah',notes:'',scheduled_date:'',created_at:'2026-09-26T09:00:00Z',created_by:'Sarah',source:'Manual'}
+  ],
+  payroll: [
+    {payroll_id:'pr1',team_member_name:'Chidi',email:'chidi@wecollect.co',month:'2026-09',bank_name:'GTBank',bank_code:'058',account_number:'0123456789',account_name:'Chidi Okafor',account_verified:'yes',salary_amount:450000,status:'Paid',reminder_sent_at:'',paid_at:'2026-09-28T09:00:00Z',payslip_doc_url:'',created_at:'2026-09-01T09:00:00Z'},
+    {payroll_id:'pr2',team_member_name:'Sarah',email:'sarah@wecollect.co',month:'2026-09',bank_name:'Access Bank',bank_code:'044',account_number:'0987654321',account_name:'',account_verified:'no',salary_amount:400000,status:'Pending',reminder_sent_at:'',paid_at:'',payslip_doc_url:'',created_at:'2026-09-01T09:00:00Z'}
+  ],
+  financeEntries: [
+    {entry_id:'f1',project_id:'p1',type:'Income',category:'Client payment',amount:2500000,currency:'NGN',description:'Guinness Study - milestone 1',invoice_url:'',entry_date:'2026-09-15',created_by:'Oreoluwa',created_at:'2026-09-15T09:00:00Z'},
+    {entry_id:'f2',project_id:'',type:'Expense',category:'Software',amount:85000,currency:'NGN',description:'Monthly SaaS tools',invoice_url:'',entry_date:'2026-09-01',created_by:'Oreoluwa',created_at:'2026-09-01T09:00:00Z'}
+  ],
+  leave: []
 };
 
 var STATE = { module: 'dashboard', editingTicketId: null };
@@ -134,7 +161,7 @@ function mockApi(action, payload) {
         if(!deptMatch && !statusMatch) return q==='' ? true : (t.title.toLowerCase().indexOf(q)>-1);
         return true;
       });
-      return {ok:true, explanation:'Local keyword match (connect Gemini for real natural-language parsing).', results:results};
+      return {ok:true, explanation:'Local keyword match (connect Claude for real natural-language parsing).', results:results};
     }
     case 'createTeamMember': {
       if(!payload.name || !payload.email) return {ok:false, error:'Name and email are required.'};
@@ -176,6 +203,163 @@ function mockApi(action, payload) {
       if(payload.hasOwnProperty('status')) s.status = payload.status;
       return {ok:true, updated:true};
     }
+
+    // ── Engineering Board ──────────────────────────────────────────────
+    case 'getEngineeringParents': {
+      var parents = DB.tickets.filter(function(t){return (t.type==='Direction'||t.type==='Feature') && (!payload.system || t.system===payload.system);});
+      return {ok:true, parents:parents};
+    }
+    case 'aiTriageTicket': {
+      var text = (payload.description||'').toLowerCase();
+      var sysGuess = ['mobile app','pmd','otg','super admin'].filter(function(s){return text.indexOf(s)>-1;})[0];
+      return {ok:true, suggestion:{
+        title: payload.description.length>60 ? payload.description.slice(0,57)+'...' : payload.description,
+        type:'Bug', system: sysGuess ? sysGuess.replace(/\b\w/g,function(c){return c.toUpperCase();}) : '',
+        priority:'Medium', parent_ticket_id:null,
+        rationale:'Local mock triage (connect Claude for real classification).'
+      }};
+    }
+
+    // ── UAT / QA Tracker ────────────────────────────────────────────────
+    case 'createTestCase': {
+      var tc = Object.assign({test_id:'tc'+Math.random(), result:'', actual_notes:'', tester:'', tested_at:'', linked_ticket_id:''}, payload);
+      DB.testCases.push(tc);
+      return {ok:true, testCase:tc};
+    }
+    case 'recordTestResult': {
+      var tc2 = DB.testCases.filter(function(x){return x.test_id===payload.test_id;})[0];
+      if(!tc2) return {ok:false, error:'Test case not found.'};
+      tc2.result = payload.result; tc2.actual_notes = payload.actual_notes||''; tc2.tester = CURRENT_USER; tc2.tested_at = new Date().toISOString();
+      if(payload.result==='Fail' && !tc2.linked_ticket_id){
+        var bugRes = mockApi('createTicket', {title:'UAT Fail: '+(tc2.test_case||tc2.flow||tc2.module), description:'Expected: '+tc2.expected_result+'\n\nActual: '+(tc2.actual_notes||'(see UAT tracker)'), type:'Bug', system: tc2.module, priority:'High', source:'UAT', source_ref:tc2.test_id, reporter:CURRENT_USER});
+        tc2.linked_ticket_id = bugRes.ticket.ticket_id;
+      }
+      return {ok:true, linked_ticket_id: tc2.linked_ticket_id};
+    }
+
+    // ── CRM Pipeline ────────────────────────────────────────────────────
+    case 'createLead': {
+      var lead = Object.assign({lead_id:'l'+Math.random(), created_at:new Date().toISOString(), updated_at:new Date().toISOString(), stage: payload.stage||'Prospecting Pool', stage_history_json:'[]', meeting_notes_json:'[]', follow_up_count:0, last_follow_up_at:'', next_follow_up_due:'', decline_category:'', competitor:'', demo_date:'', demo_meeting_booked:'', meeting_date:'', meeting_booked:''}, payload);
+      DB.leads.push(lead);
+      return {ok:true, lead:lead};
+    }
+    case 'updateLeadStage': {
+      var lead2 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
+      if(!lead2) return {ok:false, error:'Lead not found.'};
+      var hist = []; try{ hist = JSON.parse(lead2.stage_history_json||'[]'); }catch(e){}
+      if(payload.stage && payload.stage!==lead2.stage) hist.push({stage:payload.stage, at:new Date().toISOString()});
+      Object.keys(payload).forEach(function(k){ if(k!=='lead_id' && k!=='actor') lead2[k]=payload[k]; });
+      lead2.stage_history_json = JSON.stringify(hist);
+      lead2.updated_at = new Date().toISOString();
+      return {ok:true, lead_id:payload.lead_id, stage:lead2.stage, stage_history:hist};
+    }
+    case 'bookLeadDemo': {
+      var lead3 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
+      if(!lead3) return {ok:false, error:'Lead not found.'};
+      lead3.demo_date = payload.date||''; lead3.demo_meeting_booked = 'yes';
+      return {ok:true, meeting:{meeting_id:'m'+Math.random(), title:'Demo: '+lead3.name}};
+    }
+    case 'reassignLead': {
+      var lead4 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
+      if(!lead4) return {ok:false, error:'Lead not found.'};
+      lead4.owner = payload.new_owner||'';
+      return {ok:true};
+    }
+    case 'aiLeadHealthSummary': {
+      var lead5 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
+      if(!lead5) return {ok:false, error:'Lead not found.'};
+      return {ok:true, health:{summary:'(Mock) '+lead5.name+' is currently at "'+lead5.stage+'" - connect Claude for a real narrative summary.', risk_level:'Medium', suggested_next_action:'Follow up this week.'}};
+    }
+
+    // ── Content Calendar ────────────────────────────────────────────────
+    case 'createContentItem': {
+      var item = Object.assign({content_id:'c'+Math.random(), created_at:new Date().toISOString(), created_by:CURRENT_USER, source:'Manual', stage:'Idea'}, payload);
+      DB.contentCalendar.push(item);
+      return {ok:true, item:item};
+    }
+    case 'updateContentStage': {
+      var ci = DB.contentCalendar.filter(function(x){return x.content_id===payload.content_id;})[0];
+      if(!ci) return {ok:false, error:'Content item not found.'};
+      Object.keys(payload).forEach(function(k){ if(k!=='content_id' && k!=='actor') ci[k]=payload[k]; });
+      return {ok:true};
+    }
+    case 'runContentPoolNow': {
+      var ideas = ['Field data QA checklist you can use today','Why offline-first matters for African field teams','Client spotlight: faster insights with WeCollect','3 GIS mistakes that cost survey teams weeks','Meet the team: a day in the life of a field agent'];
+      var created2 = ideas.slice(0,3).map(function(title){ return mockApi('createContentItem', {title:title, type:'Post', platform:'LinkedIn', notes:'AI-suggested angle', source:'AI (weekly pool)', created_by:'AI (weekly content pool)'}).item; });
+      return {ok:true, created:created2.length, items:created2};
+    }
+
+    // ── Payroll ─────────────────────────────────────────────────────────
+    case 'listPaystackBanks': {
+      return {ok:true, banks:[{name:'Access Bank',code:'044'},{name:'GTBank',code:'058'},{name:'Zenith Bank',code:'057'},{name:'UBA',code:'033'},{name:'First Bank',code:'011'}]};
+    }
+    case 'generateMonthlyPayrollBatch': {
+      var already = {}; DB.payroll.filter(function(p){return p.month===payload.month;}).forEach(function(p){already[p.team_member_name]=true;});
+      var createdEntries = [];
+      DB.team.forEach(function(member){
+        if(already[member.name]) return;
+        var prior = DB.payroll.filter(function(p){return p.team_member_name===member.name;}).sort(function(a,b){return (b.month||'').localeCompare(a.month||'');})[0] || {};
+        var entry = {payroll_id:'pr'+Math.random(), team_member_name:member.name, email:member.email, month:payload.month, bank_name:prior.bank_name||'', bank_code:prior.bank_code||'', account_number:prior.account_number||'', account_name:prior.account_name||'', account_verified:'no', salary_amount:prior.salary_amount||'', status:'Pending', reminder_sent_at:'', paid_at:'', payslip_doc_url:'', created_at:new Date().toISOString()};
+        DB.payroll.push(entry); createdEntries.push(entry);
+      });
+      return {ok:true, created:createdEntries.length, entries:createdEntries};
+    }
+    case 'verifyPayrollAccount': {
+      var pe = DB.payroll.filter(function(x){return x.payroll_id===payload.payroll_id;})[0];
+      if(!pe) return {ok:false, error:'Payroll entry not found.'};
+      pe.account_number = payload.account_number||pe.account_number; pe.bank_code = payload.bank_code||pe.bank_code;
+      pe.account_name = pe.team_member_name; pe.account_verified = 'yes';
+      return {ok:true, account_name:pe.account_name};
+    }
+    case 'updatePayrollEntry': {
+      var pe2 = DB.payroll.filter(function(x){return x.payroll_id===payload.payroll_id;})[0];
+      if(!pe2) return {ok:false, error:'Payroll entry not found.'};
+      Object.keys(payload).forEach(function(k){ if(k!=='payroll_id' && k!=='actor') pe2[k]=payload[k]; });
+      if(payload.hasOwnProperty('account_number')||payload.hasOwnProperty('bank_code')) pe2.account_verified='no';
+      return {ok:true};
+    }
+    case 'markPayrollPaid': {
+      var pe3 = DB.payroll.filter(function(x){return x.payroll_id===payload.payroll_id;})[0];
+      if(!pe3) return {ok:false, error:'Payroll entry not found.'};
+      pe3.status = 'Paid'; pe3.paid_at = new Date().toISOString();
+      return {ok:true};
+    }
+    case 'exportPayrollCsv': {
+      var entries = DB.payroll.filter(function(p){return p.month===payload.month && p.status!=='Paid';});
+      if(!entries.length) return {ok:false, error:'No unpaid payroll entries found for '+payload.month+'.'};
+      var unverified = entries.filter(function(e){return e.account_verified!=='yes';});
+      if(unverified.length) return {ok:false, error:unverified.length+' entries not yet verified: '+unverified.map(function(e){return e.team_member_name;}).join(', ')};
+      var header = ['account_number','bank_code','account_name','amount','narration'];
+      var rows = entries.map(function(e){return [e.account_number,e.bank_code,e.account_name,e.salary_amount,'Salary - '+e.month].join(',');});
+      return {ok:true, csv:[header.join(',')].concat(rows).join('\n'), count:entries.length};
+    }
+
+    // ── Notifications / Finance / Leave ─────────────────────────────────
+    case 'getMyNotifications': {
+      var mine = DB.notifications_log.filter(function(n){return n.recipient===CURRENT_USER;}).sort(function(a,b){return (b.timestamp||'').localeCompare(a.timestamp||'');});
+      var grouped = {}; mine.forEach(function(n){ var k=n.trigger_type||'other'; (grouped[k]=grouped[k]||[]).push(n); });
+      return {ok:true, notifications:mine.slice(0,50), grouped:grouped};
+    }
+    case 'createFinanceEntry': {
+      var fe = Object.assign({entry_id:'f'+Math.random(), created_by:CURRENT_USER, created_at:new Date().toISOString()}, payload);
+      DB.financeEntries.push(fe);
+      return {ok:true, entry:fe};
+    }
+    case 'deleteFinanceEntry': {
+      DB.financeEntries = DB.financeEntries.filter(function(x){return x.entry_id!==payload.entry_id;});
+      return {ok:true, deleted:true};
+    }
+    case 'requestLeave': {
+      var lv = {leave_id:'lv'+Math.random(), team_member_name:CURRENT_USER, type:payload.type||'Annual', start_date:payload.start_date, end_date:payload.end_date, reason:payload.reason||'', status:'Pending', approved_by:'', created_at:new Date().toISOString()};
+      DB.leave.push(lv);
+      return {ok:true, leave:lv};
+    }
+    case 'decideLeave': {
+      var lv2 = DB.leave.filter(function(x){return x.leave_id===payload.leave_id;})[0];
+      if(!lv2) return {ok:false, error:'Leave request not found.'};
+      lv2.status = payload.status; lv2.approved_by = CURRENT_USER;
+      return {ok:true};
+    }
   }
 }
 
@@ -200,10 +384,20 @@ var MODULES = [
   {group:'', items:[{id:'dashboard',label:'Dashboard',ico:'Home'}]},
   {group:'Work', items:[
     {id:'tickets',label:'Ticket System',ico:'Tix'},
-    {id:'board',label:'Workflow Board',ico:'='},
+    {id:'board',label:'Engineering Board',ico:'='},
+    {id:'uat',label:'UAT / QA Tracker',ico:'QA'},
     {id:'calendar',label:'Calendar',ico:'#'},
     {id:'projects',label:'Projects',ico:'[]'},
     {id:'filemanager',label:'Files',ico:'F'}
+  ]},
+  {group:'Growth', items:[
+    {id:'crm',label:'CRM Pipeline',ico:'CRM'},
+    {id:'content',label:'Content Calendar',ico:'C'}
+  ]},
+  {group:'Finance & People', items:[
+    {id:'payroll',label:'Payroll',ico:'$',adminOnly:true},
+    {id:'finance',label:'Finance',ico:'₦',adminOnly:true},
+    {id:'leave',label:'Leave',ico:'L'}
   ]},
   {group:'Training', items:[
     {id:'training',label:'My Training',ico:'V'},
@@ -231,12 +425,16 @@ function renderNav(){
   MODULES.forEach(function(g){
     if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
     g.items.forEach(function(m){
-      if((m.id==='oneonones' || m.id==='newsdigest' || m.id==='trainingadmin') && CURRENT_USER_ROLE!=='Admin') return;
+      if((m.id==='oneonones' || m.id==='newsdigest' || m.id==='trainingadmin' || m.adminOnly) && CURRENT_USER_ROLE!=='Admin') return;
       var active = STATE.module===m.id ? ' active' : '';
-      html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+m.ico+'</span>'+m.label+'</div>';
+      html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+m.ico+'</span><span class="nav-label-text">'+m.label+'</span></div>';
     });
   });
   document.getElementById('navList').innerHTML = html;
+  var mobileIds = ['dashboard','board','crm','payroll'];
+  document.querySelectorAll('#mobileNav .mn-item[data-id]').forEach(function(btn){
+    btn.classList.toggle('active', btn.getAttribute('data-id')===STATE.module);
+  });
 }
 
 function goTo(id){
@@ -244,7 +442,30 @@ function goTo(id){
   renderNav();
   var titles = {}; MODULES.forEach(function(g){g.items.forEach(function(m){titles[m.id]=m.label;});});
   document.getElementById('pageTitle').textContent = titles[id];
+  closeMobileDrawer();
   render();
+}
+
+// ── Collapsible sidebar (desktop) + mobile drawer/bottom-nav ───────────
+function toggleSidebarCollapse(){
+  var sb = document.getElementById('sidebar');
+  var collapsed = sb.classList.toggle('collapsed');
+  try { localStorage.setItem('wecollect_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e){}
+}
+function restoreSidebarCollapse(){
+  var pref = '0';
+  try { pref = localStorage.getItem('wecollect_sidebar_collapsed') || '0'; } catch(e){}
+  if(pref==='1') document.getElementById('sidebar').classList.add('collapsed');
+}
+function openMobileDrawer(){
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('mobileNavBackdrop').classList.add('open');
+}
+function closeMobileDrawer(){
+  var sb = document.getElementById('sidebar');
+  if(sb) sb.classList.remove('mobile-open');
+  var bd = document.getElementById('mobileNavBackdrop');
+  if(bd) bd.classList.remove('open');
 }
 
 function el(html){ var d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
@@ -261,7 +482,8 @@ function render(){
     standup: renderStandup, feed: renderFeed, workload: renderWorkload,
     teamspaces: renderTeamSpaces, command: renderCommand, decisions: renderDecisions,
     adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes, newsdigest: renderNewsDigest,
-    training: renderTraining, trainingadmin: renderTrainingAdmin, filemanager: renderFileManager
+    training: renderTraining, trainingadmin: renderTrainingAdmin, filemanager: renderFileManager,
+    uat: renderUat, crm: renderCrm, content: renderContent, payroll: renderPayroll, finance: renderFinance, leave: renderLeave
   };
   c.innerHTML = '';
   c.appendChild(renderers[STATE.module]());
@@ -442,36 +664,95 @@ function sortTickets(key){
   renderTicketRows();
 }
 
-function renderBoard(){
-  if(!STATE.boardDeptFilter) STATE.boardDeptFilter = 'All';
-  var wrap = el('<div></div>');
-  var depts = ['All','Engineering','Operations','Growth'];
-  var filterHtml = '<div style="display:flex;gap:6px;margin-bottom:14px;">' + depts.map(function(d){
-    var active = STATE.boardDeptFilter===d;
-    return `<span class="pill" style="cursor:pointer;padding:5px 12px;${active?'background:var(--ink);color:var(--on-ink);':'background:var(--surface2);color:var(--text-dim);'}" onclick="setBoardFilter('${d}')">${d}</span>`;
-  }).join('') + '</div>';
+var ENGINEERING_SYSTEMS = ['Mobile App','PMD','OTG','Super Admin'];
+var ENGINEERING_TYPES = ['Direction','Feature','Task','Bug'];
 
-  var cols = STATUS_FLOW.concat(['Blocked']);
-  var html = '<div class="board">';
-  cols.forEach(function(status){
-    var items = visibleTickets().filter(function(t){
-      if(t.status!==status) return false;
-      if(STATE.boardDeptFilter!=='All' && t.department!==STATE.boardDeptFilter) return false;
-      return true;
-    });
-    html += `<div class="board-col">
-      <div class="board-col-h"><span class="board-col-dot" style="background:${STATUS_COLOR[status]}"></span>${status}<span class="board-col-count">${items.length}</span></div>
-      <div class="board-drop">${items.map(ticketCardHtml).join('')}</div>
-    </div>`;
-  });
-  html += '</div>';
-  wrap.innerHTML = '<div class="section-title">New -> Triaged -> Assigned -> In Progress -> Waiting -> Review -> Approved -> Done</div>' + filterHtml + html;
-  return wrap;
+function engineeringTickets(){
+  return visibleTickets().filter(function(t){ return ENGINEERING_TYPES.indexOf(t.type)>-1; });
 }
 
-function setBoardFilter(dept){
-  STATE.boardDeptFilter = dept;
-  render();
+function engFilteredTickets(){
+  if(!STATE.eng) STATE.eng = {system:'All', type:'All', view:'cards'};
+  return engineeringTickets().filter(function(t){
+    if(STATE.eng.system!=='All' && t.system!==STATE.eng.system) return false;
+    if(STATE.eng.type!=='All' && t.type!==STATE.eng.type) return false;
+    return true;
+  });
+}
+
+function setEngFilter(kind, val){ STATE.eng[kind] = val; render(); }
+function setEngView(view){ STATE.eng.view = view; render(); }
+
+function renderBoard(){
+  if(!STATE.eng) STATE.eng = {system:'All', type:'All', view:'cards'};
+  var wrap = el('<div></div>');
+  var items = engFilteredTickets();
+
+  var toolbar = `
+    <div class="board-toolbar">
+      <div class="board-toolbar-filters">
+        <div class="filter-pills">${['All'].concat(ENGINEERING_SYSTEMS).map(function(s){
+          return `<span class="filter-pill ${STATE.eng.system===s?'active':''}" onclick="setEngFilter('system','${s}')">${s}</span>`;
+        }).join('')}</div>
+        <div class="filter-pills">${['All'].concat(ENGINEERING_TYPES).map(function(t){
+          return `<span class="filter-pill ${STATE.eng.type===t?'active':''}" onclick="setEngFilter('type','${t}')">${t}</span>`;
+        }).join('')}</div>
+      </div>
+      <div class="view-toggle">
+        ${['cards','list','summary'].map(function(v){
+          return `<button class="view-toggle-btn ${STATE.eng.view===v?'active':''}" onclick="setEngView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  wrap.innerHTML = '<div class="section-title">Directions -&gt; Features -&gt; Tasks &amp; Bugs - filter by system and type, tied permanently across every board</div>' + toolbar + '<div id="engBody"></div>';
+  var body = wrap.querySelector('#engBody');
+
+  if(STATE.eng.view==='cards'){
+    var cols = STATUS_FLOW.concat(['Blocked']);
+    var html = '<div class="board">';
+    cols.forEach(function(status){
+      var colItems = items.filter(function(t){return t.status===status;});
+      html += `<div class="board-col">
+        <div class="board-col-h"><span class="board-col-dot" style="background:${STATUS_COLOR[status]}"></span>${status}<span class="board-col-count">${colItems.length}</span></div>
+        <div class="board-drop">${colItems.map(ticketCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
+      </div>`;
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  } else if(STATE.eng.view==='list'){
+    body.innerHTML = `<div class="card table-scroll"><table>
+      <tr><th>Type</th><th>System</th><th>Title</th><th>Status</th><th>Priority</th><th>Owner</th><th>Due</th></tr>
+      ${items.map(function(t){
+        return `<tr onclick="openTicketDetail('${t.ticket_id}')" style="cursor:pointer;">
+          <td>${typeIcon(t.type)} ${t.type}</td><td>${t.system||'-'}</td><td>${t.title}</td>
+          <td><span class="pill" style="background:${STATUS_COLOR[t.status]}22;color:${STATUS_COLOR[t.status]};">${t.status}</span></td>
+          <td><span class="pill pill-prio-${t.priority}">${t.priority}</span></td><td>${t.owner||'-'}</td><td>${fmtDate(t.due_date)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7" class="empty">No tickets match these filters.</td></tr>'}
+    </table></div>`;
+  } else {
+    var total = items.length || 1;
+    function barRows(groupKeys, keyFn, colorFn){
+      return groupKeys.map(function(k){
+        var n = items.filter(function(t){return keyFn(t)===k;}).length;
+        var pct = Math.round(n/total*100);
+        return `<div class="summary-bar-row"><span class="summary-bar-label">${k}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:${colorFn(k)};"></div></div><span class="summary-bar-pct">${n}</span></div>`;
+      }).join('');
+    }
+    body.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Matching Tickets</div></div>
+        <div class="stat-card accent-red"><div class="stat-num">${items.filter(function(t){return t.status==='Blocked';}).length}</div><div class="stat-lbl">Blocked</div></div>
+        <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(t){return t.status==='Done';}).length}</div><div class="stat-lbl">Done</div></div>
+        <div class="stat-card accent-amber"><div class="stat-num">${items.filter(function(t){return t.type==='Bug';}).length}</div><div class="stat-lbl">Bugs</div></div>
+      </div>
+      <div class="dash-grid">
+        <div class="card"><div class="card-h">By Type</div><div class="summary-bars">${barRows(ENGINEERING_TYPES, function(t){return t.type;}, function(){return 'var(--brand)';})}</div></div>
+        <div class="card"><div class="card-h">By System</div><div class="summary-bars">${barRows(ENGINEERING_SYSTEMS, function(t){return t.system||'-';}, function(){return 'var(--violet)';})}</div></div>
+      </div>`;
+  }
+  return wrap;
 }
 
 function parseChecklist(t){
@@ -491,12 +772,14 @@ function ticketCardHtml(t){
       (checklist.length > VISIBLE_ITEMS ? `<div class="thin-tag">+${checklist.length - VISIBLE_ITEMS} more</div>` : '') +
       '</div>';
   }
+  var parent = t.parent_ticket_id ? DB.tickets.filter(function(p){return p.ticket_id===t.parent_ticket_id;})[0] : null;
   return `<div class="ticket" onclick="openTicketDetail('${t.ticket_id}')">
     <div class="ticket-top"><span class="ticket-id">${t.ticket_id}</span><span class="ticket-type">${typeIcon(t.type)}</span>${checklistBadge}</div>
     <div class="ticket-title">${t.title}</div>
+    ${parent ? `<div class="thin-tag" style="margin-bottom:6px;">↳ ${parent.title}</div>` : ''}
     ${checklistItemsHtml}
     <div class="ticket-meta">
-      <span class="pill pill-dept">${t.department}</span>
+      ${t.system ? `<span class="pill" style="background:var(--violet-bg);color:var(--violet);">${t.system}</span>` : `<span class="pill pill-dept">${t.department}</span>`}
       <span class="pill pill-prio-${t.priority}">${t.priority}</span>
       <span class="owner-chip" title="${t.owner}">${initials(t.owner)}</span>
     </div>
@@ -512,6 +795,726 @@ function toggleCardChecklistItem(ticketId, idx, done){
   api('updateTicket', {ticket_id:ticketId, checklist_json:json, actor:CURRENT_USER}).then(function(res){
     if(!res.ok){ alert('Could not update checklist: '+(res.error||'Unknown error')); return; }
     t.checklist_json = json;
+    render();
+  });
+}
+
+// ── UAT / QA Tracker ─────────────────────────────────────────────────────
+var RESULT_COLOR = {Pass:'#2E9B5F', Fail:'#D64545', Blocked:'#946A0C', '':'#8E90A3'};
+function resultLabel(r){ return r || 'Not Run'; }
+
+function uatFilteredCases(){
+  if(!STATE.uat) STATE.uat = {module:'All', view:'cards'};
+  return DB.testCases.filter(function(tc){ return STATE.uat.module==='All' || tc.module===STATE.uat.module; });
+}
+function setUatFilter(val){ STATE.uat.module = val; render(); }
+function setUatView(v){ STATE.uat.view = v; render(); }
+
+function uatCardHtml(tc){
+  return `<div class="ticket" onclick="openTestCaseDetail('${tc.test_id}')">
+    <div class="ticket-top"><span class="ticket-id">${tc.module}</span></div>
+    <div class="ticket-title">${tc.test_case||tc.flow}</div>
+    <div class="thin-tag" style="margin-bottom:6px;">${tc.flow||''}</div>
+    <div class="ticket-meta">
+      <span class="pill" style="background:${RESULT_COLOR[tc.result||'']}22;color:${RESULT_COLOR[tc.result||'']};">${resultLabel(tc.result)}</span>
+      <span class="pill pill-prio-${tc.priority}">${tc.priority}</span>
+      ${tc.linked_ticket_id ? `<span class="thin-tag mono" style="margin-left:auto;">${tc.linked_ticket_id}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderUat(){
+  if(!STATE.uat) STATE.uat = {module:'All', view:'cards'};
+  var wrap = el('<div></div>');
+  var items = uatFilteredCases();
+  var modules = ['All'].concat(ENGINEERING_SYSTEMS);
+
+  wrap.innerHTML = `<div class="section-title">UAT / QA Tracker - a Fail automatically opens a Bug on the Engineering Board</div>
+    <div class="board-toolbar">
+      <div class="board-toolbar-filters">
+        <div class="filter-pills">${modules.map(function(m){return `<span class="filter-pill ${STATE.uat.module===m?'active':''}" onclick="setUatFilter('${m}')">${m}</span>`;}).join('')}</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div class="view-toggle">${['cards','list','summary'].map(function(v){return `<button class="view-toggle-btn ${STATE.uat.view===v?'active':''}" onclick="setUatView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;}).join('')}</div>
+        <button class="btn btn-primary" onclick="openNewTestCase()">+ New Test Case</button>
+      </div>
+    </div>
+    <div id="uatBody"></div>`;
+  var body = wrap.querySelector('#uatBody');
+
+  if(STATE.uat.view==='cards'){
+    var lanes = ['', 'Pass', 'Fail', 'Blocked'];
+    var html = '<div class="board">';
+    lanes.forEach(function(lane){
+      var laneItems = items.filter(function(tc){ return (tc.result||'')===lane; });
+      html += `<div class="board-col">
+        <div class="board-col-h"><span class="board-col-dot" style="background:${RESULT_COLOR[lane]}"></span>${resultLabel(lane)}<span class="board-col-count">${laneItems.length}</span></div>
+        <div class="board-drop">${laneItems.map(uatCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
+      </div>`;
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  } else if(STATE.uat.view==='list'){
+    body.innerHTML = `<div class="card table-scroll"><table>
+      <tr><th>Module</th><th>Flow</th><th>Test Case</th><th>Result</th><th>Priority</th><th>Linked Ticket</th></tr>
+      ${items.map(function(tc){
+        return `<tr onclick="openTestCaseDetail('${tc.test_id}')" style="cursor:pointer;">
+          <td>${tc.module}</td><td>${tc.flow||'-'}</td><td>${tc.test_case||'-'}</td>
+          <td><span class="pill" style="background:${RESULT_COLOR[tc.result||'']}22;color:${RESULT_COLOR[tc.result||'']};">${resultLabel(tc.result)}</span></td>
+          <td><span class="pill pill-prio-${tc.priority}">${tc.priority}</span></td><td class="mono">${tc.linked_ticket_id||'-'}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">No test cases yet.</td></tr>'}
+    </table></div>`;
+  } else {
+    var total = items.length || 1;
+    var passCount = items.filter(function(tc){return tc.result==='Pass';}).length;
+    var failCount = items.filter(function(tc){return tc.result==='Fail';}).length;
+    body.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Total Test Cases</div></div>
+        <div class="stat-card accent-green"><div class="stat-num">${Math.round(passCount/total*100)}%</div><div class="stat-lbl">Pass Rate</div></div>
+        <div class="stat-card accent-red"><div class="stat-num">${failCount}</div><div class="stat-lbl">Failing</div></div>
+        <div class="stat-card"><div class="stat-num">${items.filter(function(tc){return !tc.result;}).length}</div><div class="stat-lbl">Not Run</div></div>
+      </div>
+      <div class="card"><div class="card-h">By Module</div><div class="summary-bars">${ENGINEERING_SYSTEMS.map(function(m){
+        var n = items.filter(function(tc){return tc.module===m;}).length;
+        var pct = Math.round(n/total*100);
+        return `<div class="summary-bar-row"><span class="summary-bar-label">${m}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:var(--violet);"></div></div><span class="summary-bar-pct">${n}</span></div>`;
+      }).join('')}</div></div>`;
+  }
+  return wrap;
+}
+
+function openNewTestCase(){
+  ['tcf_flow','tcf_case','tcf_steps','tcf_expected'].forEach(function(id){ document.getElementById(id).value=''; });
+  openModal('newTestCaseModalBg');
+}
+function saveNewTestCase(){
+  var payload = {
+    module: document.getElementById('tcf_module').value,
+    type: document.getElementById('tcf_type').value,
+    flow: document.getElementById('tcf_flow').value,
+    test_case: document.getElementById('tcf_case').value,
+    steps: document.getElementById('tcf_steps').value,
+    expected_result: document.getElementById('tcf_expected').value,
+    priority: document.getElementById('tcf_priority').value
+  };
+  api('createTestCase', payload).then(function(res){
+    if(!res.ok){ alert('Could not add test case: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.testCase) DB.testCases.push(res.testCase);
+    closeModal('newTestCaseModalBg');
+    render();
+  });
+}
+
+function openTestCaseDetail(id){
+  var tc = DB.testCases.filter(function(x){return x.test_id===id;})[0];
+  if(!tc) return;
+  var body = document.getElementById('uatDetailModalBody');
+  body.innerHTML = `
+    <div class="modal-h"><h2>${tc.test_case||tc.flow}</h2><button class="close-x" onclick="closeModal('uatDetailModalBg')">X</button></div>
+    <div class="thin-tag" style="margin-bottom:10px;">${tc.module} · ${tc.flow||''}</div>
+    <div class="field"><label>Steps</label><div class="card" style="font-size:12.5px;">${(tc.steps||'-').replace(/\n/g,'<br>')}</div></div>
+    <div class="field"><label>Expected Result</label><div class="card" style="font-size:12.5px;">${tc.expected_result||'-'}</div></div>
+    <div class="field"><label>Result</label>
+      <div class="stage-btn-row">${['Pass','Fail','Blocked'].map(function(r){
+        return `<button class="stage-btn ${tc.result===r?'current':''}" onclick="saveTestResult('${id}','${r}')">${r}</button>`;
+      }).join('')}</div>
+    </div>
+    <div class="field"><label>Notes on actual result</label><textarea id="uat_notes">${tc.actual_notes||''}</textarea></div>
+    <div class="thin-tag">Notes are saved together with whichever result button above you click.</div>
+    ${tc.linked_ticket_id ? `<div class="thin-tag" style="margin-top:10px;">Linked Bug ticket: <a href="javascript:void(0)" onclick="closeModal('uatDetailModalBg');openTicketDetail('${tc.linked_ticket_id}')" class="mono">${tc.linked_ticket_id}</a></div>` : ''}
+  `;
+  openModal('uatDetailModalBg');
+}
+
+function saveTestResult(id, result){
+  var notesBox = document.getElementById('uat_notes');
+  var notes = notesBox ? notesBox.value : '';
+  api('recordTestResult', {test_id:id, result:result, actual_notes:notes}).then(function(res){
+    if(!res.ok){ alert('Could not save result: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){
+      var tc = DB.testCases.filter(function(x){return x.test_id===id;})[0];
+      if(tc){ tc.result = result; tc.actual_notes = notes; if(res.linked_ticket_id) tc.linked_ticket_id = res.linked_ticket_id; }
+    }
+    render();
+    openTestCaseDetail(id);
+  });
+}
+
+// ── CRM Pipeline ─────────────────────────────────────────────────────────
+var CRM_STAGES = ['Prospecting Pool','Requested More Info','Agreed to Meeting','Intro Call','Follow Up','Demo Session','Follow up & Feedback','Onboarding','Declined / Cold Leads'];
+var CRM_STAGE_COLOR = {'Prospecting Pool':'#8E90A3','Requested More Info':'#3B6FD4','Agreed to Meeting':'#3B6FD4','Intro Call':'#3B6FD4','Follow Up':'#D9A62E','Demo Session':'#7C5CBF','Follow up & Feedback':'#7C5CBF','Onboarding':'#2E9B5F','Declined / Cold Leads':'#D64545'};
+
+function crmFilteredLeads(){
+  if(!STATE.crm) STATE.crm = {offering:'All', view:'cards'};
+  return DB.leads.filter(function(l){ return STATE.crm.offering==='All' || l.offering===STATE.crm.offering; });
+}
+function setCrmFilter(val){ STATE.crm.offering = val; render(); }
+function setCrmView(v){ STATE.crm.view = v; render(); }
+
+function leadCardHtml(l){
+  return `<div class="ticket" onclick="openLeadDetail('${l.lead_id}')">
+    <div class="ticket-top"><span class="ticket-id">${l.organization||''}</span></div>
+    <div class="ticket-title">${l.name}</div>
+    <div class="thin-tag" style="margin-bottom:6px;">${l.offering||''}</div>
+    <div class="ticket-meta">
+      <span class="owner-chip" title="${l.owner}">${initials(l.owner)}</span>
+    </div>
+  </div>`;
+}
+
+function renderCrm(){
+  if(!STATE.crm) STATE.crm = {offering:'All', view:'cards'};
+  var wrap = el('<div></div>');
+  var offerings = ['All'].concat(DB.leads.map(function(l){return l.offering;}).filter(function(o,i,arr){return o && arr.indexOf(o)===i;}));
+  var items = crmFilteredLeads();
+
+  wrap.innerHTML = `<div class="section-title">CRM Pipeline - 9-stage funnel</div>
+    <div class="board-toolbar">
+      <div class="board-toolbar-filters">
+        <div class="filter-pills">${offerings.map(function(o){return `<span class="filter-pill ${STATE.crm.offering===o?'active':''}" onclick="setCrmFilter('${o}')">${o}</span>`;}).join('')}</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div class="view-toggle">${['cards','list','summary'].map(function(v){return `<button class="view-toggle-btn ${STATE.crm.view===v?'active':''}" onclick="setCrmView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;}).join('')}</div>
+        <button class="btn btn-primary" onclick="openNewLead()">+ New Lead</button>
+      </div>
+    </div>
+    <div id="crmBody"></div>`;
+  var body = wrap.querySelector('#crmBody');
+
+  if(STATE.crm.view==='cards'){
+    var html = '<div class="board">';
+    CRM_STAGES.forEach(function(stage){
+      var stageItems = items.filter(function(l){return l.stage===stage;});
+      html += `<div class="board-col">
+        <div class="board-col-h"><span class="board-col-dot" style="background:${CRM_STAGE_COLOR[stage]}"></span>${stage}<span class="board-col-count">${stageItems.length}</span></div>
+        <div class="board-drop">${stageItems.map(leadCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
+      </div>`;
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  } else if(STATE.crm.view==='list'){
+    body.innerHTML = `<div class="card table-scroll"><table>
+      <tr><th>Name</th><th>Organization</th><th>Offering</th><th>Stage</th><th>Owner</th><th>Updated</th></tr>
+      ${items.map(function(l){
+        return `<tr onclick="openLeadDetail('${l.lead_id}')" style="cursor:pointer;">
+          <td>${l.name}</td><td>${l.organization||'-'}</td><td>${l.offering||'-'}</td>
+          <td><span class="pill" style="background:${CRM_STAGE_COLOR[l.stage]}22;color:${CRM_STAGE_COLOR[l.stage]};">${l.stage}</span></td>
+          <td>${l.owner||'-'}</td><td>${fmtDate(l.updated_at)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">No leads match this filter.</td></tr>'}
+    </table></div>`;
+  } else {
+    var total = items.length || 1;
+    body.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Total Leads</div></div>
+        <div class="stat-card accent-violet"><div class="stat-num">${items.filter(function(l){return l.stage==='Demo Session';}).length}</div><div class="stat-lbl">In Demo</div></div>
+        <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(l){return l.stage==='Onboarding';}).length}</div><div class="stat-lbl">Onboarding</div></div>
+        <div class="stat-card accent-red"><div class="stat-num">${items.filter(function(l){return l.stage==='Declined / Cold Leads';}).length}</div><div class="stat-lbl">Declined</div></div>
+      </div>
+      <div class="card"><div class="card-h">By Stage</div><div class="summary-bars">${CRM_STAGES.map(function(s){
+        var n = items.filter(function(l){return l.stage===s;}).length;
+        var pct = Math.round(n/total*100);
+        return `<div class="summary-bar-row"><span class="summary-bar-label">${s}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:${CRM_STAGE_COLOR[s]};"></div></div><span class="summary-bar-pct">${n}</span></div>`;
+      }).join('')}</div></div>`;
+  }
+  return wrap;
+}
+
+function openNewLead(){
+  ['lf_name','lf_org','lf_position','lf_email','lf_linkedin','lf_offering','lf_source'].forEach(function(id){ document.getElementById(id).value=''; });
+  var ownerSel = document.getElementById('lf_owner');
+  ownerSel.innerHTML = '<option value="">Unassigned</option>' + DB.team.map(function(p){return `<option value="${p.name}">${p.name}</option>`;}).join('');
+  openModal('newLeadModalBg');
+}
+function saveNewLead(){
+  var payload = {
+    name: document.getElementById('lf_name').value,
+    organization: document.getElementById('lf_org').value,
+    position: document.getElementById('lf_position').value,
+    email: document.getElementById('lf_email').value,
+    linkedin_url: document.getElementById('lf_linkedin').value,
+    offering: document.getElementById('lf_offering').value,
+    owner: document.getElementById('lf_owner').value,
+    source: document.getElementById('lf_source').value || 'Manual'
+  };
+  api('createLead', payload).then(function(res){
+    if(!res.ok){ alert('Could not create lead: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.lead) DB.leads.push(res.lead);
+    closeModal('newLeadModalBg');
+    render();
+  });
+}
+
+function openLeadDetail(id){
+  var l = DB.leads.filter(function(x){return x.lead_id===id;})[0];
+  if(!l) return;
+  var showDemo = l.stage==='Demo Session' && l.demo_meeting_booked!=='yes';
+  var showDecline = l.stage==='Declined / Cold Leads';
+  var body = document.getElementById('leadDetailModalBody');
+  body.innerHTML = `
+    <div class="modal-h"><h2>${l.name}</h2><button class="close-x" onclick="closeModal('leadDetailModalBg')">X</button></div>
+    <div class="thin-tag" style="margin-bottom:10px;">${l.organization||''} ${l.position?'· '+l.position:''}</div>
+    <div class="row2">
+      <div class="field"><label>Owner</label>
+        <select id="ld_owner" onchange="reassignLead('${id}', this.value)">
+          ${DB.team.map(function(p){return `<option ${p.name===l.owner?'selected':''}>${p.name}</option>`;}).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Offering</label><input value="${l.offering||''}" disabled></div>
+    </div>
+    <div class="field"><label>Stage</label>
+      <div class="stage-btn-row">${CRM_STAGES.map(function(s){
+        return `<button class="stage-btn ${l.stage===s?'current':''}" onclick="setLeadStage('${id}','${s}')">${s}</button>`;
+      }).join('')}</div>
+    </div>
+    ${showDemo ? `
+      <div class="reveal-panel">
+        <b>Book Demo Session</b>
+        <div class="row2" style="margin-top:8px;">
+          <div class="field" style="margin-bottom:0;"><label>Date</label><input type="date" id="ld_demo_date"></div>
+          <div class="field" style="margin-bottom:0;"><label>Time</label><input type="time" id="ld_demo_time"></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="bookDemo('${id}')">Book Demo</button>
+      </div>` : ''}
+    ${showDecline ? `
+      <div class="reveal-panel decline">
+        <b>Decline Reason</b>
+        <select id="ld_decline_cat" style="margin-top:8px;width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
+          <option value="">Select a reason</option><option>Budget</option><option>Chose competitor</option><option>No longer needed</option><option>Went cold / no response</option><option>Other</option>
+        </select>
+        <input id="ld_competitor" placeholder="Competitor name (if applicable)" style="margin-top:8px;width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
+        <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:10px;" onclick="saveDeclineReason('${id}')">Save Reason</button>
+      </div>` : ''}
+    <div class="card-h" style="margin-top:14px;display:flex;justify-content:space-between;">AI Lead Health <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;" onclick="runAiLeadHealth('${id}')">Ask Claude</button></div>
+    <div id="ld_health" class="ai-box" style="display:none;"></div>
+  `;
+  openModal('leadDetailModalBg');
+}
+
+function setLeadStage(id, stage){
+  api('updateLeadStage', {lead_id:id, stage:stage}).then(function(res){
+    if(!res.ok){ alert('Could not update stage: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l) l.stage=stage; }
+    render();
+    openLeadDetail(id);
+  });
+}
+function reassignLead(id, newOwner){
+  api('reassignLead', {lead_id:id, new_owner:newOwner}).then(function(res){
+    if(!res.ok){ alert('Could not reassign: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l) l.owner=newOwner; }
+    render();
+  });
+}
+function bookDemo(id){
+  var date = document.getElementById('ld_demo_date').value;
+  var time = document.getElementById('ld_demo_time').value;
+  if(!date){ alert('Pick a date first.'); return; }
+  api('bookLeadDemo', {lead_id:id, date:date, time:time, invitees:[CURRENT_USER]}).then(function(res){
+    if(!res.ok){ alert('Could not book demo: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.demo_date=date; l.demo_meeting_booked='yes'; } }
+    render();
+    openLeadDetail(id);
+  });
+}
+function saveDeclineReason(id){
+  var category = document.getElementById('ld_decline_cat').value;
+  var competitor = document.getElementById('ld_competitor').value;
+  api('updateLeadStage', {lead_id:id, stage:'Declined / Cold Leads', decline_category:category, competitor:competitor}).then(function(res){
+    if(!res.ok){ alert('Could not save: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.decline_category=category; l.competitor=competitor; } }
+    render();
+    openLeadDetail(id);
+  });
+}
+function runAiLeadHealth(id){
+  var box = document.getElementById('ld_health');
+  box.style.display='block';
+  box.innerHTML = '<div class="ai-box-h">Claude</div>Thinking...';
+  api('aiLeadHealthSummary', {lead_id:id}).then(function(res){
+    if(!res.ok){ box.innerHTML = '<div class="ai-box-h">Claude</div>Could not get a summary: '+(res.error||'Unknown error'); return; }
+    var h = res.health || {};
+    box.innerHTML = `<div class="ai-box-h">Claude · Risk: ${h.risk_level||'Unknown'}</div>${h.summary||''}<div style="margin-top:8px;"><b>Next:</b> ${h.suggested_next_action||'-'}</div>`;
+  });
+}
+
+// ── Content Calendar ──────────────────────────────────────────────────
+var CONTENT_STAGES = ['Idea','Drafting','Design','Scheduled','Published'];
+var CONTENT_STAGE_COLOR = {'Idea':'#8E90A3','Drafting':'#3B6FD4','Design':'#D9A62E','Scheduled':'#7C5CBF','Published':'#2E9B5F'};
+
+function contentFiltered(){
+  if(!STATE.content) STATE.content = {platform:'All', view:'cards'};
+  return DB.contentCalendar.filter(function(c){ return STATE.content.platform==='All' || c.platform===STATE.content.platform; });
+}
+function setContentFilter(val){ STATE.content.platform = val; render(); }
+function setContentView(v){ STATE.content.view = v; render(); }
+
+function contentCardHtml(c){
+  return `<div class="ticket" onclick="openContentDetail('${c.content_id}')">
+    <div class="ticket-top"><span class="pill" style="background:var(--brand-bg);color:var(--brand);">${c.type||'Post'}</span></div>
+    <div class="ticket-title">${c.title}</div>
+    <div class="thin-tag">${c.platform||''}</div>
+  </div>`;
+}
+
+function renderContent(){
+  if(!STATE.content) STATE.content = {platform:'All', view:'cards'};
+  var wrap = el('<div></div>');
+  var platforms = ['All','LinkedIn','Instagram','Twitter/X','Blog','Newsletter'];
+  var items = contentFiltered();
+
+  wrap.innerHTML = `<div class="section-title">Content Calendar - refreshed automatically every Friday morning with a new AI-proposed pool</div>
+    <div class="board-toolbar">
+      <div class="board-toolbar-filters">
+        <div class="filter-pills">${platforms.map(function(p){return `<span class="filter-pill ${STATE.content.platform===p?'active':''}" onclick="setContentFilter('${p}')">${p}</span>`;}).join('')}</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div class="view-toggle">${['cards','list','summary'].map(function(v){return `<button class="view-toggle-btn ${STATE.content.view===v?'active':''}" onclick="setContentView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;}).join('')}</div>
+        ${CURRENT_USER_ROLE==='Admin' ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run Weekly Pool Now</button>' : ''}
+        <button class="btn btn-primary" onclick="openNewContent()">+ New Item</button>
+      </div>
+    </div>
+    <div id="contentBody"></div>`;
+  var body = wrap.querySelector('#contentBody');
+
+  if(STATE.content.view==='cards'){
+    var html = '<div class="board">';
+    CONTENT_STAGES.forEach(function(stage){
+      var stageItems = items.filter(function(c){return c.stage===stage;});
+      html += `<div class="board-col">
+        <div class="board-col-h"><span class="board-col-dot" style="background:${CONTENT_STAGE_COLOR[stage]}"></span>${stage}<span class="board-col-count">${stageItems.length}</span></div>
+        <div class="board-drop">${stageItems.map(contentCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
+      </div>`;
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  } else if(STATE.content.view==='list'){
+    body.innerHTML = `<div class="card table-scroll"><table>
+      <tr><th>Title</th><th>Type</th><th>Platform</th><th>Stage</th><th>Owner</th><th>Scheduled</th></tr>
+      ${items.map(function(c){
+        return `<tr onclick="openContentDetail('${c.content_id}')" style="cursor:pointer;">
+          <td>${c.title}</td><td>${c.type||'-'}</td><td>${c.platform||'-'}</td>
+          <td><span class="pill" style="background:${CONTENT_STAGE_COLOR[c.stage]}22;color:${CONTENT_STAGE_COLOR[c.stage]};">${c.stage}</span></td>
+          <td>${c.owner||'-'}</td><td>${fmtDate(c.scheduled_date)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">Nothing here yet.</td></tr>'}
+    </table></div>`;
+  } else {
+    var total = items.length || 1;
+    body.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Total Items</div></div>
+        <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(c){return c.stage==='Published';}).length}</div><div class="stat-lbl">Published</div></div>
+        <div class="stat-card accent-violet"><div class="stat-num">${items.filter(function(c){return c.stage==='Scheduled';}).length}</div><div class="stat-lbl">Scheduled</div></div>
+      </div>
+      <div class="card"><div class="card-h">By Stage</div><div class="summary-bars">${CONTENT_STAGES.map(function(s){
+        var n = items.filter(function(c){return c.stage===s;}).length;
+        var pct = Math.round(n/total*100);
+        return `<div class="summary-bar-row"><span class="summary-bar-label">${s}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:${CONTENT_STAGE_COLOR[s]};"></div></div><span class="summary-bar-pct">${n}</span></div>`;
+      }).join('')}</div></div>`;
+  }
+  return wrap;
+}
+
+function openNewContent(){
+  ['cf_title','cf_notes'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('cf_type').value='Post';
+  var ownerSel = document.getElementById('cf_owner');
+  ownerSel.innerHTML = '<option value="">Unassigned</option>' + DB.team.map(function(p){return `<option value="${p.name}">${p.name}</option>`;}).join('');
+  openModal('newContentModalBg');
+}
+function saveNewContent(){
+  var payload = {
+    title: document.getElementById('cf_title').value,
+    type: document.getElementById('cf_type').value,
+    platform: document.getElementById('cf_platform').value,
+    owner: document.getElementById('cf_owner').value,
+    notes: document.getElementById('cf_notes').value
+  };
+  api('createContentItem', payload).then(function(res){
+    if(!res.ok){ alert('Could not add content item: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.item) DB.contentCalendar.push(res.item);
+    closeModal('newContentModalBg');
+    render();
+  });
+}
+
+function openContentDetail(id){
+  var c = DB.contentCalendar.filter(function(x){return x.content_id===id;})[0];
+  if(!c) return;
+  var body = document.getElementById('contentDetailModalBody');
+  body.innerHTML = `
+    <div class="modal-h"><h2>${c.title}</h2><button class="close-x" onclick="closeModal('contentDetailModalBg')">X</button></div>
+    <div class="thin-tag" style="margin-bottom:10px;">${c.type||''} · ${c.platform||''}</div>
+    <div class="field"><label>Stage</label>
+      <div class="stage-btn-row">${CONTENT_STAGES.map(function(s){
+        return `<button class="stage-btn ${c.stage===s?'current':''}" onclick="setContentStage('${id}','${s}')">${s}</button>`;
+      }).join('')}</div>
+    </div>
+    ${c.stage==='Scheduled' || c.stage==='Design' ? `<div class="field"><label>Scheduled Date</label><input type="date" id="cd_date" value="${c.scheduled_date||''}" onchange="saveContentField('${id}','scheduled_date',this.value)"></div>` : ''}
+    <div class="field"><label>Owner</label>
+      <select id="cd_owner" onchange="saveContentField('${id}','owner',this.value)">
+        <option value="">Unassigned</option>
+        ${DB.team.map(function(p){return `<option ${p.name===c.owner?'selected':''}>${p.name}</option>`;}).join('')}
+      </select>
+    </div>
+    <div class="field"><label>Notes</label><textarea onchange="saveContentField('${id}','notes',this.value)">${c.notes||''}</textarea></div>
+  `;
+  openModal('contentDetailModalBg');
+}
+function setContentStage(id, stage){
+  api('updateContentStage', {content_id:id, stage:stage}).then(function(res){
+    if(!res.ok){ alert('Could not update stage: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var c=DB.contentCalendar.filter(function(x){return x.content_id===id;})[0]; if(c) c.stage=stage; }
+    render();
+    openContentDetail(id);
+  });
+}
+function saveContentField(id, field, value){
+  var payload = {content_id:id}; payload[field]=value;
+  api('updateContentStage', payload).then(function(res){
+    if(!res.ok){ alert('Could not save: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var c=DB.contentCalendar.filter(function(x){return x.content_id===id;})[0]; if(c) c[field]=value; }
+  });
+}
+function runContentPoolNowClick(){
+  if(!confirm('Ask Claude to propose next week\'s content pool now?')) return;
+  api('runContentPoolNow', {}).then(function(res){
+    if(!res.ok){ alert('Could not generate content pool: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.items){ res.items.forEach(function(i){ DB.contentCalendar.push(i); }); }
+    alert((res.created||0)+' new content ideas added to the Idea column.');
+    render();
+  });
+}
+
+// ── Payroll (Admin only) ─────────────────────────────────────────────────
+function renderPayroll(){
+  if(CURRENT_USER_ROLE!=='Admin'){
+    var deny = el('<div></div>'); deny.innerHTML = '<div class="empty">Payroll is restricted to Admins.</div>'; return deny;
+  }
+  if(!STATE.payrollMonth){
+    var months = DB.payroll.map(function(p){return p.month;}).filter(Boolean);
+    STATE.payrollMonth = months.length ? months.sort().slice(-1)[0] : new Date().toISOString().slice(0,7);
+  }
+  var wrap = el('<div></div>');
+  var allMonths = ['All'].concat(DB.payroll.map(function(p){return p.month;}).filter(function(m,i,arr){return m && arr.indexOf(m)===i;}).sort());
+  var items = DB.payroll.filter(function(p){ return STATE.payrollMonth==='All' || p.month===STATE.payrollMonth; });
+  var totalSalary = items.reduce(function(s,p){return s+(Number(p.salary_amount)||0);},0);
+
+  wrap.innerHTML = `<div class="section-title">Payroll - verification only; this app never moves money itself</div>
+    <div class="stat-grid" style="margin-bottom:16px;">
+      <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Entries this month</div></div>
+      <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(p){return p.status==='Paid';}).length}</div><div class="stat-lbl">Paid</div></div>
+      <div class="stat-card accent-amber"><div class="stat-num">${items.filter(function(p){return p.account_verified!=='yes';}).length}</div><div class="stat-lbl">Unverified Accounts</div></div>
+      <div class="stat-card"><div class="stat-num">₦${totalSalary.toLocaleString()}</div><div class="stat-lbl">Total Salary</div></div>
+    </div>
+    <div class="board-toolbar">
+      <div class="filter-pills">${allMonths.map(function(m){return `<span class="filter-pill ${STATE.payrollMonth===m?'active':''}" onclick="setPayrollMonth('${m}')">${m}</span>`;}).join('')}</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export CSV</button>
+        <button class="btn btn-primary" onclick="openPayrollRun()">Run Monthly Payroll</button>
+      </div>
+    </div>
+    <div class="card table-scroll"><table>
+      <tr><th>Team Member</th><th>Bank</th><th>Verified</th><th>Salary</th><th>Status</th></tr>
+      ${items.map(function(p){
+        return `<tr onclick="openPayrollDetail('${p.payroll_id}')" style="cursor:pointer;">
+          <td>${p.team_member_name}</td><td>${p.bank_name||'-'} ${p.account_number?('· '+p.account_number):''}</td>
+          <td><span class="pill" style="background:${p.account_verified==='yes'?'var(--green-bg)':'var(--amber-bg)'};color:${p.account_verified==='yes'?'var(--green)':'#946A0C'};">${p.account_verified==='yes'?'Verified':'Unverified'}</span></td>
+          <td>₦${(Number(p.salary_amount)||0).toLocaleString()}</td>
+          <td><span class="pill" style="background:${p.status==='Paid'?'var(--green-bg)':'var(--surface2)'};color:${p.status==='Paid'?'var(--green)':'var(--text-dim)'};">${p.status}</span></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty">No payroll entries for this month yet.</td></tr>'}
+    </table></div>`;
+  return wrap;
+}
+function setPayrollMonth(m){ STATE.payrollMonth = m; render(); }
+
+function openPayrollRun(){
+  document.getElementById('pf_month').value = new Date().toISOString().slice(0,7);
+  openModal('payrollRunModalBg');
+}
+function saveRunPayrollBatch(){
+  var month = document.getElementById('pf_month').value;
+  if(!month){ alert('Pick a month first.'); return; }
+  api('generateMonthlyPayrollBatch', {month:month}).then(function(res){
+    if(!res.ok){ alert('Could not run payroll: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.entries){ res.entries.forEach(function(e){ DB.payroll.push(e); }); }
+    STATE.payrollMonth = month;
+    closeModal('payrollRunModalBg');
+    alert((res.created||0)+' payroll entries created for '+month+'.');
+    render();
+  });
+}
+
+function openPayrollDetail(id){
+  var p = DB.payroll.filter(function(x){return x.payroll_id===id;})[0];
+  if(!p) return;
+  var body = document.getElementById('payrollDetailModalBody');
+  body.innerHTML = `
+    <div class="modal-h"><h2>${p.team_member_name} - ${p.month}</h2><button class="close-x" onclick="closeModal('payrollDetailModalBg')">X</button></div>
+    <div class="row2">
+      <div class="field"><label>Bank Name</label><input id="pd_bank_name" value="${p.bank_name||''}"></div>
+      <div class="field"><label>Bank Code</label><input id="pd_bank_code" value="${p.bank_code||''}" placeholder="e.g. 058"></div>
+    </div>
+    <div class="field"><label>Account Number</label><input id="pd_account_number" value="${p.account_number||''}"></div>
+    <div class="thin-tag" style="margin-bottom:10px;">${p.account_verified==='yes' ? ('Verified as: '+(p.account_name||'-')) : 'Not yet verified.'}</div>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-bottom:10px;" onclick="verifyPayrollAcct('${id}')">Verify Account with Paystack</button>
+    <div class="field"><label>Salary Amount (₦)</label><input type="number" id="pd_salary" value="${p.salary_amount||''}" onchange="savePayrollField('${id}','salary_amount',this.value)"></div>
+    ${p.status!=='Paid' ? `<button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="markPayrollPaidClick('${id}')">Mark Paid (after transferring in Paystack)</button>` : `<div class="thin-tag">Paid on ${fmtDate(p.paid_at)}</div>`}
+  `;
+  openModal('payrollDetailModalBg');
+}
+function verifyPayrollAcct(id){
+  var accountNumber = document.getElementById('pd_account_number').value;
+  var bankCode = document.getElementById('pd_bank_code').value;
+  var bankName = document.getElementById('pd_bank_name').value;
+  api('updatePayrollEntry', {payroll_id:id, bank_name:bankName, bank_code:bankCode, account_number:accountNumber}).then(function(){
+    api('verifyPayrollAccount', {payroll_id:id, account_number:accountNumber, bank_code:bankCode}).then(function(res){
+      if(!res.ok){ alert('Verification failed: '+(res.error||'Unknown error')); return; }
+      if(WORKSPACE_MODE){ var p=DB.payroll.filter(function(x){return x.payroll_id===id;})[0]; if(p){ p.bank_name=bankName; p.bank_code=bankCode; p.account_number=accountNumber; p.account_name=res.account_name; p.account_verified='yes'; } }
+      alert('Verified: '+res.account_name);
+      render();
+      openPayrollDetail(id);
+    });
+  });
+}
+function savePayrollField(id, field, value){
+  var payload = {payroll_id:id}; payload[field]=value;
+  api('updatePayrollEntry', payload).then(function(res){
+    if(!res.ok){ alert('Could not save: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var p=DB.payroll.filter(function(x){return x.payroll_id===id;})[0]; if(p) p[field]=value; }
+  });
+}
+function markPayrollPaidClick(id){
+  if(!confirm('Mark this as paid? Only do this after you have actually transferred the salary in your Paystack dashboard.')) return;
+  api('markPayrollPaid', {payroll_id:id}).then(function(res){
+    if(!res.ok){ alert('Could not update: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var p=DB.payroll.filter(function(x){return x.payroll_id===id;})[0]; if(p){ p.status='Paid'; p.paid_at=new Date().toISOString(); } }
+    closeModal('payrollDetailModalBg');
+    render();
+  });
+}
+function exportPayrollCsvClick(){
+  if(STATE.payrollMonth==='All'){ alert('Pick a specific month first.'); return; }
+  api('exportPayrollCsv', {month:STATE.payrollMonth}).then(function(res){
+    if(!res.ok){ alert('Could not export: '+(res.error||'Unknown error')); return; }
+    var blob = new Blob([res.csv], {type:'text/csv'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'wecollect-payroll-'+STATE.payrollMonth+'.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+}
+
+// ── Finance (Admin only) ─────────────────────────────────────────────────
+function renderFinance(){
+  if(CURRENT_USER_ROLE!=='Admin'){
+    var deny = el('<div></div>'); deny.innerHTML = '<div class="empty">Finance is restricted to Admins.</div>'; return deny;
+  }
+  var wrap = el('<div></div>');
+  var income = DB.financeEntries.filter(function(e){return e.type==='Income';}).reduce(function(s,e){return s+(Number(e.amount)||0);},0);
+  var expense = DB.financeEntries.filter(function(e){return e.type==='Expense';}).reduce(function(s,e){return s+(Number(e.amount)||0);},0);
+  wrap.innerHTML = `<div class="section-title">Finance Dashboard</div>
+    <div class="stat-grid" style="margin-bottom:16px;">
+      <div class="stat-card accent-green"><div class="stat-num">₦${income.toLocaleString()}</div><div class="stat-lbl">Income</div></div>
+      <div class="stat-card accent-red"><div class="stat-num">₦${expense.toLocaleString()}</div><div class="stat-lbl">Expenses</div></div>
+      <div class="stat-card"><div class="stat-num">₦${(income-expense).toLocaleString()}</div><div class="stat-lbl">Net</div></div>
+    </div>
+    <div style="margin-bottom:12px;"><button class="btn btn-primary" onclick="openNewFinanceEntry()">+ New Entry</button></div>
+    <div class="card table-scroll"><table>
+      <tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr>
+      ${DB.financeEntries.slice().reverse().map(function(e){
+        return `<tr>
+          <td>${fmtDate(e.entry_date)}</td>
+          <td><span class="pill" style="background:${e.type==='Income'?'var(--green-bg)':'var(--red-bg)'};color:${e.type==='Income'?'var(--green)':'var(--red)'};">${e.type}</span></td>
+          <td>${e.category||'-'}</td><td>${e.description||'-'}</td>
+          <td>${e.currency||'NGN'} ${(Number(e.amount)||0).toLocaleString()}</td>
+          <td><span class="thin-tag" style="color:var(--red);cursor:pointer;" onclick="deleteFinanceEntryClick('${e.entry_id}')">Delete</span></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">No finance entries yet.</td></tr>'}
+    </table></div>`;
+  return wrap;
+}
+function openNewFinanceEntry(){
+  ['ff_category','ff_amount','ff_desc'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('ff_date').value = new Date().toISOString().slice(0,10);
+  var projSel = document.getElementById('ff_project');
+  projSel.innerHTML = '<option value="">None</option>' + DB.projects.map(function(p){return `<option value="${p.project_id}">${p.name}</option>`;}).join('');
+  openModal('newFinanceModalBg');
+}
+function saveNewFinanceEntry(){
+  var payload = {
+    type: document.getElementById('ff_type').value,
+    category: document.getElementById('ff_category').value,
+    amount: Number(document.getElementById('ff_amount').value)||0,
+    currency: document.getElementById('ff_currency').value||'NGN',
+    entry_date: document.getElementById('ff_date').value,
+    project_id: document.getElementById('ff_project').value,
+    description: document.getElementById('ff_desc').value
+  };
+  api('createFinanceEntry', payload).then(function(res){
+    if(!res.ok){ alert('Could not add entry: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.entry) DB.financeEntries.push(res.entry);
+    closeModal('newFinanceModalBg');
+    render();
+  });
+}
+function deleteFinanceEntryClick(id){
+  if(!confirm('Delete this finance entry?')) return;
+  api('deleteFinanceEntry', {entry_id:id}).then(function(res){
+    if(!res.ok){ alert('Could not delete: '+(res.error||'Unknown error')); return; }
+    DB.financeEntries = DB.financeEntries.filter(function(e){return e.entry_id!==id;});
+    render();
+  });
+}
+
+// ── Leave ────────────────────────────────────────────────────────────────
+function renderLeave(){
+  var wrap = el('<div></div>');
+  var isAdmin = CURRENT_USER_ROLE==='Admin';
+  var items = isAdmin ? DB.leave : DB.leave.filter(function(l){return l.team_member_name===CURRENT_USER;});
+  wrap.innerHTML = `<div class="section-title">${isAdmin?'Leave Requests':'My Leave Requests'}</div>
+    <div style="margin-bottom:12px;"><button class="btn btn-primary" onclick="openRequestLeave()">Request Leave</button></div>
+    <div class="card table-scroll"><table>
+      <tr><th>${isAdmin?'Team Member':'Type'}</th><th>${isAdmin?'Type':'Dates'}</th><th>${isAdmin?'Dates':'Reason'}</th><th>Status</th>${isAdmin?'<th></th>':''}</tr>
+      ${items.map(function(l){
+        return `<tr>
+          <td>${isAdmin?l.team_member_name:l.type}</td>
+          <td>${isAdmin?l.type:(l.start_date+' to '+l.end_date)}</td>
+          <td>${isAdmin?(l.start_date+' to '+l.end_date):(l.reason||'-')}</td>
+          <td><span class="pill" style="background:${l.status==='Approved'?'var(--green-bg)':l.status==='Declined'?'var(--red-bg)':'var(--surface2)'};color:${l.status==='Approved'?'var(--green)':l.status==='Declined'?'var(--red)':'var(--text-dim)'};">${l.status}</span></td>
+          ${isAdmin && l.status==='Pending' ? `<td><button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="decideLeaveClick('${l.leave_id}','Approved')">Approve</button> <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);" onclick="decideLeaveClick('${l.leave_id}','Declined')">Decline</button></td>` : (isAdmin?'<td></td>':'')}
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty">No leave requests yet.</td></tr>'}
+    </table></div>`;
+  return wrap;
+}
+function openRequestLeave(){
+  ['lvf_start','lvf_end','lvf_reason'].forEach(function(id){ document.getElementById(id).value=''; });
+  openModal('requestLeaveModalBg');
+}
+function saveLeaveRequest(){
+  var payload = {
+    type: document.getElementById('lvf_type').value,
+    start_date: document.getElementById('lvf_start').value,
+    end_date: document.getElementById('lvf_end').value,
+    reason: document.getElementById('lvf_reason').value
+  };
+  api('requestLeave', payload).then(function(res){
+    if(!res.ok){ alert('Could not submit request: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE && res.leave) DB.leave.push(res.leave);
+    closeModal('requestLeaveModalBg');
+    render();
+  });
+}
+function decideLeaveClick(id, status){
+  api('decideLeave', {leave_id:id, status:status}).then(function(res){
+    if(!res.ok){ alert('Could not update: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var l=DB.leave.filter(function(x){return x.leave_id===id;})[0]; if(l){ l.status=status; l.approved_by=CURRENT_USER; } }
     render();
   });
 }
@@ -797,6 +1800,14 @@ function toggleInvitee(name){
   renderInviteePicker();
 }
 
+// Quick shortcut from Team Directory - "book a meeting with anyone,
+// any department" without having to find them in the invitee picker.
+function scheduleMeetingWith(name){
+  openScheduleMeetingModal();
+  SCHEDULE_INVITEES = [name];
+  renderInviteePicker();
+}
+
 function saveScheduledMeeting(force){
   var description = document.getElementById('sm_desc').value.trim();
   if(!description){ alert('A meeting description is required so an agenda can be generated.'); return; }
@@ -1058,10 +2069,10 @@ function renderTeamSpaces(){
   });
   html += '</div>';
 
-  html += '<div class="section-title">All Team Members</div><div class="card" style="padding:0;"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th></tr></thead><tbody>' +
+  html += '<div class="section-title">All Team Members - book a meeting with anyone, any department</div><div class="card" style="padding:0;"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th><th></th></tr></thead><tbody>' +
     (DB.team.length ? DB.team.map(function(p){
-      return `<tr><td>${p.name}</td><td>${p.email}</td><td>${p.department||' - '}</td><td>${p.role||' - '}</td></tr>`;
-    }).join('') : '<tr><td colspan="4" class="empty">No team members yet.</td></tr>') +
+      return `<tr><td>${p.name}</td><td>${p.email}</td><td>${p.department||' - '}</td><td>${p.role||' - '}</td><td><button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;" onclick="scheduleMeetingWith('${p.name}')">Meet</button></td></tr>`;
+    }).join('') : '<tr><td colspan="5" class="empty">No team members yet.</td></tr>') +
     '</tbody></table></div>';
 
   wrap.innerHTML = html;
@@ -1314,7 +2325,7 @@ function importGoogleDocForSession(sessionId){
 // for the whole duration of reading/parsing, so it is physically impossible
 // to click Save while a placeholder like "[Loading Word reader...]" is
 // still sitting in the textarea instead of the real extracted content -
-// that exact race is what caused Gemini to report "no notes provided"
+// that exact race is what caused Claude to report "no notes provided"
 // on a previous upload.
 function handleNotesFileUpload(event, textareaId, saveButtonId){
   var file = event.target.files[0];
@@ -2253,20 +3264,75 @@ function buildFileManagerBrowseView(folderId, folderName, breadcrumb){
   return wrap;
 }
 
+var TRIGGER_LABELS = {
+  welcome:'Welcome', assigned:'New Ticket', blocked:'Blocked', review:'Review', uat_fail:'UAT Fail',
+  lead_assigned:'CRM', lead_declined:'CRM', lead_won:'CRM', lead_reassigned:'CRM', lead_followup:'CRM Follow-up',
+  content_assigned:'Content', content_scheduled:'Content', content_published:'Content', content_weekly_pool:'Content',
+  payroll_paid:'Payroll', payroll_reminder:'Payroll', leave_request:'Leave', leave_decision:'Leave',
+  meeting_invite:'Meetings', news_digest:'Industry News', test:'Test'
+};
+function notifChannelLabel(triggerType){ return TRIGGER_LABELS[triggerType] || 'Other'; }
+
+function fetchMyNotifications(){
+  return api('getMyNotifications', {}).then(function(res){
+    if(!res.ok) return {notifications:[], grouped:{}};
+    return res;
+  });
+}
+
 function renderNotifications(){
   var wrap = el('<div></div>');
   wrap.innerHTML = `<div class="section-title">Notifications</div>
   <div class="card">
-    <div class="thin-tag" style="margin-bottom:10px;">Private Slack DMs fire from Apps Script (welcome, assigned, due tomorrow, overdue, blocked, review needed, completed, meeting invites). Configure SLACK_BOT_TOKEN in Script Properties to activate - each person also needs their Slack Member ID saved in the Team tab.</div>
+    <div class="thin-tag" style="margin-bottom:10px;">Private Slack DMs fire from Apps Script, grouped below by what triggered them (Payroll, Tickets, UAT, CRM, Content, Meetings, ...). Configure SLACK_BOT_TOKEN in Script Properties to activate - each person also needs their Slack Member ID saved in the Team tab.</div>
     <button class="btn btn-ghost" onclick="sendTestDM()">Send Test DM to Myself</button>
-    <div id="notifLog" style="margin-top:14px;"></div>
+    <div id="notifLog" style="margin-top:14px;">Loading...</div>
   </div>`;
   var box = wrap.querySelector('#notifLog');
-  box.innerHTML = DB.notifications_log && DB.notifications_log.length ? DB.notifications_log.slice().reverse().map(function(n){
-    return `<div class="thin-row"><span class="thin-title">${n.message}</span><span class="thin-tag">${n.status}</span></div>`;
-  }).join('') : '<div class="empty">No notifications sent yet in this session.</div>';
+  fetchMyNotifications().then(function(res){
+    var grouped = res.grouped || {};
+    var keys = Object.keys(grouped);
+    if(!keys.length){ box.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
+    box.innerHTML = keys.map(function(k){
+      return `<div class="dept-block"><div class="dept-h">${notifChannelLabel(k)}</div>` +
+        grouped[k].map(function(n){ return `<div class="thin-row"><span class="thin-title">${n.message}</span><span class="thin-tag">${fmtDateTime(n.timestamp)}</span></div>`; }).join('') +
+      '</div>';
+    }).join('');
+  });
   return wrap;
 }
+
+function toggleNotifBell(){
+  var dd = document.getElementById('notifDropdown');
+  var opening = !dd.classList.contains('open');
+  if(!opening){ dd.classList.remove('open'); return; }
+  dd.innerHTML = '<div class="search-result-item" style="color:var(--text-faint);">Loading...</div>';
+  dd.classList.add('open');
+  fetchMyNotifications().then(function(res){
+    var mine = res.notifications || [];
+    if(!mine.length){ dd.innerHTML = '<div class="search-result-item" style="color:var(--text-faint);">No notifications yet.</div>'; return; }
+    var lastGroup = '';
+    dd.innerHTML = mine.slice(0,15).map(function(n){
+      var g = notifChannelLabel(n.trigger_type);
+      var groupHtml = g !== lastGroup ? '<div class="search-result-group">'+g+'</div>' : '';
+      lastGroup = g;
+      return groupHtml + '<div class="search-result-item" style="display:block;"><div>'+n.message+'</div><div class="thin-tag">'+fmtDateTime(n.timestamp)+'</div></div>';
+    }).join('');
+  });
+}
+
+function refreshNotifBadge(){
+  fetchMyNotifications().then(function(res){
+    var count = (res.notifications||[]).length;
+    var badge = document.getElementById('notifBadge');
+    if(!badge) return;
+    if(count>0){ badge.textContent = count>9 ? '9+' : String(count); badge.classList.remove('hidden'); }
+    else badge.classList.add('hidden');
+  });
+}
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.notif-bell-wrap')){ var dd=document.getElementById('notifDropdown'); if(dd) dd.classList.remove('open'); }
+});
 
 function sendTestDM(){
   api('testSlackDM', {}).then(function(res){
@@ -2313,17 +3379,56 @@ function openNewTicket(){
   document.getElementById('ticketModalTitle').textContent = 'New Ticket';
   ['f_title','f_desc'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('f_due').value='';
+  document.getElementById('f_system').value='';
+  document.getElementById('f_ai_hint').textContent='';
   populateSelects();
   if(document.getElementById('f_template')) document.getElementById('f_template').value='';
+  toggleParentPicker();
   openModal('ticketModalBg');
 }
 
+function toggleParentPicker(){
+  var type = document.getElementById('f_type').value;
+  var system = document.getElementById('f_system').value;
+  var wrap = document.getElementById('f_parent_wrap');
+  var sel = document.getElementById('f_parent');
+  var needsParent = (type==='Task' || type==='Bug');
+  wrap.style.display = needsParent ? '' : 'none';
+  if(!needsParent) return;
+  var parents = DB.tickets.filter(function(t){ return (t.type==='Direction'||t.type==='Feature') && (!system || t.system===system); });
+  sel.innerHTML = '<option value="">None</option>' + parents.map(function(p){return `<option value="${p.ticket_id}">${p.title}</option>`;}).join('');
+}
+
+// AI-driven feature: turns a rough free-text description into suggested
+// type/system/priority/parent before the ticket is even created, so
+// someone reporting a bug doesn't have to classify their own report.
+function aiTriageFromDescription(){
+  var desc = document.getElementById('f_desc').value;
+  if(!desc.trim()){ alert('Describe the bug or task first.'); return; }
+  var hint = document.getElementById('f_ai_hint');
+  hint.textContent = 'Asking Claude...';
+  api('aiTriageTicket', {description: desc}).then(function(res){
+    if(!res.ok){ hint.textContent = 'Could not get a suggestion: ' + (res.error||'Unknown error'); return; }
+    var s = res.suggestion || {};
+    if(s.title) document.getElementById('f_title').value = s.title;
+    if(s.type) document.getElementById('f_type').value = s.type;
+    if(s.system) document.getElementById('f_system').value = s.system;
+    if(s.priority) document.getElementById('f_prio').value = s.priority;
+    toggleParentPicker();
+    if(s.parent_ticket_id) document.getElementById('f_parent').value = s.parent_ticket_id;
+    hint.textContent = s.rationale ? ('Claude: ' + s.rationale) : 'Suggestion applied - review before saving.';
+  });
+}
+
 function saveTicket(){
+  var type = document.getElementById('f_type').value;
   var payload = {
     title: document.getElementById('f_title').value || 'Untitled Ticket',
     description: document.getElementById('f_desc').value,
-    type: document.getElementById('f_type').value,
+    type: type,
     department: document.getElementById('f_dept').value,
+    system: document.getElementById('f_system') ? document.getElementById('f_system').value : '',
+    parent_ticket_id: (document.getElementById('f_parent') && (type==='Task'||type==='Bug')) ? document.getElementById('f_parent').value : '',
     priority: document.getElementById('f_prio').value,
     owner: document.getElementById('f_owner').value,
     due_date: document.getElementById('f_due').value,
@@ -2356,12 +3461,25 @@ function openTicketDetail(id){
     <div class="row2">
       <div class="field"><label>Type</label>
         <select id="d_type" onchange="changeTicketField('${id}','type',this.value)">
-          ${['Bug','Feature','Task','Idea','Incident','Customer Request','Growth','Documentation','Research','Deployment'].map(function(ty){return `<option ${ty===t.type?'selected':''}>${ty}</option>`;}).join('')}
+          ${['Direction','Feature','Task','Bug','Idea','Incident','Customer Request','Growth','Documentation','Research','Deployment'].map(function(ty){return `<option ${ty===t.type?'selected':''}>${ty}</option>`;}).join('')}
         </select>
       </div>
       <div class="field"><label>Department</label>
         <select id="d_dept" onchange="changeTicketField('${id}','department',this.value)">
           ${['Engineering','Operations','Growth'].map(function(dp){return `<option ${dp===t.department?'selected':''}>${dp}</option>`;}).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>System</label>
+        <select id="d_system" onchange="changeTicketField('${id}','system',this.value)">
+          ${['','Mobile App','PMD','OTG','Super Admin'].map(function(s){return `<option value="${s}" ${s===(t.system||'')?'selected':''}>${s||'-'}</option>`;}).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Tied to (Direction/Feature)</label>
+        <select id="d_parent" onchange="changeTicketField('${id}','parent_ticket_id',this.value)">
+          <option value="">None</option>
+          ${DB.tickets.filter(function(p){return (p.type==='Direction'||p.type==='Feature') && p.ticket_id!==id;}).map(function(p){return `<option value="${p.ticket_id}" ${p.ticket_id===t.parent_ticket_id?'selected':''}>${p.title}</option>`;}).join('')}
         </select>
       </div>
     </div>
@@ -2386,8 +3504,9 @@ function openTicketDetail(id){
       </div>
       <div class="field"><label>Due Date</label><input type="date" id="d_due" value="${t.due_date||''}" onchange="changeTicketField('${id}','due_date',this.value)"></div>
     </div>
-    <div style="display:flex;gap:12px;font-size:12px;color:var(--text-dim);margin-top:4px;">
+    <div style="display:flex;gap:12px;font-size:12px;color:var(--text-dim);margin-top:4px;flex-wrap:wrap;">
       <span><b>Reporter:</b> ${t.reporter}</span>
+      ${t.source==='UAT' ? '<span class="pill" style="background:var(--red-bg);color:var(--red);">From UAT fail</span>' : ''}
     </div>
 
     <div class="card-h" style="margin-top:16px;">Checklist <span class="thin-tag">${checklist.filter(c=>c.done).length}/${checklist.length}</span></div>
@@ -2542,6 +3661,7 @@ function selectUser(name){
   document.getElementById('greetName').textContent = 'Good Morning, ' + name;
   renderNav();
   render();
+  refreshNotifBadge();
 }
 
 function switchUser(){
@@ -2612,6 +3732,7 @@ document.addEventListener('click', function(e){
 document.getElementById('greetDate').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
 
 function boot(){
+  restoreSidebarCollapse();
   if (WORKSPACE_MODE) {
     document.getElementById('loginSub').textContent = 'Verifying your account...';
     document.getElementById('loginPeople').innerHTML = '<div class="login-loading">One moment...</div>';
@@ -2640,6 +3761,12 @@ if (WORKSPACE_MODE) {
       DB.team = res.data.team || [];
       DB.templates = res.data.templates || [];
       DB.oneOnOnes = res.data.oneOnOnes || [];
+      DB.testCases = res.data.testCases || [];
+      DB.leads = res.data.leads || [];
+      DB.contentCalendar = res.data.contentCalendar || [];
+      DB.payroll = res.data.payroll || [];
+      DB.financeEntries = res.data.financeEntries || [];
+      DB.leave = res.data.leave || [];
       boot();
     } else {
       document.getElementById('loginSub').textContent = 'Could not load your data';
