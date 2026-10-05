@@ -1,3 +1,420 @@
+// ═══════════════════════════════════════════════════════════════════════
+// Shared board page — the "Outreach Pipeline" layout used by CRM, Engineering,
+// UAT and Content: header + primary button, stage tabs with counts, search +
+// filter selects + Cards/List/Summary toggle, card grid.
+// ═══════════════════════════════════════════════════════════════════════
+var SVG_PATHS = {
+  home:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  tag:'<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  columns:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
+  check:'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  file:'<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  card:'<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+  chart:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+  sun:'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  book:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  award:'<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>',
+  message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  activity:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  sliders:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  grid:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  star:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  globe:'<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  bell:'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  menu:'<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  chevrons:'<polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>',
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'
+};
+function svgIco(name, size){
+  size = size || 16;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(SVG_PATHS[name]||'')+'</svg>';
+}
+var NAV_ICON = {
+  dashboard:'home', tickets:'tag', board:'columns', uat:'check', calendar:'calendar', projects:'folder', filemanager:'file',
+  crm:'users', content:'edit', payroll:'card', finance:'chart', leave:'sun', training:'book', trainingadmin:'award',
+  meetings:'message', standup:'zap', oneonones:'users', feed:'activity', workload:'sliders', teamspaces:'grid',
+  command:'star', newsdigest:'globe', decisions:'flag', adminlog:'shield', notifications:'bell'
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Self-contained shell: this file injects every style, modal and shell control
+// the new modules need, so it works even if the pasted Index.html is older.
+// Idempotent — safe to run on top of the newer Index.html too.
+// ═══════════════════════════════════════════════════════════════════════
+var SHELL_CSS = `/* ── Collapsible sidebar (desktop) ───────────────────────────────────── */
+#sidebar{transition:width .15s;}
+.sidebar-collapse-btn{width:22px;height:22px;border-radius:5px;border:none;background:transparent;color:var(--on-ink-dim);cursor:pointer;font-size:13px;flex-shrink:0;}
+.sidebar-collapse-btn:hover{background:var(--line2);color:var(--on-ink);}
+#sidebar.collapsed{width:72px;}
+#sidebar.collapsed .brand-name,#sidebar.collapsed .brand-sub,#sidebar.collapsed .greet,
+#sidebar.collapsed .nav-label,#sidebar.collapsed .nav-item span.nav-label-text,
+#sidebar.collapsed #footLabel{display:none;}
+#sidebar.collapsed .brand{justify-content:center;padding:0;}
+#sidebar.collapsed .nav-item{justify-content:center;padding:9px 0;}
+#sidebar.collapsed .nav-count{display:none;}
+#sidebar.collapsed .sidebar-foot{justify-content:center;padding:12px 0;}
+
+/* ── Board view-toggle + filter pills (CRM/Ticketing/Content/UAT boards) */
+.view-toggle{display:inline-flex;background:var(--surface2);border-radius:7px;padding:3px;gap:2px;}
+.view-toggle-btn{border:none;background:transparent;padding:6px 13px;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-dim);font-family:inherit;}
+.view-toggle-btn.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow);}
+.filter-pills{display:flex;gap:6px;flex-wrap:wrap;}
+.filter-pill{font-size:12px;padding:6px 12px;border-radius:20px;background:var(--surface2);border:1px solid transparent;cursor:pointer;user-select:none;color:var(--text-dim);}
+.filter-pill.active{background:var(--ink);color:var(--on-ink);}
+.board-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;margin-bottom:14px;}
+.board-toolbar-filters{display:flex;flex-direction:column;gap:8px;}
+.table-scroll{overflow-x:auto;}
+.table-scroll table{min-width:640px;}
+.summary-bars{display:flex;flex-direction:column;gap:8px;}
+.summary-bar-row{display:flex;align-items:center;gap:10px;font-size:12.5px;}
+.summary-bar-label{width:150px;flex-shrink:0;}
+.summary-bar-track{flex:1;height:9px;background:var(--surface2);border-radius:20px;overflow:hidden;}
+.summary-bar-fill{height:100%;border-radius:20px;}
+.summary-bar-pct{width:36px;text-align:right;font-family:'IBM Plex Mono';font-size:11px;color:var(--text-dim);}
+.stage-btn-row{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px;}
+.stage-btn{font-size:11.5px;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--text-dim);}
+.stage-btn.current{background:var(--ink);color:var(--on-ink);border-color:var(--ink);}
+.reveal-panel{background:var(--brand-bg);border:1px solid #CBD0F6;border-radius:8px;padding:12px;margin:10px 0;}
+.reveal-panel.decline{background:var(--red-bg);border-color:#F3C8C8;}
+
+/* ── Mobile bottom nav (hidden on desktop) ───────────────────────────── */
+#mobileNav{display:none;}
+#mobileNavBackdrop{display:none;}
+
+/* ── Mobile / small-screen layout ────────────────────────────────────── */
+@media (max-width:760px){
+  body{overflow:auto;}
+  #app{height:100vh;}
+  #sidebar{
+    position:fixed; left:0; top:0; bottom:0; z-index:70; width:240px !important;
+    transform:translateX(-100%); transition:transform .18s ease;
+  }
+  #sidebar.mobile-open{transform:translateX(0);}
+  #sidebar.collapsed{width:240px !important;} /* collapse is a desktop-only concept on mobile */
+  #sidebar.collapsed .brand-name,#sidebar.collapsed .brand-sub,#sidebar.collapsed .greet,
+  #sidebar.collapsed .nav-label,#sidebar.collapsed .nav-item span.nav-label-text,
+  #sidebar.collapsed #footLabel{display:block;}
+  #sidebar.collapsed .nav-item{justify-content:flex-start;padding:8px 10px;}
+  .collapse-chevron{display:none;}
+  .mobile-hamburger{display:inline-flex !important;}
+  #mobileNavBackdrop.open{display:block;position:fixed;inset:0;background:rgba(20,22,31,.45);z-index:65;}
+
+  #topbar{padding:0 14px;gap:8px;}
+  .page-title{font-size:15px;}
+  .search-wrap{display:none;}
+  #content{padding:16px 14px 84px;}
+  .dash-grid{grid-template-columns:1fr;}
+  .row2{grid-template-columns:1fr;}
+  .stat-grid{grid-template-columns:repeat(2,1fr);}
+  .modal{position:fixed;width:min(460px,100%);max-height:90vh;overflow-y:auto;border-radius:12px 12px 0 0;}
+  .board-toolbar{flex-direction:column;align-items:stretch;}
+
+  #mobileNav{
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:66;
+    background:var(--ink); border-top:1px solid var(--line2);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+  .mn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;cursor:pointer;color:var(--on-ink-dim);font-size:10px;border:none;background:none;font-family:inherit;}
+  .mn-item.active{color:var(--on-ink);}
+  .mn-ico{font-size:14px;line-height:1;}
+}
+/* ── Shared board page (Outreach-Pipeline layout) ───────────────────── */
+.bp{--bp-accent:#4C50E3;}
+.bp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.bp-title{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;letter-spacing:-.3px;}
+.bp-sub{font-size:12.5px;color:var(--text-dim);margin-top:3px;}
+.bp-head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.bp-btn{background:var(--bp-accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.bp-btn:hover{filter:brightness(.92);}
+.bp-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;-webkit-overflow-scrolling:touch;}
+.bp-tab{white-space:nowrap;border:1px solid var(--line);background:var(--surface);padding:6px 13px;border-radius:20px;font-size:12.5px;cursor:pointer;color:var(--text-dim);font-family:inherit;}
+.bp-tab .n{margin-left:7px;font-size:11px;opacity:.65;font-family:'IBM Plex Mono',monospace;}
+.bp-tab:hover{border-color:var(--bp-accent);}
+.bp-tab.active{background:var(--bp-accent);border-color:var(--bp-accent);color:#fff;}
+.bp-tab.active .n{opacity:.9;}
+.bp-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 16px;}
+.bp-search{position:relative;flex:1;min-width:170px;}
+.bp-search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-faint);pointer-events:none;}
+.bp-search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;font-family:inherit;outline:none;}
+.bp-search input:focus{border-color:var(--bp-accent);}
+.bp-sel{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;font-family:inherit;color:var(--text);max-width:100%;}
+.bp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;}
+.bp-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;transition:.12s;}
+.bp-card:hover{border-color:var(--bp-accent);transform:translateY(-1px);}
+.bp-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.bp-stage{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;}
+.bp-id{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-faint);}
+.bp-card-title{font-size:14.5px;font-weight:600;line-height:1.3;}
+.bp-card-sub{font-size:12px;color:var(--text-dim);margin-top:-4px;}
+.bp-chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:5px;background:var(--surface2);color:var(--text-dim);}
+.bp-chip.tag{background:var(--brand-bg);color:var(--brand);font-weight:500;}
+.bp-chips{display:flex;gap:5px;flex-wrap:wrap;}
+.bp-prog{display:flex;gap:3px;}
+.bp-seg{flex:1;height:4px;border-radius:3px;background:var(--surface2);}
+.bp-card-foot{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--text-faint);margin-top:2px;padding-top:8px;border-top:1px solid var(--line);}
+.bp-owner{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);}
+
+/* ── Icons / topbar polish ──────────────────────────────────────────── */
+.nav-ico{display:inline-flex;align-items:center;justify-content:center;width:18px;flex-shrink:0;}
+.search-ico{display:flex;align-items:center;pointer-events:none;}
+.sidebar-collapse-btn{display:inline-flex;align-items:center;justify-content:center;}
+#sidebar.collapsed .collapse-chevron svg{transform:rotate(180deg);}
+.notif-bell-wrap .bell-btn{width:34px;height:34px;border-radius:8px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;position:relative;}
+.notif-bell-wrap .bell-btn:hover{background:var(--surface2);}
+.mn-ico{display:inline-flex;}
+.nav-item.active::before{display:none !important;}
+.nav-item.active{box-shadow:inset 3px 0 0 var(--brand);}
+@media (max-width:760px){
+  #notifDropdown{position:fixed !important;left:10px !important;right:10px !important;top:58px !important;width:auto !important;}
+  .bp-sel{flex:1;min-width:120px;}
+  .bp-head-actions{width:100%;}
+  .bp-btn{flex:1;}
+}
+`;
+var SHELL_MODALS = `<div class="modal-bg" id="newTestCaseModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2>New Test Case</h2><button class="close-x" onclick="closeModal('newTestCaseModalBg')">X</button></div>
+    <div class="row2">
+      <div class="field"><label>Module / System</label>
+        <select id="tcf_module"><option>Mobile App</option><option>PMD</option><option>OTG</option><option>Super Admin</option></select>
+      </div>
+      <div class="field"><label>Type</label><input id="tcf_type" placeholder="Functional" value="Functional"></div>
+    </div>
+    <div class="field"><label>Flow</label><input id="tcf_flow" placeholder="Login"></div>
+    <div class="field"><label>Test Case</label><input id="tcf_case" placeholder="Login with valid credentials"></div>
+    <div class="field"><label>Steps</label><textarea id="tcf_steps" placeholder="1. Open app  2. Enter credentials  3. Tap Login"></textarea></div>
+    <div class="field"><label>Expected Result</label><textarea id="tcf_expected" placeholder="User lands on home dashboard"></textarea></div>
+    <div class="field"><label>Priority</label>
+      <select id="tcf_priority"><option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option></select>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="saveNewTestCase()">Add Test Case</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="uatDetailModalBg">
+  <div class="modal" id="uatDetailModalBody"></div>
+</div>
+
+<div class="modal-bg" id="newLeadModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2>New Lead</h2><button class="close-x" onclick="closeModal('newLeadModalBg')">X</button></div>
+    <div class="row2">
+      <div class="field"><label>Name</label><input id="lf_name" placeholder="Amaka Obi"></div>
+      <div class="field"><label>Organization</label><input id="lf_org" placeholder="FSD Africa"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Position</label><input id="lf_position" placeholder="Program Lead"></div>
+      <div class="field"><label>Email</label><input id="lf_email" placeholder="amaka@fsdafrica.org"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>LinkedIn URL</label><input id="lf_linkedin" placeholder="https://linkedin.com/in/..."></div>
+      <div class="field"><label>Offering</label><input id="lf_offering" placeholder="M&E Platform"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Owner</label><select id="lf_owner"></select></div>
+      <div class="field"><label>Source</label><input id="lf_source" placeholder="Outreach / Referral / Inbound"></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="saveNewLead()">Create Lead</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="leadDetailModalBg">
+  <div class="modal" id="leadDetailModalBody"></div>
+</div>
+
+<div class="modal-bg" id="newContentModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2>New Content Item</h2><button class="close-x" onclick="closeModal('newContentModalBg')">X</button></div>
+    <div class="field"><label>Title</label><input id="cf_title" placeholder="5 signs your field data has a GPS problem"></div>
+    <div class="row2">
+      <div class="field"><label>Type</label><input id="cf_type" placeholder="Post / Carousel / Video / Article" value="Post"></div>
+      <div class="field"><label>Platform</label>
+        <select id="cf_platform"><option>LinkedIn</option><option>Instagram</option><option>Twitter/X</option><option>Blog</option><option>Newsletter</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Owner</label><select id="cf_owner"><option value="">Unassigned</option></select></div>
+    <div class="field"><label>Notes / Angle</label><textarea id="cf_notes" placeholder="What's the angle or brief?"></textarea></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="saveNewContent()">Add to Calendar</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="contentDetailModalBg">
+  <div class="modal" id="contentDetailModalBody"></div>
+</div>
+
+<div class="modal-bg" id="payrollRunModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2>Run Monthly Payroll</h2><button class="close-x" onclick="closeModal('payrollRunModalBg')">X</button></div>
+    <div class="field"><label>Month</label><input type="month" id="pf_month"></div>
+    <div class="thin-tag">Creates a Pending entry for every team member who doesn't already have one this month, carrying forward their last known bank details and salary.</div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;margin-top:10px;" onclick="saveRunPayrollBatch()">Generate Entries</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="payrollDetailModalBg">
+  <div class="modal" id="payrollDetailModalBody"></div>
+</div>
+
+<div class="modal-bg" id="newFinanceModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2>New Finance Entry</h2><button class="close-x" onclick="closeModal('newFinanceModalBg')">X</button></div>
+    <div class="row2">
+      <div class="field"><label>Type</label><select id="ff_type"><option>Income</option><option>Expense</option></select></div>
+      <div class="field"><label>Category</label><input id="ff_category" placeholder="Client payment / Software / Payroll..."></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Amount</label><input type="number" id="ff_amount" placeholder="250000"></div>
+      <div class="field"><label>Currency</label><input id="ff_currency" value="NGN"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Date</label><input type="date" id="ff_date"></div>
+      <div class="field"><label>Project (optional)</label><select id="ff_project"><option value="">None</option></select></div>
+    </div>
+    <div class="field"><label>Description</label><textarea id="ff_desc" placeholder="What is this entry for?"></textarea></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="saveNewFinanceEntry()">Add Entry</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="requestLeaveModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2>Request Leave</h2><button class="close-x" onclick="closeModal('requestLeaveModalBg')">X</button></div>
+    <div class="field"><label>Type</label>
+      <select id="lvf_type"><option>Annual</option><option>Sick</option><option>Unpaid</option><option>Other</option></select>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Start Date</label><input type="date" id="lvf_start"></div>
+      <div class="field"><label>End Date</label><input type="date" id="lvf_end"></div>
+    </div>
+    <div class="field"><label>Reason (optional)</label><textarea id="lvf_reason"></textarea></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="saveLeaveRequest()">Submit Request</button>
+  </div>
+</div>
+`;
+var SHELL_TICKET = `<div class="modal-bg" id="ticketModalBg">
+  <div class="modal">
+    <div class="modal-h"><h2 id="ticketModalTitle">New Ticket</h2><button class="close-x" onclick="closeModal('ticketModalBg')">X</button></div>
+    <div class="field"><label>Start from Template (optional)</label><select id="f_template" onchange="applyTemplateToForm()"></select></div>
+    <div class="field"><label>Title</label><input id="f_title" placeholder="Dashboard Export Bug"></div>
+    <div class="field">
+      <label style="display:flex;justify-content:space-between;align-items:center;">Description
+        <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;" onclick="aiTriageFromDescription()">AI: suggest fields</button>
+      </label>
+      <textarea id="f_desc" placeholder="What's going on..."></textarea>
+      <div id="f_ai_hint" class="thin-tag" style="margin-top:4px;"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Type</label>
+        <select id="f_type" onchange="toggleParentPicker()">
+          <option>Direction</option><option>Feature</option><option selected>Task</option><option>Bug</option>
+          <option>Idea</option><option>Incident</option><option>Customer Request</option><option>Growth</option>
+          <option>Documentation</option><option>Research</option><option>Deployment</option>
+        </select>
+      </div>
+      <div class="field"><label>Department</label>
+        <select id="f_dept"><option>Engineering</option><option>Operations</option><option>Growth</option></select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>System</label>
+        <select id="f_system" onchange="toggleParentPicker()">
+          <option value="">-</option><option>Mobile App</option><option>PMD</option><option>OTG</option><option>Super Admin</option>
+        </select>
+      </div>
+      <div class="field" id="f_parent_wrap">
+        <label>Tied to (Direction/Feature)</label>
+        <select id="f_parent"><option value="">None</option></select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Priority</label>
+        <select id="f_prio"><option>Low</option><option selected>Medium</option><option>High</option><option>Urgent</option></select>
+      </div>
+      <div class="field"><label>Owner</label><select id="f_owner"></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Due Date</label><input type="date" id="f_due"></div>
+      <div class="field"><label>Project</label><select id="f_project"></select></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="saveTicket()">Create Ticket</button>
+  </div>
+</div>
+`;
+
+function ensureShell(){
+  try {
+    var vp = document.querySelector('meta[name=viewport]');
+    if(!vp){ vp = document.createElement('meta'); vp.name='viewport'; document.head.appendChild(vp); }
+    vp.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+  } catch(e){}
+
+  if(!document.getElementById('wcShellCss')){
+    var st = document.createElement('style'); st.id = 'wcShellCss'; st.textContent = SHELL_CSS; document.head.appendChild(st);
+  }
+
+  var app = document.getElementById('app');
+
+  // modals (only add the ones that are missing)
+  var holder = document.createElement('div'); holder.innerHTML = SHELL_MODALS;
+  Array.prototype.slice.call(holder.children).forEach(function(m){
+    if(m.id && !document.getElementById(m.id)) document.body.appendChild(m);
+  });
+  // ticket modal: replace when it lacks the System / Tied-to fields
+  if(!document.getElementById('f_system')){
+    var th = document.createElement('div'); th.innerHTML = SHELL_TICKET;
+    var newT = th.firstElementChild, oldT = document.getElementById('ticketModalBg');
+    if(oldT) oldT.parentNode.replaceChild(newT, oldT); else document.body.appendChild(newT);
+  }
+
+  if(app){
+    if(!document.getElementById('mobileNavBackdrop')){
+      var bd = document.createElement('div'); bd.id = 'mobileNavBackdrop'; bd.onclick = closeMobileDrawer; app.insertBefore(bd, app.firstChild);
+    }
+    var brand = document.querySelector('#sidebar .brand');
+    if(brand && !brand.querySelector('.collapse-chevron')){
+      var ch = document.createElement('button'); ch.className = 'sidebar-collapse-btn collapse-chevron'; ch.title = 'Collapse sidebar';
+      ch.innerHTML = svgIco('chevrons', 15); ch.onclick = toggleSidebarCollapse; brand.appendChild(ch);
+    } else if(brand){
+      var ex = brand.querySelector('.collapse-chevron'); if(ex && ex.textContent.trim()) ex.innerHTML = svgIco('chevrons', 15);
+    }
+    var tb = document.getElementById('topbar');
+    if(tb){
+      if(!tb.querySelector('.mobile-hamburger')){
+        var hb = document.createElement('button'); hb.className = 'sidebar-collapse-btn mobile-hamburger'; hb.style.display = 'none'; hb.title = 'Menu';
+        hb.innerHTML = svgIco('menu', 18); hb.onclick = openMobileDrawer; tb.insertBefore(hb, tb.firstChild);
+      } else {
+        var h2 = tb.querySelector('.mobile-hamburger'); if(h2.textContent.trim()) h2.innerHTML = svgIco('menu', 18);
+      }
+      if(!document.getElementById('notifBadge')){
+        var old = tb.querySelector('.notif-bell-wrap'); if(old) old.remove();
+        var bw = document.createElement('div'); bw.className = 'notif-bell-wrap'; bw.style.position = 'relative';
+        bw.innerHTML = '<button class="bell-btn" title="Notifications" onclick="toggleNotifBell()">'+svgIco('bell',18)+
+          '<span id="notifBadge" class="hidden" style="position:absolute;top:1px;right:1px;background:var(--red);color:#fff;font-size:9px;line-height:1;border-radius:20px;padding:2px 4px;">0</span></button>'+
+          '<div id="notifDropdown" class="search-results" style="width:320px;right:0;left:auto;"></div>';
+        tb.appendChild(bw);
+      }
+    }
+    var si = document.querySelector('.search-ico'); if(si) si.innerHTML = svgIco('search', 15);
+    if(!document.getElementById('mobileNav')){
+      var mn = document.createElement('div'); mn.id = 'mobileNav';
+      [['dashboard','home','Home'],['tickets','tag','Tickets'],['board','columns','Board'],['crm','users','CRM']].forEach(function(x){
+        mn.innerHTML += '<button class="mn-item" data-id="'+x[0]+'" onclick="goTo(\''+x[0]+'\')"><span class="mn-ico">'+svgIco(x[1],19)+'</span>'+x[2]+'</button>';
+      });
+      mn.innerHTML += '<button class="mn-item" onclick="openMobileDrawer()"><span class="mn-ico">'+svgIco('more',19)+'</span>More</button>';
+      app.appendChild(mn);
+    }
+  }
+}
+
+ensureShell();
+
 var WORKSPACE_MODE = (typeof google !== 'undefined' && !!google.script && !!google.script.run);
 
 var CURRENT_USER = 'Oreoluwa';
@@ -253,10 +670,11 @@ function mockApi(action, payload) {
       lead2.updated_at = new Date().toISOString();
       return {ok:true, lead_id:payload.lead_id, stage:lead2.stage, stage_history:hist};
     }
+    case 'testSlackDM': return {ok:true};
     case 'bookLeadDemo': {
       var lead3 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
       if(!lead3) return {ok:false, error:'Lead not found.'};
-      lead3.demo_date = payload.date||''; lead3.demo_meeting_booked = 'yes';
+      if(payload.kind==='discovery'){ lead3.meeting_date = payload.date||''; lead3.meeting_booked = 'yes'; } else { lead3.demo_date = payload.date||''; lead3.demo_meeting_booked = 'yes'; }
       return {ok:true, meeting:{meeting_id:'m'+Math.random(), title:'Demo: '+lead3.name}};
     }
     case 'reassignLead': {
@@ -380,43 +798,315 @@ function simulateMeetingParse(notes){
   return { summary: notes.slice(0,140)+'...', decisions: decisions, action_items: items };
 }
 
+function bpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function bpState(key){
+  if(!STATE.boards) STATE.boards = {};
+  if(!STATE.boards[key]) STATE.boards[key] = {stage:'All', q:'', f:{}, view:'cards'};
+  return STATE.boards[key];
+}
+function bpUniq(list){ return list.filter(function(v,i,a){ return v && a.indexOf(v)===i; }).sort(); }
+function bpTeamNames(){ return DB.team.map(function(p){return p.name;}); }
+
+var BP_CFGS = {
+  crm: function(){
+    return {
+      title:'Outreach Pipeline', subtitle:'Prospects moving through the 9-stage funnel', accent:'#1F8A5B',
+      newLabel:'+ New prospect', onNew:'openNewLead()', emptyMsg:'No prospects match these filters.',
+      stages: CRM_STAGES.map(function(s){ return {id:s, color:CRM_STAGE_COLOR[s]}; }),
+      items:function(){ return DB.leads; },
+      stageOf:function(l){ return l.stage; },
+      filters:[
+        {key:'owner', all:'All reps', opts:function(){ return bpTeamNames(); }, get:function(l){ return l.owner; }},
+        {key:'offering', all:'All offerings', opts:function(){ return bpUniq(DB.leads.map(function(l){return l.offering;})); }, get:function(l){ return l.offering; }}
+      ],
+      search:function(l){ return [l.name,l.organization,l.position,l.email,l.offering,l.owner].join(' '); },
+      desc:function(l){
+        var idx = CRM_STAGES.indexOf(l.stage), notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
+        var chips = [];
+        if(l.meeting_date) chips.push({t:'Discovery · '+fmtDate(l.meeting_date), c:'#3B6FD4'});
+        if(l.demo_date) chips.push({t:'Demo · '+fmtDate(l.demo_date), c:'#7C5CBF'});
+        if(notes.length) chips.push({t:notes.length+' note'+(notes.length>1?'s':'')});
+        if(l.stage==='Declined / Cold Leads' && l.decline_category) chips.push({t:l.decline_category, c:'#D64545'});
+        return {
+          id:'', stageLabel:l.stage, color:CRM_STAGE_COLOR[l.stage]||'#8E90A3',
+          title:l.name, sub:[l.organization,l.position].filter(Boolean).join(' · '), tag:l.offering,
+          progress:{n:idx+1, total:CRM_STAGES.length, color:CRM_STAGE_COLOR[l.stage]||'#8E90A3'},
+          chips:chips, owner:l.owner, date:fmtDate(l.updated_at), open:"openLeadDetail('"+l.lead_id+"')"
+        };
+      },
+      cols:[
+        {h:'Name', v:function(l){return bpEsc(l.name);}}, {h:'Organization', v:function(l){return bpEsc(l.organization||'-');}},
+        {h:'Offering', v:function(l){return bpEsc(l.offering||'-');}}, {h:'Stage', stage:true},
+        {h:'Owner', v:function(l){return bpEsc(l.owner||'-');}}, {h:'Updated', v:function(l){return fmtDate(l.updated_at);}}
+      ],
+      stats:function(items){ return [
+        {n:items.length,l:'Total prospects'},
+        {n:items.filter(function(l){return l.stage==='Demo Session';}).length,l:'In demo',cls:'accent-violet'},
+        {n:items.filter(function(l){return l.stage==='Onboarding';}).length,l:'Onboarding',cls:'accent-green'},
+        {n:items.filter(function(l){return l.stage==='Declined / Cold Leads';}).length,l:'Declined',cls:'accent-red'}
+      ]; }
+    };
+  },
+  eng: function(){
+    var cols = STATUS_FLOW.concat(['Blocked']);
+    return {
+      title:'Engineering Board', subtitle:'Directions → Features → Tasks & Bugs, tied to Mobile App, PMD, OTG and Super Admin', accent:'#4C50E3',
+      newLabel:'+ New ticket', onNew:'openNewTicket()', emptyMsg:'No tickets match these filters.',
+      stages: cols.map(function(s){ return {id:s, color:STATUS_COLOR[s]}; }),
+      items:function(){ return engineeringTickets(); },
+      stageOf:function(t){ return t.status; },
+      filters:[
+        {key:'system', all:'All systems', opts:function(){ return ENGINEERING_SYSTEMS; }, get:function(t){ return t.system; }},
+        {key:'type', all:'All types', opts:function(){ return ENGINEERING_TYPES; }, get:function(t){ return t.type; }},
+        {key:'owner', all:'All owners', opts:function(){ return bpTeamNames(); }, get:function(t){ return t.owner; }}
+      ],
+      search:function(t){ return [t.ticket_id,t.title,t.description,t.system,t.type,t.owner].join(' '); },
+      desc:function(t){
+        var cl = parseChecklist(t), parent = t.parent_ticket_id ? DB.tickets.filter(function(p){return p.ticket_id===t.parent_ticket_id;})[0] : null;
+        var chips = [{t:t.type, c:'#4C50E3'},{t:t.priority, c:({Low:'#2E9B5F',Medium:'#946A0C',High:'#D9822E',Urgent:'#D64545'})[t.priority]}];
+        if(cl.length) chips.push({t:cl.filter(function(c){return c.done;}).length+'/'+cl.length+' checklist'});
+        return {
+          id:t.ticket_id, stageLabel:t.status, color:STATUS_COLOR[t.status]||'#8E90A3',
+          title:t.title, sub:parent ? '↳ '+parent.title : '', tag:t.system || t.department,
+          progress:{n:Math.max(0, STATUS_FLOW.indexOf(t.status)+1), total:STATUS_FLOW.length, color:STATUS_COLOR[t.status]||'#8E90A3'},
+          chips:chips, owner:t.owner, date:t.due_date ? 'Due '+fmtDate(t.due_date) : '', open:"openTicketDetail('"+t.ticket_id+"')"
+        };
+      },
+      cols:[
+        {h:'ID', v:function(t){return '<span class="mono">'+bpEsc(t.ticket_id)+'</span>';}}, {h:'Type', v:function(t){return bpEsc(t.type);}},
+        {h:'System', v:function(t){return bpEsc(t.system||'-');}}, {h:'Title', v:function(t){return bpEsc(t.title);}}, {h:'Stage', stage:true},
+        {h:'Priority', v:function(t){return '<span class="pill pill-prio-'+t.priority+'">'+bpEsc(t.priority)+'</span>';}},
+        {h:'Owner', v:function(t){return bpEsc(t.owner||'-');}}, {h:'Due', v:function(t){return fmtDate(t.due_date);}}
+      ],
+      stats:function(items){ return [
+        {n:items.length,l:'Matching tickets'},
+        {n:items.filter(function(t){return t.status==='Blocked';}).length,l:'Blocked',cls:'accent-red'},
+        {n:items.filter(function(t){return t.status==='Done';}).length,l:'Done',cls:'accent-green'},
+        {n:items.filter(function(t){return t.type==='Bug';}).length,l:'Bugs',cls:'accent-amber'}
+      ]; },
+      extraBars:[
+        {title:'By type', keys:ENGINEERING_TYPES, fn:function(t){return t.type;}},
+        {title:'By system', keys:ENGINEERING_SYSTEMS, fn:function(t){return t.system;}}
+      ]
+    };
+  },
+  uat: function(){
+    var lanes = ['Not Run','Pass','Fail','Blocked'], colors = {'Not Run':'#8E90A3',Pass:'#2E9B5F',Fail:'#D64545',Blocked:'#946A0C'};
+    return {
+      title:'UAT / QA Tracker', subtitle:'A Fail automatically opens a Bug on the Engineering Board', accent:'#4C50E3',
+      newLabel:'+ New test case', onNew:'openNewTestCase()', emptyMsg:'No test cases match these filters.',
+      stages: lanes.map(function(s){ return {id:s, color:colors[s]}; }),
+      items:function(){ return DB.testCases; },
+      stageOf:function(tc){ return resultLabel(tc.result); },
+      filters:[
+        {key:'module', all:'All systems', opts:function(){ return ENGINEERING_SYSTEMS; }, get:function(tc){ return tc.module; }},
+        {key:'priority', all:'All priorities', opts:function(){ return ['Low','Medium','High','Critical']; }, get:function(tc){ return tc.priority; }}
+      ],
+      search:function(tc){ return [tc.module,tc.flow,tc.test_case,tc.steps,tc.tester].join(' '); },
+      desc:function(tc){
+        var r = resultLabel(tc.result);
+        return {
+          id:tc.test_id, stageLabel:r, color:colors[r], title:tc.test_case||tc.flow, sub:tc.flow||'', tag:tc.module,
+          progress:null, chips:[{t:tc.priority, c:({Low:'#2E9B5F',Medium:'#946A0C',High:'#D9822E',Critical:'#D64545'})[tc.priority]}].concat(tc.linked_ticket_id?[{t:'Bug '+tc.linked_ticket_id, c:'#D64545'}]:[]),
+          owner:tc.tester, date:tc.tested_at ? fmtDate(tc.tested_at) : '', open:"openTestCaseDetail('"+tc.test_id+"')"
+        };
+      },
+      cols:[
+        {h:'System', v:function(tc){return bpEsc(tc.module);}}, {h:'Flow', v:function(tc){return bpEsc(tc.flow||'-');}},
+        {h:'Test case', v:function(tc){return bpEsc(tc.test_case||'-');}}, {h:'Result', stage:true},
+        {h:'Priority', v:function(tc){return bpEsc(tc.priority||'-');}}, {h:'Linked bug', v:function(tc){return '<span class="mono">'+bpEsc(tc.linked_ticket_id||'-')+'</span>';}}
+      ],
+      stats:function(items){
+        var pass = items.filter(function(tc){return tc.result==='Pass';}).length;
+        return [
+          {n:items.length,l:'Test cases'},
+          {n:Math.round(pass/(items.length||1)*100)+'%',l:'Pass rate',cls:'accent-green'},
+          {n:items.filter(function(tc){return tc.result==='Fail';}).length,l:'Failing',cls:'accent-red'},
+          {n:items.filter(function(tc){return !tc.result;}).length,l:'Not run'}
+        ];
+      },
+      extraBars:[{title:'By system', keys:ENGINEERING_SYSTEMS, fn:function(tc){return tc.module;}}]
+    };
+  },
+  content: function(){
+    return {
+      title:'Content Calendar', subtitle:'Claude proposes a fresh pool every Friday morning', accent:'#4C50E3',
+      newLabel:'+ New item', onNew:'openNewContent()', emptyMsg:'Nothing here yet.',
+      extraButtons: CURRENT_USER_ROLE==='Admin' ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run weekly pool now</button>' : '',
+      stages: CONTENT_STAGES.map(function(s){ return {id:s, color:CONTENT_STAGE_COLOR[s]}; }),
+      items:function(){ return DB.contentCalendar; },
+      stageOf:function(c){ return c.stage; },
+      filters:[
+        {key:'platform', all:'All platforms', opts:function(){ return ['LinkedIn','Instagram','Twitter/X','Blog','Newsletter']; }, get:function(c){ return c.platform; }},
+        {key:'owner', all:'All owners', opts:function(){ return bpTeamNames(); }, get:function(c){ return c.owner; }}
+      ],
+      search:function(c){ return [c.title,c.type,c.platform,c.owner,c.notes].join(' '); },
+      desc:function(c){
+        return {
+          id:'', stageLabel:c.stage, color:CONTENT_STAGE_COLOR[c.stage]||'#8E90A3', title:c.title, sub:c.type||'', tag:c.platform,
+          progress:{n:CONTENT_STAGES.indexOf(c.stage)+1, total:CONTENT_STAGES.length, color:CONTENT_STAGE_COLOR[c.stage]||'#8E90A3'},
+          chips:(c.source && c.source.indexOf('AI')===0) ? [{t:'AI idea', c:'#7C5CBF'}] : [],
+          owner:c.owner, date:c.scheduled_date ? 'Posts '+fmtDate(c.scheduled_date) : fmtDate(c.created_at), open:"openContentDetail('"+c.content_id+"')"
+        };
+      },
+      cols:[
+        {h:'Title', v:function(c){return bpEsc(c.title);}}, {h:'Type', v:function(c){return bpEsc(c.type||'-');}},
+        {h:'Platform', v:function(c){return bpEsc(c.platform||'-');}}, {h:'Stage', stage:true},
+        {h:'Owner', v:function(c){return bpEsc(c.owner||'-');}}, {h:'Scheduled', v:function(c){return fmtDate(c.scheduled_date);}}
+      ],
+      stats:function(items){ return [
+        {n:items.length,l:'Total items'},
+        {n:items.filter(function(c){return c.stage==='Idea';}).length,l:'Ideas'},
+        {n:items.filter(function(c){return c.stage==='Scheduled';}).length,l:'Scheduled',cls:'accent-violet'},
+        {n:items.filter(function(c){return c.stage==='Published';}).length,l:'Published',cls:'accent-green'}
+      ]; }
+    };
+  }
+};
+
+function bpFiltered(key, ignoreStage){
+  var cfg = BP_CFGS[key](), st = bpState(key), q = (st.q||'').toLowerCase();
+  return cfg.items().filter(function(it){
+    if(q && cfg.search(it).toLowerCase().indexOf(q)<0) return false;
+    for(var i=0;i<cfg.filters.length;i++){
+      var f = cfg.filters[i], v = st.f[f.key];
+      if(v && String(f.get(it)||'')!==v) return false;
+    }
+    if(!ignoreStage && st.stage!=='All' && cfg.stageOf(it)!==st.stage) return false;
+    return true;
+  });
+}
+
+function bpCardHtml(cfg, it){
+  var d = cfg.desc(it), segs = '', chips = '';
+  if(d.progress){
+    for(var i=0;i<d.progress.total;i++) segs += '<span class="bp-seg"'+(i<d.progress.n?' style="background:'+d.progress.color+'"':'')+'></span>';
+  }
+  (d.chips||[]).forEach(function(c){
+    if(!c || !c.t) return;
+    chips += '<span class="bp-chip"'+(c.c?' style="background:'+c.c+'1f;color:'+c.c+'"':'')+'>'+bpEsc(c.t)+'</span>';
+  });
+  return '<div class="bp-card" onclick="'+d.open+'">'+
+    '<div class="bp-card-top"><span class="bp-stage" style="background:'+d.color+'1f;color:'+d.color+'">'+bpEsc(d.stageLabel)+'</span>'+(d.id?'<span class="bp-id">'+bpEsc(d.id)+'</span>':'')+'</div>'+
+    '<div class="bp-card-title">'+bpEsc(d.title)+'</div>'+
+    (d.sub?'<div class="bp-card-sub">'+bpEsc(d.sub)+'</div>':'')+
+    (d.tag?'<div><span class="bp-chip tag">'+bpEsc(d.tag)+'</span></div>':'')+
+    (segs?'<div class="bp-prog">'+segs+'</div>':'')+
+    (chips?'<div class="bp-chips">'+chips+'</div>':'')+
+    '<div class="bp-card-foot"><span class="bp-owner"><span class="owner-chip">'+bpEsc(initials(d.owner))+'</span>'+bpEsc(d.owner||'Unassigned')+'</span><span>'+bpEsc(d.date||'')+'</span></div>'+
+  '</div>';
+}
+
+function bpRefresh(key){
+  var cfg = BP_CFGS[key](), st = bpState(key);
+  var tabsEl = document.getElementById('bp_tabs'), viewEl = document.getElementById('bp_view'), bodyEl = document.getElementById('bp_body');
+  if(!tabsEl || !bodyEl) return;
+  var counted = bpFiltered(key, true), items = bpFiltered(key, false);
+
+  var tabs = '<button class="bp-tab'+(st.stage==='All'?' active':'')+'" onclick="bpTab(\''+key+'\',-1)">All<span class="n">'+counted.length+'</span></button>';
+  cfg.stages.forEach(function(s, i){
+    var n = counted.filter(function(it){ return cfg.stageOf(it)===s.id; }).length;
+    tabs += '<button class="bp-tab'+(st.stage===s.id?' active':'')+'" onclick="bpTab(\''+key+'\','+i+')">'+bpEsc(s.id)+'<span class="n">'+n+'</span></button>';
+  });
+  tabsEl.innerHTML = tabs;
+
+  viewEl.innerHTML = ['cards','list','summary'].map(function(v){
+    return '<button class="view-toggle-btn'+(st.view===v?' active':'')+'" onclick="bpView(\''+key+'\',\''+v+'\')">'+v.charAt(0).toUpperCase()+v.slice(1)+'</button>';
+  }).join('');
+
+  if(st.view==='cards'){
+    bodyEl.innerHTML = items.length ? '<div class="bp-grid">'+items.map(function(it){ return bpCardHtml(cfg, it); }).join('')+'</div>' : '<div class="empty">'+cfg.emptyMsg+'</div>';
+  } else if(st.view==='list'){
+    var colorOf = {}; cfg.stages.forEach(function(s){ colorOf[s.id]=s.color; });
+    bodyEl.innerHTML = '<div class="card table-scroll"><table><tr>'+cfg.cols.map(function(c){return '<th>'+c.h+'</th>';}).join('')+'</tr>'+
+      (items.map(function(it){
+        var d = cfg.desc(it);
+        return '<tr onclick="'+d.open+'" style="cursor:pointer;">'+cfg.cols.map(function(c){
+          return '<td>'+(c.stage ? '<span class="pill" style="background:'+d.color+'22;color:'+d.color+';">'+bpEsc(d.stageLabel)+'</span>' : c.v(it))+'</td>';
+        }).join('')+'</tr>';
+      }).join('') || '<tr><td colspan="'+cfg.cols.length+'" class="empty">'+cfg.emptyMsg+'</td></tr>')+'</table></div>';
+  } else {
+    var total = items.length || 1;
+    function bars(title, keys, fn, colorFn){
+      return '<div class="card"><div class="card-h">'+title+'</div><div class="summary-bars">'+keys.map(function(k){
+        var n = items.filter(function(it){ return fn(it)===k; }).length;
+        return '<div class="summary-bar-row"><span class="summary-bar-label">'+bpEsc(k)+'</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:'+Math.round(n/total*100)+'%;background:'+colorFn(k)+';"></div></div><span class="summary-bar-pct">'+n+'</span></div>';
+      }).join('')+'</div></div>';
+    }
+    var colors = {}; cfg.stages.forEach(function(s){ colors[s.id]=s.color; });
+    var html = '<div class="stat-grid" style="margin-bottom:16px;">'+cfg.stats(items).map(function(s){
+      return '<div class="stat-card '+(s.cls||'')+'"><div class="stat-num">'+s.n+'</div><div class="stat-lbl">'+s.l+'</div></div>';
+    }).join('')+'</div>';
+    html += '<div class="dash-grid">'+bars('By stage', cfg.stages.map(function(s){return s.id;}), cfg.stageOf, function(k){return colors[k];});
+    (cfg.extraBars||[]).forEach(function(b){ html += bars(b.title, b.keys, b.fn, function(){return 'var(--violet)';}); });
+    bodyEl.innerHTML = html+'</div>';
+  }
+}
+
+function bpTab(key, idx){ var cfg = BP_CFGS[key](); bpState(key).stage = idx<0 ? 'All' : cfg.stages[idx].id; bpRefresh(key); }
+function bpView(key, v){ bpState(key).view = v; bpRefresh(key); }
+function bpSearch(key, v){ bpState(key).q = v; bpRefresh(key); }
+function bpFilter(key, f, v){ bpState(key).f[f] = v; bpRefresh(key); }
+
+function renderBoardPage(key){
+  var cfg = BP_CFGS[key](), st = bpState(key);
+  var wrap = el('<div class="bp" style="--bp-accent:'+cfg.accent+';"></div>');
+  var selects = cfg.filters.map(function(f){
+    return '<select class="bp-sel" onchange="bpFilter(\''+key+'\',\''+f.key+'\',this.value)"><option value="">'+f.all+'</option>'+
+      f.opts().map(function(o){ return '<option'+(st.f[f.key]===o?' selected':'')+'>'+bpEsc(o)+'</option>'; }).join('')+'</select>';
+  }).join('');
+  wrap.innerHTML =
+    '<div class="bp-head"><div><div class="bp-title">'+cfg.title+'</div><div class="bp-sub">'+cfg.subtitle+'</div></div>'+
+      '<div class="bp-head-actions">'+(cfg.extraButtons||'')+'<button class="bp-btn" onclick="'+cfg.onNew+'">'+cfg.newLabel+'</button></div></div>'+
+    '<div class="bp-tabs" id="bp_tabs"></div>'+
+    '<div class="bp-bar"><div class="bp-search">'+svgIco('search',15)+'<input placeholder="Search…" value="'+bpEsc(st.q)+'" oninput="bpSearch(\''+key+'\',this.value)"></div>'+selects+
+      '<div class="view-toggle" id="bp_view"></div></div>'+
+    '<div id="bp_body"></div>';
+  setTimeout(function(){ bpRefresh(key); }, 0);
+  return wrap;
+}
+function renderBoard(){ return renderBoardPage('eng'); }
+function renderUat(){ return renderBoardPage('uat'); }
+function renderCrm(){ return renderBoardPage('crm'); }
+function renderContent(){ return renderBoardPage('content'); }
+
 var MODULES = [
-  {group:'', items:[{id:'dashboard',label:'Dashboard',ico:'Home'}]},
+  {group:'', items:[{id:'dashboard',label:'Dashboard'}]},
   {group:'Work', items:[
-    {id:'tickets',label:'Ticket System',ico:'Tix'},
-    {id:'board',label:'Engineering Board',ico:'='},
-    {id:'uat',label:'UAT / QA Tracker',ico:'QA'},
-    {id:'calendar',label:'Calendar',ico:'#'},
-    {id:'projects',label:'Projects',ico:'[]'},
-    {id:'filemanager',label:'Files',ico:'F'}
+    {id:'tickets',label:'Ticket System'},
+    {id:'board',label:'Engineering Board'},
+    {id:'uat',label:'UAT / QA Tracker'},
+    {id:'calendar',label:'Calendar'},
+    {id:'projects',label:'Projects'},
+    {id:'filemanager',label:'Files'}
   ]},
   {group:'Growth', items:[
-    {id:'crm',label:'CRM Pipeline',ico:'CRM'},
-    {id:'content',label:'Content Calendar',ico:'C'}
+    {id:'crm',label:'CRM Pipeline'},
+    {id:'content',label:'Content Calendar'}
   ]},
   {group:'Finance & People', items:[
-    {id:'payroll',label:'Payroll',ico:'$',adminOnly:true},
-    {id:'finance',label:'Finance',ico:'₦',adminOnly:true},
-    {id:'leave',label:'Leave',ico:'L'}
+    {id:'payroll',label:'Payroll',adminOnly:true},
+    {id:'finance',label:'Finance',adminOnly:true},
+    {id:'leave',label:'Leave'}
   ]},
   {group:'Training', items:[
-    {id:'training',label:'My Training',ico:'V'},
-    {id:'trainingadmin',label:'Training Admin',ico:'V'}
+    {id:'training',label:'My Training'},
+    {id:'trainingadmin',label:'Training Admin'}
   ]},
   {group:'Team', items:[
-    {id:'meetings',label:'Meetings',ico:'Talk'},
-    {id:'standup',label:'Stand-up Mode',ico:'*'},
-    {id:'oneonones',label:'One-on-Ones',ico:'2'},
-    {id:'feed',label:'Activity Feed',ico:'~'},
-    {id:'workload',label:'Workload',ico:'|'},
-    {id:'teamspaces',label:'Team Spaces',ico:'#'}
+    {id:'meetings',label:'Meetings'},
+    {id:'standup',label:'Stand-up Mode'},
+    {id:'oneonones',label:'One-on-Ones'},
+    {id:'feed',label:'Activity Feed'},
+    {id:'workload',label:'Workload'},
+    {id:'teamspaces',label:'Team Spaces'}
   ]},
   {group:'Intelligence', items:[
-    {id:'command',label:'AI Command Center',ico:'*'},
-    {id:'newsdigest',label:'Industry News',ico:'N'},
-    {id:'decisions',label:'Decision Register',ico:'!'},
-    {id:'adminlog',label:'Admin Activity Log',ico:'='},
-    {id:'notifications',label:'Notifications',ico:'!'}
+    {id:'command',label:'AI Command Center'},
+    {id:'newsdigest',label:'Industry News'},
+    {id:'decisions',label:'Decision Register'},
+    {id:'adminlog',label:'Admin Activity Log'},
+    {id:'notifications',label:'Notifications'}
   ]}
 ];
 
@@ -427,7 +1117,7 @@ function renderNav(){
     g.items.forEach(function(m){
       if((m.id==='oneonones' || m.id==='newsdigest' || m.id==='trainingadmin' || m.adminOnly) && CURRENT_USER_ROLE!=='Admin') return;
       var active = STATE.module===m.id ? ' active' : '';
-      html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+m.ico+'</span><span class="nav-label-text">'+m.label+'</span></div>';
+      html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+svgIco(NAV_ICON[m.id])+'</span><span class="nav-label-text">'+m.label+'</span></div>';
     });
   });
   document.getElementById('navList').innerHTML = html;
@@ -683,77 +1373,6 @@ function engFilteredTickets(){
 function setEngFilter(kind, val){ STATE.eng[kind] = val; render(); }
 function setEngView(view){ STATE.eng.view = view; render(); }
 
-function renderBoard(){
-  if(!STATE.eng) STATE.eng = {system:'All', type:'All', view:'cards'};
-  var wrap = el('<div></div>');
-  var items = engFilteredTickets();
-
-  var toolbar = `
-    <div class="board-toolbar">
-      <div class="board-toolbar-filters">
-        <div class="filter-pills">${['All'].concat(ENGINEERING_SYSTEMS).map(function(s){
-          return `<span class="filter-pill ${STATE.eng.system===s?'active':''}" onclick="setEngFilter('system','${s}')">${s}</span>`;
-        }).join('')}</div>
-        <div class="filter-pills">${['All'].concat(ENGINEERING_TYPES).map(function(t){
-          return `<span class="filter-pill ${STATE.eng.type===t?'active':''}" onclick="setEngFilter('type','${t}')">${t}</span>`;
-        }).join('')}</div>
-      </div>
-      <div class="view-toggle">
-        ${['cards','list','summary'].map(function(v){
-          return `<button class="view-toggle-btn ${STATE.eng.view===v?'active':''}" onclick="setEngView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;
-        }).join('')}
-      </div>
-    </div>`;
-
-  wrap.innerHTML = '<div class="section-title">Directions -&gt; Features -&gt; Tasks &amp; Bugs - filter by system and type, tied permanently across every board</div>' + toolbar + '<div id="engBody"></div>';
-  var body = wrap.querySelector('#engBody');
-
-  if(STATE.eng.view==='cards'){
-    var cols = STATUS_FLOW.concat(['Blocked']);
-    var html = '<div class="board">';
-    cols.forEach(function(status){
-      var colItems = items.filter(function(t){return t.status===status;});
-      html += `<div class="board-col">
-        <div class="board-col-h"><span class="board-col-dot" style="background:${STATUS_COLOR[status]}"></span>${status}<span class="board-col-count">${colItems.length}</span></div>
-        <div class="board-drop">${colItems.map(ticketCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
-      </div>`;
-    });
-    html += '</div>';
-    body.innerHTML = html;
-  } else if(STATE.eng.view==='list'){
-    body.innerHTML = `<div class="card table-scroll"><table>
-      <tr><th>Type</th><th>System</th><th>Title</th><th>Status</th><th>Priority</th><th>Owner</th><th>Due</th></tr>
-      ${items.map(function(t){
-        return `<tr onclick="openTicketDetail('${t.ticket_id}')" style="cursor:pointer;">
-          <td>${typeIcon(t.type)} ${t.type}</td><td>${t.system||'-'}</td><td>${t.title}</td>
-          <td><span class="pill" style="background:${STATUS_COLOR[t.status]}22;color:${STATUS_COLOR[t.status]};">${t.status}</span></td>
-          <td><span class="pill pill-prio-${t.priority}">${t.priority}</span></td><td>${t.owner||'-'}</td><td>${fmtDate(t.due_date)}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="7" class="empty">No tickets match these filters.</td></tr>'}
-    </table></div>`;
-  } else {
-    var total = items.length || 1;
-    function barRows(groupKeys, keyFn, colorFn){
-      return groupKeys.map(function(k){
-        var n = items.filter(function(t){return keyFn(t)===k;}).length;
-        var pct = Math.round(n/total*100);
-        return `<div class="summary-bar-row"><span class="summary-bar-label">${k}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:${colorFn(k)};"></div></div><span class="summary-bar-pct">${n}</span></div>`;
-      }).join('');
-    }
-    body.innerHTML = `
-      <div class="stat-grid" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Matching Tickets</div></div>
-        <div class="stat-card accent-red"><div class="stat-num">${items.filter(function(t){return t.status==='Blocked';}).length}</div><div class="stat-lbl">Blocked</div></div>
-        <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(t){return t.status==='Done';}).length}</div><div class="stat-lbl">Done</div></div>
-        <div class="stat-card accent-amber"><div class="stat-num">${items.filter(function(t){return t.type==='Bug';}).length}</div><div class="stat-lbl">Bugs</div></div>
-      </div>
-      <div class="dash-grid">
-        <div class="card"><div class="card-h">By Type</div><div class="summary-bars">${barRows(ENGINEERING_TYPES, function(t){return t.type;}, function(){return 'var(--brand)';})}</div></div>
-        <div class="card"><div class="card-h">By System</div><div class="summary-bars">${barRows(ENGINEERING_SYSTEMS, function(t){return t.system||'-';}, function(){return 'var(--violet)';})}</div></div>
-      </div>`;
-  }
-  return wrap;
-}
 
 function parseChecklist(t){
   try { return JSON.parse(t.checklist_json || '[]'); } catch(e){ return []; }
@@ -823,67 +1442,6 @@ function uatCardHtml(tc){
   </div>`;
 }
 
-function renderUat(){
-  if(!STATE.uat) STATE.uat = {module:'All', view:'cards'};
-  var wrap = el('<div></div>');
-  var items = uatFilteredCases();
-  var modules = ['All'].concat(ENGINEERING_SYSTEMS);
-
-  wrap.innerHTML = `<div class="section-title">UAT / QA Tracker - a Fail automatically opens a Bug on the Engineering Board</div>
-    <div class="board-toolbar">
-      <div class="board-toolbar-filters">
-        <div class="filter-pills">${modules.map(function(m){return `<span class="filter-pill ${STATE.uat.module===m?'active':''}" onclick="setUatFilter('${m}')">${m}</span>`;}).join('')}</div>
-      </div>
-      <div style="display:flex;gap:10px;">
-        <div class="view-toggle">${['cards','list','summary'].map(function(v){return `<button class="view-toggle-btn ${STATE.uat.view===v?'active':''}" onclick="setUatView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;}).join('')}</div>
-        <button class="btn btn-primary" onclick="openNewTestCase()">+ New Test Case</button>
-      </div>
-    </div>
-    <div id="uatBody"></div>`;
-  var body = wrap.querySelector('#uatBody');
-
-  if(STATE.uat.view==='cards'){
-    var lanes = ['', 'Pass', 'Fail', 'Blocked'];
-    var html = '<div class="board">';
-    lanes.forEach(function(lane){
-      var laneItems = items.filter(function(tc){ return (tc.result||'')===lane; });
-      html += `<div class="board-col">
-        <div class="board-col-h"><span class="board-col-dot" style="background:${RESULT_COLOR[lane]}"></span>${resultLabel(lane)}<span class="board-col-count">${laneItems.length}</span></div>
-        <div class="board-drop">${laneItems.map(uatCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
-      </div>`;
-    });
-    html += '</div>';
-    body.innerHTML = html;
-  } else if(STATE.uat.view==='list'){
-    body.innerHTML = `<div class="card table-scroll"><table>
-      <tr><th>Module</th><th>Flow</th><th>Test Case</th><th>Result</th><th>Priority</th><th>Linked Ticket</th></tr>
-      ${items.map(function(tc){
-        return `<tr onclick="openTestCaseDetail('${tc.test_id}')" style="cursor:pointer;">
-          <td>${tc.module}</td><td>${tc.flow||'-'}</td><td>${tc.test_case||'-'}</td>
-          <td><span class="pill" style="background:${RESULT_COLOR[tc.result||'']}22;color:${RESULT_COLOR[tc.result||'']};">${resultLabel(tc.result)}</span></td>
-          <td><span class="pill pill-prio-${tc.priority}">${tc.priority}</span></td><td class="mono">${tc.linked_ticket_id||'-'}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty">No test cases yet.</td></tr>'}
-    </table></div>`;
-  } else {
-    var total = items.length || 1;
-    var passCount = items.filter(function(tc){return tc.result==='Pass';}).length;
-    var failCount = items.filter(function(tc){return tc.result==='Fail';}).length;
-    body.innerHTML = `
-      <div class="stat-grid" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Total Test Cases</div></div>
-        <div class="stat-card accent-green"><div class="stat-num">${Math.round(passCount/total*100)}%</div><div class="stat-lbl">Pass Rate</div></div>
-        <div class="stat-card accent-red"><div class="stat-num">${failCount}</div><div class="stat-lbl">Failing</div></div>
-        <div class="stat-card"><div class="stat-num">${items.filter(function(tc){return !tc.result;}).length}</div><div class="stat-lbl">Not Run</div></div>
-      </div>
-      <div class="card"><div class="card-h">By Module</div><div class="summary-bars">${ENGINEERING_SYSTEMS.map(function(m){
-        var n = items.filter(function(tc){return tc.module===m;}).length;
-        var pct = Math.round(n/total*100);
-        return `<div class="summary-bar-row"><span class="summary-bar-label">${m}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:var(--violet);"></div></div><span class="summary-bar-pct">${n}</span></div>`;
-      }).join('')}</div></div>`;
-  }
-  return wrap;
-}
 
 function openNewTestCase(){
   ['tcf_flow','tcf_case','tcf_steps','tcf_expected'].forEach(function(id){ document.getElementById(id).value=''; });
@@ -964,64 +1522,6 @@ function leadCardHtml(l){
   </div>`;
 }
 
-function renderCrm(){
-  if(!STATE.crm) STATE.crm = {offering:'All', view:'cards'};
-  var wrap = el('<div></div>');
-  var offerings = ['All'].concat(DB.leads.map(function(l){return l.offering;}).filter(function(o,i,arr){return o && arr.indexOf(o)===i;}));
-  var items = crmFilteredLeads();
-
-  wrap.innerHTML = `<div class="section-title">CRM Pipeline - 9-stage funnel</div>
-    <div class="board-toolbar">
-      <div class="board-toolbar-filters">
-        <div class="filter-pills">${offerings.map(function(o){return `<span class="filter-pill ${STATE.crm.offering===o?'active':''}" onclick="setCrmFilter('${o}')">${o}</span>`;}).join('')}</div>
-      </div>
-      <div style="display:flex;gap:10px;">
-        <div class="view-toggle">${['cards','list','summary'].map(function(v){return `<button class="view-toggle-btn ${STATE.crm.view===v?'active':''}" onclick="setCrmView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;}).join('')}</div>
-        <button class="btn btn-primary" onclick="openNewLead()">+ New Lead</button>
-      </div>
-    </div>
-    <div id="crmBody"></div>`;
-  var body = wrap.querySelector('#crmBody');
-
-  if(STATE.crm.view==='cards'){
-    var html = '<div class="board">';
-    CRM_STAGES.forEach(function(stage){
-      var stageItems = items.filter(function(l){return l.stage===stage;});
-      html += `<div class="board-col">
-        <div class="board-col-h"><span class="board-col-dot" style="background:${CRM_STAGE_COLOR[stage]}"></span>${stage}<span class="board-col-count">${stageItems.length}</span></div>
-        <div class="board-drop">${stageItems.map(leadCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
-      </div>`;
-    });
-    html += '</div>';
-    body.innerHTML = html;
-  } else if(STATE.crm.view==='list'){
-    body.innerHTML = `<div class="card table-scroll"><table>
-      <tr><th>Name</th><th>Organization</th><th>Offering</th><th>Stage</th><th>Owner</th><th>Updated</th></tr>
-      ${items.map(function(l){
-        return `<tr onclick="openLeadDetail('${l.lead_id}')" style="cursor:pointer;">
-          <td>${l.name}</td><td>${l.organization||'-'}</td><td>${l.offering||'-'}</td>
-          <td><span class="pill" style="background:${CRM_STAGE_COLOR[l.stage]}22;color:${CRM_STAGE_COLOR[l.stage]};">${l.stage}</span></td>
-          <td>${l.owner||'-'}</td><td>${fmtDate(l.updated_at)}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty">No leads match this filter.</td></tr>'}
-    </table></div>`;
-  } else {
-    var total = items.length || 1;
-    body.innerHTML = `
-      <div class="stat-grid" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Total Leads</div></div>
-        <div class="stat-card accent-violet"><div class="stat-num">${items.filter(function(l){return l.stage==='Demo Session';}).length}</div><div class="stat-lbl">In Demo</div></div>
-        <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(l){return l.stage==='Onboarding';}).length}</div><div class="stat-lbl">Onboarding</div></div>
-        <div class="stat-card accent-red"><div class="stat-num">${items.filter(function(l){return l.stage==='Declined / Cold Leads';}).length}</div><div class="stat-lbl">Declined</div></div>
-      </div>
-      <div class="card"><div class="card-h">By Stage</div><div class="summary-bars">${CRM_STAGES.map(function(s){
-        var n = items.filter(function(l){return l.stage===s;}).length;
-        var pct = Math.round(n/total*100);
-        return `<div class="summary-bar-row"><span class="summary-bar-label">${s}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:${CRM_STAGE_COLOR[s]};"></div></div><span class="summary-bar-pct">${n}</span></div>`;
-      }).join('')}</div></div>`;
-  }
-  return wrap;
-}
 
 function openNewLead(){
   ['lf_name','lf_org','lf_position','lf_email','lf_linkedin','lf_offering','lf_source'].forEach(function(id){ document.getElementById(id).value=''; });
@@ -1053,6 +1553,8 @@ function openLeadDetail(id){
   if(!l) return;
   var showDemo = l.stage==='Demo Session' && l.demo_meeting_booked!=='yes';
   var showDecline = l.stage==='Declined / Cold Leads';
+  var showDisc = (l.stage==='Agreed to Meeting' || l.stage==='Intro Call') && l.meeting_booked!=='yes';
+  var notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
   var body = document.getElementById('leadDetailModalBody');
   body.innerHTML = `
     <div class="modal-h"><h2>${l.name}</h2><button class="close-x" onclick="closeModal('leadDetailModalBg')">X</button></div>
@@ -1070,6 +1572,17 @@ function openLeadDetail(id){
         return `<button class="stage-btn ${l.stage===s?'current':''}" onclick="setLeadStage('${id}','${s}')">${s}</button>`;
       }).join('')}</div>
     </div>
+    ${l.meeting_booked==='yes' ? `<div class="thin-tag" style="margin:6px 0;">Discovery call booked for ${fmtDate(l.meeting_date)}</div>` : ''}
+    ${l.demo_meeting_booked==='yes' ? `<div class="thin-tag" style="margin:6px 0;">Demo booked for ${fmtDate(l.demo_date)}</div>` : ''}
+    ${showDisc ? `
+      <div class="reveal-panel">
+        <b>Schedule Discovery Call</b>
+        <div class="row2" style="margin-top:8px;">
+          <div class="field" style="margin-bottom:0;"><label>Date</label><input type="date" id="ld_disc_date"></div>
+          <div class="field" style="margin-bottom:0;"><label>Time</label><input type="time" id="ld_disc_time"></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="bookDiscovery('${id}')">Book Discovery Call</button>
+      </div>` : ''}
     ${showDemo ? `
       <div class="reveal-panel">
         <b>Book Demo Session</b>
@@ -1088,6 +1601,10 @@ function openLeadDetail(id){
         <input id="ld_competitor" placeholder="Competitor name (if applicable)" style="margin-top:8px;width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
         <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:10px;" onclick="saveDeclineReason('${id}')">Save Reason</button>
       </div>` : ''}
+    <div class="card-h" style="margin-top:14px;">Meeting Notes</div>
+    <div id="ld_notes">${notes.map(function(n){ return `<div class="card" style="font-size:12.5px;margin-bottom:6px;"><div class="thin-tag">${n.by||''} · ${fmtDate(n.at)}</div>${bpEsc(n.text)}</div>`; }).join('') || '<div class="thin-tag">No notes yet.</div>'}</div>
+    <textarea id="ld_note_text" placeholder="What was discussed on the call..." style="width:100%;margin-top:6px;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;"></textarea>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:6px;" onclick="addLeadNote('${id}')">Save Note</button>
     <div class="card-h" style="margin-top:14px;display:flex;justify-content:space-between;">AI Lead Health <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;" onclick="runAiLeadHealth('${id}')">Ask Claude</button></div>
     <div id="ld_health" class="ai-box" style="display:none;"></div>
   `;
@@ -1113,9 +1630,34 @@ function bookDemo(id){
   var date = document.getElementById('ld_demo_date').value;
   var time = document.getElementById('ld_demo_time').value;
   if(!date){ alert('Pick a date first.'); return; }
-  api('bookLeadDemo', {lead_id:id, date:date, time:time, invitees:[CURRENT_USER]}).then(function(res){
+  api('bookLeadDemo', {lead_id:id, kind:'demo', date:date, time:time, invitees:[CURRENT_USER]}).then(function(res){
     if(!res.ok){ alert('Could not book demo: '+(res.error||'Unknown error')); return; }
     if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.demo_date=date; l.demo_meeting_booked='yes'; } }
+    render();
+    openLeadDetail(id);
+  });
+}
+function bookDiscovery(id){
+  var date = document.getElementById('ld_disc_date').value;
+  var time = document.getElementById('ld_disc_time').value;
+  if(!date){ alert('Pick a date first.'); return; }
+  api('bookLeadDemo', {lead_id:id, kind:'discovery', date:date, time:time, invitees:[CURRENT_USER]}).then(function(res){
+    if(!res.ok){ alert('Could not book call: '+(res.error||'Unknown error')); return; }
+    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.meeting_date=date; l.meeting_booked='yes'; } }
+    render();
+    openLeadDetail(id);
+  });
+}
+function addLeadNote(id){
+  var text = (document.getElementById('ld_note_text').value||'').trim();
+  if(!text){ alert('Write a note first.'); return; }
+  var l = DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(!l) return;
+  var notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
+  notes.push({text:text, by:CURRENT_USER, at:new Date().toISOString()});
+  var json = JSON.stringify(notes);
+  api('updateLeadStage', {lead_id:id, stage:l.stage, meeting_notes_json:json}).then(function(res){
+    if(!res.ok){ alert('Could not save note: '+(res.error||'Unknown error')); return; }
+    l.meeting_notes_json = json;
     render();
     openLeadDetail(id);
   });
@@ -1160,64 +1702,6 @@ function contentCardHtml(c){
   </div>`;
 }
 
-function renderContent(){
-  if(!STATE.content) STATE.content = {platform:'All', view:'cards'};
-  var wrap = el('<div></div>');
-  var platforms = ['All','LinkedIn','Instagram','Twitter/X','Blog','Newsletter'];
-  var items = contentFiltered();
-
-  wrap.innerHTML = `<div class="section-title">Content Calendar - refreshed automatically every Friday morning with a new AI-proposed pool</div>
-    <div class="board-toolbar">
-      <div class="board-toolbar-filters">
-        <div class="filter-pills">${platforms.map(function(p){return `<span class="filter-pill ${STATE.content.platform===p?'active':''}" onclick="setContentFilter('${p}')">${p}</span>`;}).join('')}</div>
-      </div>
-      <div style="display:flex;gap:10px;">
-        <div class="view-toggle">${['cards','list','summary'].map(function(v){return `<button class="view-toggle-btn ${STATE.content.view===v?'active':''}" onclick="setContentView('${v}')">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`;}).join('')}</div>
-        ${CURRENT_USER_ROLE==='Admin' ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run Weekly Pool Now</button>' : ''}
-        <button class="btn btn-primary" onclick="openNewContent()">+ New Item</button>
-      </div>
-    </div>
-    <div id="contentBody"></div>`;
-  var body = wrap.querySelector('#contentBody');
-
-  if(STATE.content.view==='cards'){
-    var html = '<div class="board">';
-    CONTENT_STAGES.forEach(function(stage){
-      var stageItems = items.filter(function(c){return c.stage===stage;});
-      html += `<div class="board-col">
-        <div class="board-col-h"><span class="board-col-dot" style="background:${CONTENT_STAGE_COLOR[stage]}"></span>${stage}<span class="board-col-count">${stageItems.length}</span></div>
-        <div class="board-drop">${stageItems.map(contentCardHtml).join('') || '<div class="empty" style="padding:20px 6px;">-</div>'}</div>
-      </div>`;
-    });
-    html += '</div>';
-    body.innerHTML = html;
-  } else if(STATE.content.view==='list'){
-    body.innerHTML = `<div class="card table-scroll"><table>
-      <tr><th>Title</th><th>Type</th><th>Platform</th><th>Stage</th><th>Owner</th><th>Scheduled</th></tr>
-      ${items.map(function(c){
-        return `<tr onclick="openContentDetail('${c.content_id}')" style="cursor:pointer;">
-          <td>${c.title}</td><td>${c.type||'-'}</td><td>${c.platform||'-'}</td>
-          <td><span class="pill" style="background:${CONTENT_STAGE_COLOR[c.stage]}22;color:${CONTENT_STAGE_COLOR[c.stage]};">${c.stage}</span></td>
-          <td>${c.owner||'-'}</td><td>${fmtDate(c.scheduled_date)}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty">Nothing here yet.</td></tr>'}
-    </table></div>`;
-  } else {
-    var total = items.length || 1;
-    body.innerHTML = `
-      <div class="stat-grid" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Total Items</div></div>
-        <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(c){return c.stage==='Published';}).length}</div><div class="stat-lbl">Published</div></div>
-        <div class="stat-card accent-violet"><div class="stat-num">${items.filter(function(c){return c.stage==='Scheduled';}).length}</div><div class="stat-lbl">Scheduled</div></div>
-      </div>
-      <div class="card"><div class="card-h">By Stage</div><div class="summary-bars">${CONTENT_STAGES.map(function(s){
-        var n = items.filter(function(c){return c.stage===s;}).length;
-        var pct = Math.round(n/total*100);
-        return `<div class="summary-bar-row"><span class="summary-bar-label">${s}</span><div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%;background:${CONTENT_STAGE_COLOR[s]};"></div></div><span class="summary-bar-pct">${n}</span></div>`;
-      }).join('')}</div></div>`;
-  }
-  return wrap;
-}
 
 function openNewContent(){
   ['cf_title','cf_notes'].forEach(function(id){ document.getElementById(id).value=''; });
@@ -3732,6 +4216,7 @@ document.addEventListener('click', function(e){
 document.getElementById('greetDate').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
 
 function boot(){
+  ensureShell();
   restoreSidebarCollapse();
   if (WORKSPACE_MODE) {
     document.getElementById('loginSub').textContent = 'Verifying your account...';
