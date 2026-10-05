@@ -1066,7 +1066,6 @@ function renderBoardPage(key){
   return wrap;
 }
 function renderBoard(){ return renderBoardPage('eng'); }
-function renderUat(){ return renderBoardPage('uat'); }
 function renderCrm(){ return renderBoardPage('crm'); }
 function renderContent(){ return renderBoardPage('content'); }
 
@@ -1110,31 +1109,7 @@ var MODULES = [
   ]}
 ];
 
-function renderNav(){
-  var html = '';
-  MODULES.forEach(function(g){
-    if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
-    g.items.forEach(function(m){
-      if((m.id==='oneonones' || m.id==='newsdigest' || m.id==='trainingadmin' || m.adminOnly) && CURRENT_USER_ROLE!=='Admin') return;
-      var active = STATE.module===m.id ? ' active' : '';
-      html += '<div class="nav-item'+active+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+svgIco(NAV_ICON[m.id])+'</span><span class="nav-label-text">'+m.label+'</span></div>';
-    });
-  });
-  document.getElementById('navList').innerHTML = html;
-  var mobileIds = ['dashboard','board','crm','payroll'];
-  document.querySelectorAll('#mobileNav .mn-item[data-id]').forEach(function(btn){
-    btn.classList.toggle('active', btn.getAttribute('data-id')===STATE.module);
-  });
-}
 
-function goTo(id){
-  STATE.module = id;
-  renderNav();
-  var titles = {}; MODULES.forEach(function(g){g.items.forEach(function(m){titles[m.id]=m.label;});});
-  document.getElementById('pageTitle').textContent = titles[id];
-  closeMobileDrawer();
-  render();
-}
 
 // ── Collapsible sidebar (desktop) + mobile drawer/bottom-nav ───────────
 function toggleSidebarCollapse(){
@@ -1164,108 +1139,11 @@ function fmtDateTime(d){ if(!d) return ' - '; var dt = new Date(d); if(isNaN(dt)
 function initials(name){ return (name||'?').split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2); }
 function typeIcon(t){ return TYPE_ICON[t] || '[Task]'; }
 
-function render(){
-  var c = document.getElementById('content');
-  var renderers = {
-    dashboard: renderDashboard, tickets: renderTickets, board: renderBoard,
-    calendar: renderCalendar, projects: renderProjects, meetings: renderMeetings,
-    standup: renderStandup, feed: renderFeed, workload: renderWorkload,
-    teamspaces: renderTeamSpaces, command: renderCommand, decisions: renderDecisions,
-    adminlog: renderAdminLog, notifications: renderNotifications, oneonones: renderOneOnOnes, newsdigest: renderNewsDigest,
-    training: renderTraining, trainingadmin: renderTrainingAdmin, filemanager: renderFileManager,
-    uat: renderUat, crm: renderCrm, content: renderContent, payroll: renderPayroll, finance: renderFinance, leave: renderLeave
-  };
-  c.innerHTML = '';
-  c.appendChild(renderers[STATE.module]());
-  populateSelects();
-}
 
 function visibleTickets(){
   return DB.tickets.filter(function(t){ return t.source !== 'OneOnOne'; });
 }
 
-function renderDashboard(){
-  var t = visibleTickets();
-  var blocked = t.filter(function(x){return x.status==='Blocked';});
-  var review = t.filter(function(x){return x.status==='Review';});
-  var dueToday = t.filter(function(x){return x.due_date===new Date().toISOString().slice(0,10);});
-  var myWork = t.filter(function(x){return x.owner===CURRENT_USER;});
-  var completedToday = t.filter(function(x){return x.status==='Done';}).length;
-  var overdue = t.filter(function(x){return x.due_date && x.due_date < new Date().toISOString().slice(0,10) && x.status!=='Done';});
-
-  var wrap = el('<div></div>');
-  wrap.innerHTML = `
-    <div class="section-title">Admin Dashboard</div>
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-num">${t.length}</div><div class="stat-lbl">Total Open Tickets</div></div>
-      <div class="stat-card accent-amber"><div class="stat-num">${t.filter(x=>x.department==='Engineering').length}</div><div class="stat-lbl">Engineering</div></div>
-      <div class="stat-card accent-amber"><div class="stat-num">${t.filter(x=>x.department==='Operations').length}</div><div class="stat-lbl">Operations</div></div>
-      <div class="stat-card accent-amber"><div class="stat-num">${t.filter(x=>x.department==='Growth').length}</div><div class="stat-lbl">Growth</div></div>
-      <div class="stat-card accent-green"><div class="stat-num">${completedToday}</div><div class="stat-lbl">Completed Today</div></div>
-      <div class="stat-card accent-red"><div class="stat-num">${blocked.length}</div><div class="stat-lbl">Blocked</div></div>
-      <div class="stat-card accent-red"><div class="stat-num">${overdue.length}</div><div class="stat-lbl">Overdue</div></div>
-      <div class="stat-card accent-violet"><div class="stat-num">${DB.meetings.length}</div><div class="stat-lbl">Meetings</div></div>
-      <div class="stat-card"><div class="stat-num">${DB.projects.filter(p=>p.status==='Active').length}</div><div class="stat-lbl">Projects Running</div></div>
-    </div>
-
-    <div class="dash-grid">
-      <div>
-        <div class="card">
-          <div class="card-h">My Work <span class="thin-tag">${myWork.length} tickets</span></div>
-          <div id="myWorkList"></div>
-        </div>
-        <div class="card" style="margin-top:14px;">
-          <div class="card-h">Blocked Tickets</div>
-          <div id="blockedList"></div>
-        </div>
-        <div class="card" style="margin-top:14px;">
-          <div class="card-h">Waiting For Review</div>
-          <div id="reviewList"></div>
-        </div>
-      </div>
-      <div>
-        <div class="card">
-          <div class="card-h">Today's Meetings</div>
-          <div id="meetingsToday"></div>
-        </div>
-        <div class="card" style="margin-top:14px;">
-          <div class="card-h">Tasks Due</div>
-          <div id="dueList"></div>
-        </div>
-        <div class="card" style="margin-top:14px;">
-          <div class="card-h">Team Activity</div>
-          <div id="teamActivityMini"></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  function rowList(container, arr, empty){
-    var box = wrap.querySelector(container);
-    if(!arr.length){ box.innerHTML = '<div class="empty">'+empty+'</div>'; return; }
-    box.innerHTML = arr.slice(0,6).map(function(x){
-      return `<div class="thin-row"><span class="thin-dot" style="background:${STATUS_COLOR[x.status]||'#ccc'}"></span>
-        <span class="thin-title" onclick="openTicketDetail('${x.ticket_id}')" style="cursor:pointer">${typeIcon(x.type)} ${x.title}</span>
-        <span class="thin-tag">${x.owner||'unassigned'}</span></div>`;
-    }).join('');
-  }
-  rowList('#myWorkList', myWork, 'Nothing assigned to you right now.');
-  rowList('#blockedList', blocked, 'No blocked tickets. ');
-  rowList('#reviewList', review, 'Nothing waiting for review.');
-  rowList('#dueList', dueToday, 'Nothing due today.');
-
-  var mtBox = wrap.querySelector('#meetingsToday');
-  var todays = DB.meetings.filter(function(m){return m.date===new Date().toISOString().slice(0,10);});
-  mtBox.innerHTML = todays.length ? todays.map(function(m){return `<div class="thin-row"><span class="thin-title">${m.title}</span><span class="thin-tag">${m.participants}</span></div>`;}).join('') : '<div class="empty">No meetings logged for today.</div>';
-
-  var actBox = wrap.querySelector('#teamActivityMini');
-  var recentAct = DB.activities.slice(-6).reverse();
-  actBox.innerHTML = recentAct.length ? recentAct.map(function(a){
-    return `<div class="thin-row"><span class="thin-title">${a.actor}  -  ${a.action}</span><span class="thin-tag">${fmtDate(a.timestamp)}</span></div>`;
-  }).join('') : '<div class="empty">No recent activity.</div>';
-
-  return wrap;
-}
 
 var TICKET_TABLE_COLS = [
   {key:'ticket_id', label:'ID'}, {key:'title', label:'Title'}, {key:'department', label:'Department'},
@@ -1523,165 +1401,8 @@ function leadCardHtml(l){
 }
 
 
-function openNewLead(){
-  ['lf_name','lf_org','lf_position','lf_email','lf_linkedin','lf_offering','lf_source'].forEach(function(id){ document.getElementById(id).value=''; });
-  var ownerSel = document.getElementById('lf_owner');
-  ownerSel.innerHTML = '<option value="">Unassigned</option>' + DB.team.map(function(p){return `<option value="${p.name}">${p.name}</option>`;}).join('');
-  openModal('newLeadModalBg');
-}
-function saveNewLead(){
-  var payload = {
-    name: document.getElementById('lf_name').value,
-    organization: document.getElementById('lf_org').value,
-    position: document.getElementById('lf_position').value,
-    email: document.getElementById('lf_email').value,
-    linkedin_url: document.getElementById('lf_linkedin').value,
-    offering: document.getElementById('lf_offering').value,
-    owner: document.getElementById('lf_owner').value,
-    source: document.getElementById('lf_source').value || 'Manual'
-  };
-  api('createLead', payload).then(function(res){
-    if(!res.ok){ alert('Could not create lead: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE && res.lead) DB.leads.push(res.lead);
-    closeModal('newLeadModalBg');
-    render();
-  });
-}
 
-function openLeadDetail(id){
-  var l = DB.leads.filter(function(x){return x.lead_id===id;})[0];
-  if(!l) return;
-  var showDemo = l.stage==='Demo Session' && l.demo_meeting_booked!=='yes';
-  var showDecline = l.stage==='Declined / Cold Leads';
-  var showDisc = (l.stage==='Agreed to Meeting' || l.stage==='Intro Call') && l.meeting_booked!=='yes';
-  var notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
-  var body = document.getElementById('leadDetailModalBody');
-  body.innerHTML = `
-    <div class="modal-h"><h2>${l.name}</h2><button class="close-x" onclick="closeModal('leadDetailModalBg')">X</button></div>
-    <div class="thin-tag" style="margin-bottom:10px;">${l.organization||''} ${l.position?'· '+l.position:''}</div>
-    <div class="row2">
-      <div class="field"><label>Owner</label>
-        <select id="ld_owner" onchange="reassignLead('${id}', this.value)">
-          ${DB.team.map(function(p){return `<option ${p.name===l.owner?'selected':''}>${p.name}</option>`;}).join('')}
-        </select>
-      </div>
-      <div class="field"><label>Offering</label><input value="${l.offering||''}" disabled></div>
-    </div>
-    <div class="field"><label>Stage</label>
-      <div class="stage-btn-row">${CRM_STAGES.map(function(s){
-        return `<button class="stage-btn ${l.stage===s?'current':''}" onclick="setLeadStage('${id}','${s}')">${s}</button>`;
-      }).join('')}</div>
-    </div>
-    ${l.meeting_booked==='yes' ? `<div class="thin-tag" style="margin:6px 0;">Discovery call booked for ${fmtDate(l.meeting_date)}</div>` : ''}
-    ${l.demo_meeting_booked==='yes' ? `<div class="thin-tag" style="margin:6px 0;">Demo booked for ${fmtDate(l.demo_date)}</div>` : ''}
-    ${showDisc ? `
-      <div class="reveal-panel">
-        <b>Schedule Discovery Call</b>
-        <div class="row2" style="margin-top:8px;">
-          <div class="field" style="margin-bottom:0;"><label>Date</label><input type="date" id="ld_disc_date"></div>
-          <div class="field" style="margin-bottom:0;"><label>Time</label><input type="time" id="ld_disc_time"></div>
-        </div>
-        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="bookDiscovery('${id}')">Book Discovery Call</button>
-      </div>` : ''}
-    ${showDemo ? `
-      <div class="reveal-panel">
-        <b>Book Demo Session</b>
-        <div class="row2" style="margin-top:8px;">
-          <div class="field" style="margin-bottom:0;"><label>Date</label><input type="date" id="ld_demo_date"></div>
-          <div class="field" style="margin-bottom:0;"><label>Time</label><input type="time" id="ld_demo_time"></div>
-        </div>
-        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="bookDemo('${id}')">Book Demo</button>
-      </div>` : ''}
-    ${showDecline ? `
-      <div class="reveal-panel decline">
-        <b>Decline Reason</b>
-        <select id="ld_decline_cat" style="margin-top:8px;width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
-          <option value="">Select a reason</option><option>Budget</option><option>Chose competitor</option><option>No longer needed</option><option>Went cold / no response</option><option>Other</option>
-        </select>
-        <input id="ld_competitor" placeholder="Competitor name (if applicable)" style="margin-top:8px;width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
-        <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:10px;" onclick="saveDeclineReason('${id}')">Save Reason</button>
-      </div>` : ''}
-    <div class="card-h" style="margin-top:14px;">Meeting Notes</div>
-    <div id="ld_notes">${notes.map(function(n){ return `<div class="card" style="font-size:12.5px;margin-bottom:6px;"><div class="thin-tag">${n.by||''} · ${fmtDate(n.at)}</div>${bpEsc(n.text)}</div>`; }).join('') || '<div class="thin-tag">No notes yet.</div>'}</div>
-    <textarea id="ld_note_text" placeholder="What was discussed on the call..." style="width:100%;margin-top:6px;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;"></textarea>
-    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:6px;" onclick="addLeadNote('${id}')">Save Note</button>
-    <div class="card-h" style="margin-top:14px;display:flex;justify-content:space-between;">AI Lead Health <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;" onclick="runAiLeadHealth('${id}')">Ask Claude</button></div>
-    <div id="ld_health" class="ai-box" style="display:none;"></div>
-  `;
-  openModal('leadDetailModalBg');
-}
 
-function setLeadStage(id, stage){
-  api('updateLeadStage', {lead_id:id, stage:stage}).then(function(res){
-    if(!res.ok){ alert('Could not update stage: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l) l.stage=stage; }
-    render();
-    openLeadDetail(id);
-  });
-}
-function reassignLead(id, newOwner){
-  api('reassignLead', {lead_id:id, new_owner:newOwner}).then(function(res){
-    if(!res.ok){ alert('Could not reassign: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l) l.owner=newOwner; }
-    render();
-  });
-}
-function bookDemo(id){
-  var date = document.getElementById('ld_demo_date').value;
-  var time = document.getElementById('ld_demo_time').value;
-  if(!date){ alert('Pick a date first.'); return; }
-  api('bookLeadDemo', {lead_id:id, kind:'demo', date:date, time:time, invitees:[CURRENT_USER]}).then(function(res){
-    if(!res.ok){ alert('Could not book demo: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.demo_date=date; l.demo_meeting_booked='yes'; } }
-    render();
-    openLeadDetail(id);
-  });
-}
-function bookDiscovery(id){
-  var date = document.getElementById('ld_disc_date').value;
-  var time = document.getElementById('ld_disc_time').value;
-  if(!date){ alert('Pick a date first.'); return; }
-  api('bookLeadDemo', {lead_id:id, kind:'discovery', date:date, time:time, invitees:[CURRENT_USER]}).then(function(res){
-    if(!res.ok){ alert('Could not book call: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.meeting_date=date; l.meeting_booked='yes'; } }
-    render();
-    openLeadDetail(id);
-  });
-}
-function addLeadNote(id){
-  var text = (document.getElementById('ld_note_text').value||'').trim();
-  if(!text){ alert('Write a note first.'); return; }
-  var l = DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(!l) return;
-  var notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
-  notes.push({text:text, by:CURRENT_USER, at:new Date().toISOString()});
-  var json = JSON.stringify(notes);
-  api('updateLeadStage', {lead_id:id, stage:l.stage, meeting_notes_json:json}).then(function(res){
-    if(!res.ok){ alert('Could not save note: '+(res.error||'Unknown error')); return; }
-    l.meeting_notes_json = json;
-    render();
-    openLeadDetail(id);
-  });
-}
-function saveDeclineReason(id){
-  var category = document.getElementById('ld_decline_cat').value;
-  var competitor = document.getElementById('ld_competitor').value;
-  api('updateLeadStage', {lead_id:id, stage:'Declined / Cold Leads', decline_category:category, competitor:competitor}).then(function(res){
-    if(!res.ok){ alert('Could not save: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var l=DB.leads.filter(function(x){return x.lead_id===id;})[0]; if(l){ l.decline_category=category; l.competitor=competitor; } }
-    render();
-    openLeadDetail(id);
-  });
-}
-function runAiLeadHealth(id){
-  var box = document.getElementById('ld_health');
-  box.style.display='block';
-  box.innerHTML = '<div class="ai-box-h">Claude</div>Thinking...';
-  api('aiLeadHealthSummary', {lead_id:id}).then(function(res){
-    if(!res.ok){ box.innerHTML = '<div class="ai-box-h">Claude</div>Could not get a summary: '+(res.error||'Unknown error'); return; }
-    var h = res.health || {};
-    box.innerHTML = `<div class="ai-box-h">Claude · Risk: ${h.risk_level||'Unknown'}</div>${h.summary||''}<div style="margin-top:8px;"><b>Next:</b> ${h.suggested_next_action||'-'}</div>`;
-  });
-}
 
 // ── Content Calendar ──────────────────────────────────────────────────
 var CONTENT_STAGES = ['Idea','Drafting','Design','Scheduled','Published'];
@@ -1775,233 +1496,12 @@ function runContentPoolNowClick(){
 }
 
 // ── Payroll (Admin only) ─────────────────────────────────────────────────
-function renderPayroll(){
-  if(CURRENT_USER_ROLE!=='Admin'){
-    var deny = el('<div></div>'); deny.innerHTML = '<div class="empty">Payroll is restricted to Admins.</div>'; return deny;
-  }
-  if(!STATE.payrollMonth){
-    var months = DB.payroll.map(function(p){return p.month;}).filter(Boolean);
-    STATE.payrollMonth = months.length ? months.sort().slice(-1)[0] : new Date().toISOString().slice(0,7);
-  }
-  var wrap = el('<div></div>');
-  var allMonths = ['All'].concat(DB.payroll.map(function(p){return p.month;}).filter(function(m,i,arr){return m && arr.indexOf(m)===i;}).sort());
-  var items = DB.payroll.filter(function(p){ return STATE.payrollMonth==='All' || p.month===STATE.payrollMonth; });
-  var totalSalary = items.reduce(function(s,p){return s+(Number(p.salary_amount)||0);},0);
 
-  wrap.innerHTML = `<div class="section-title">Payroll - verification only; this app never moves money itself</div>
-    <div class="stat-grid" style="margin-bottom:16px;">
-      <div class="stat-card"><div class="stat-num">${items.length}</div><div class="stat-lbl">Entries this month</div></div>
-      <div class="stat-card accent-green"><div class="stat-num">${items.filter(function(p){return p.status==='Paid';}).length}</div><div class="stat-lbl">Paid</div></div>
-      <div class="stat-card accent-amber"><div class="stat-num">${items.filter(function(p){return p.account_verified!=='yes';}).length}</div><div class="stat-lbl">Unverified Accounts</div></div>
-      <div class="stat-card"><div class="stat-num">₦${totalSalary.toLocaleString()}</div><div class="stat-lbl">Total Salary</div></div>
-    </div>
-    <div class="board-toolbar">
-      <div class="filter-pills">${allMonths.map(function(m){return `<span class="filter-pill ${STATE.payrollMonth===m?'active':''}" onclick="setPayrollMonth('${m}')">${m}</span>`;}).join('')}</div>
-      <div style="display:flex;gap:10px;">
-        <button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export CSV</button>
-        <button class="btn btn-primary" onclick="openPayrollRun()">Run Monthly Payroll</button>
-      </div>
-    </div>
-    <div class="card table-scroll"><table>
-      <tr><th>Team Member</th><th>Bank</th><th>Verified</th><th>Salary</th><th>Status</th></tr>
-      ${items.map(function(p){
-        return `<tr onclick="openPayrollDetail('${p.payroll_id}')" style="cursor:pointer;">
-          <td>${p.team_member_name}</td><td>${p.bank_name||'-'} ${p.account_number?('· '+p.account_number):''}</td>
-          <td><span class="pill" style="background:${p.account_verified==='yes'?'var(--green-bg)':'var(--amber-bg)'};color:${p.account_verified==='yes'?'var(--green)':'#946A0C'};">${p.account_verified==='yes'?'Verified':'Unverified'}</span></td>
-          <td>₦${(Number(p.salary_amount)||0).toLocaleString()}</td>
-          <td><span class="pill" style="background:${p.status==='Paid'?'var(--green-bg)':'var(--surface2)'};color:${p.status==='Paid'?'var(--green)':'var(--text-dim)'};">${p.status}</span></td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="5" class="empty">No payroll entries for this month yet.</td></tr>'}
-    </table></div>`;
-  return wrap;
-}
-function setPayrollMonth(m){ STATE.payrollMonth = m; render(); }
 
-function openPayrollRun(){
-  document.getElementById('pf_month').value = new Date().toISOString().slice(0,7);
-  openModal('payrollRunModalBg');
-}
-function saveRunPayrollBatch(){
-  var month = document.getElementById('pf_month').value;
-  if(!month){ alert('Pick a month first.'); return; }
-  api('generateMonthlyPayrollBatch', {month:month}).then(function(res){
-    if(!res.ok){ alert('Could not run payroll: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE && res.entries){ res.entries.forEach(function(e){ DB.payroll.push(e); }); }
-    STATE.payrollMonth = month;
-    closeModal('payrollRunModalBg');
-    alert((res.created||0)+' payroll entries created for '+month+'.');
-    render();
-  });
-}
-
-function openPayrollDetail(id){
-  var p = DB.payroll.filter(function(x){return x.payroll_id===id;})[0];
-  if(!p) return;
-  var body = document.getElementById('payrollDetailModalBody');
-  body.innerHTML = `
-    <div class="modal-h"><h2>${p.team_member_name} - ${p.month}</h2><button class="close-x" onclick="closeModal('payrollDetailModalBg')">X</button></div>
-    <div class="row2">
-      <div class="field"><label>Bank Name</label><input id="pd_bank_name" value="${p.bank_name||''}"></div>
-      <div class="field"><label>Bank Code</label><input id="pd_bank_code" value="${p.bank_code||''}" placeholder="e.g. 058"></div>
-    </div>
-    <div class="field"><label>Account Number</label><input id="pd_account_number" value="${p.account_number||''}"></div>
-    <div class="thin-tag" style="margin-bottom:10px;">${p.account_verified==='yes' ? ('Verified as: '+(p.account_name||'-')) : 'Not yet verified.'}</div>
-    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-bottom:10px;" onclick="verifyPayrollAcct('${id}')">Verify Account with Paystack</button>
-    <div class="field"><label>Salary Amount (₦)</label><input type="number" id="pd_salary" value="${p.salary_amount||''}" onchange="savePayrollField('${id}','salary_amount',this.value)"></div>
-    ${p.status!=='Paid' ? `<button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="markPayrollPaidClick('${id}')">Mark Paid (after transferring in Paystack)</button>` : `<div class="thin-tag">Paid on ${fmtDate(p.paid_at)}</div>`}
-  `;
-  openModal('payrollDetailModalBg');
-}
-function verifyPayrollAcct(id){
-  var accountNumber = document.getElementById('pd_account_number').value;
-  var bankCode = document.getElementById('pd_bank_code').value;
-  var bankName = document.getElementById('pd_bank_name').value;
-  api('updatePayrollEntry', {payroll_id:id, bank_name:bankName, bank_code:bankCode, account_number:accountNumber}).then(function(){
-    api('verifyPayrollAccount', {payroll_id:id, account_number:accountNumber, bank_code:bankCode}).then(function(res){
-      if(!res.ok){ alert('Verification failed: '+(res.error||'Unknown error')); return; }
-      if(WORKSPACE_MODE){ var p=DB.payroll.filter(function(x){return x.payroll_id===id;})[0]; if(p){ p.bank_name=bankName; p.bank_code=bankCode; p.account_number=accountNumber; p.account_name=res.account_name; p.account_verified='yes'; } }
-      alert('Verified: '+res.account_name);
-      render();
-      openPayrollDetail(id);
-    });
-  });
-}
-function savePayrollField(id, field, value){
-  var payload = {payroll_id:id}; payload[field]=value;
-  api('updatePayrollEntry', payload).then(function(res){
-    if(!res.ok){ alert('Could not save: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var p=DB.payroll.filter(function(x){return x.payroll_id===id;})[0]; if(p) p[field]=value; }
-  });
-}
-function markPayrollPaidClick(id){
-  if(!confirm('Mark this as paid? Only do this after you have actually transferred the salary in your Paystack dashboard.')) return;
-  api('markPayrollPaid', {payroll_id:id}).then(function(res){
-    if(!res.ok){ alert('Could not update: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var p=DB.payroll.filter(function(x){return x.payroll_id===id;})[0]; if(p){ p.status='Paid'; p.paid_at=new Date().toISOString(); } }
-    closeModal('payrollDetailModalBg');
-    render();
-  });
-}
-function exportPayrollCsvClick(){
-  if(STATE.payrollMonth==='All'){ alert('Pick a specific month first.'); return; }
-  api('exportPayrollCsv', {month:STATE.payrollMonth}).then(function(res){
-    if(!res.ok){ alert('Could not export: '+(res.error||'Unknown error')); return; }
-    var blob = new Blob([res.csv], {type:'text/csv'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'wecollect-payroll-'+STATE.payrollMonth+'.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-  });
-}
 
 // ── Finance (Admin only) ─────────────────────────────────────────────────
-function renderFinance(){
-  if(CURRENT_USER_ROLE!=='Admin'){
-    var deny = el('<div></div>'); deny.innerHTML = '<div class="empty">Finance is restricted to Admins.</div>'; return deny;
-  }
-  var wrap = el('<div></div>');
-  var income = DB.financeEntries.filter(function(e){return e.type==='Income';}).reduce(function(s,e){return s+(Number(e.amount)||0);},0);
-  var expense = DB.financeEntries.filter(function(e){return e.type==='Expense';}).reduce(function(s,e){return s+(Number(e.amount)||0);},0);
-  wrap.innerHTML = `<div class="section-title">Finance Dashboard</div>
-    <div class="stat-grid" style="margin-bottom:16px;">
-      <div class="stat-card accent-green"><div class="stat-num">₦${income.toLocaleString()}</div><div class="stat-lbl">Income</div></div>
-      <div class="stat-card accent-red"><div class="stat-num">₦${expense.toLocaleString()}</div><div class="stat-lbl">Expenses</div></div>
-      <div class="stat-card"><div class="stat-num">₦${(income-expense).toLocaleString()}</div><div class="stat-lbl">Net</div></div>
-    </div>
-    <div style="margin-bottom:12px;"><button class="btn btn-primary" onclick="openNewFinanceEntry()">+ New Entry</button></div>
-    <div class="card table-scroll"><table>
-      <tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr>
-      ${DB.financeEntries.slice().reverse().map(function(e){
-        return `<tr>
-          <td>${fmtDate(e.entry_date)}</td>
-          <td><span class="pill" style="background:${e.type==='Income'?'var(--green-bg)':'var(--red-bg)'};color:${e.type==='Income'?'var(--green)':'var(--red)'};">${e.type}</span></td>
-          <td>${e.category||'-'}</td><td>${e.description||'-'}</td>
-          <td>${e.currency||'NGN'} ${(Number(e.amount)||0).toLocaleString()}</td>
-          <td><span class="thin-tag" style="color:var(--red);cursor:pointer;" onclick="deleteFinanceEntryClick('${e.entry_id}')">Delete</span></td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty">No finance entries yet.</td></tr>'}
-    </table></div>`;
-  return wrap;
-}
-function openNewFinanceEntry(){
-  ['ff_category','ff_amount','ff_desc'].forEach(function(id){ document.getElementById(id).value=''; });
-  document.getElementById('ff_date').value = new Date().toISOString().slice(0,10);
-  var projSel = document.getElementById('ff_project');
-  projSel.innerHTML = '<option value="">None</option>' + DB.projects.map(function(p){return `<option value="${p.project_id}">${p.name}</option>`;}).join('');
-  openModal('newFinanceModalBg');
-}
-function saveNewFinanceEntry(){
-  var payload = {
-    type: document.getElementById('ff_type').value,
-    category: document.getElementById('ff_category').value,
-    amount: Number(document.getElementById('ff_amount').value)||0,
-    currency: document.getElementById('ff_currency').value||'NGN',
-    entry_date: document.getElementById('ff_date').value,
-    project_id: document.getElementById('ff_project').value,
-    description: document.getElementById('ff_desc').value
-  };
-  api('createFinanceEntry', payload).then(function(res){
-    if(!res.ok){ alert('Could not add entry: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE && res.entry) DB.financeEntries.push(res.entry);
-    closeModal('newFinanceModalBg');
-    render();
-  });
-}
-function deleteFinanceEntryClick(id){
-  if(!confirm('Delete this finance entry?')) return;
-  api('deleteFinanceEntry', {entry_id:id}).then(function(res){
-    if(!res.ok){ alert('Could not delete: '+(res.error||'Unknown error')); return; }
-    DB.financeEntries = DB.financeEntries.filter(function(e){return e.entry_id!==id;});
-    render();
-  });
-}
 
 // ── Leave ────────────────────────────────────────────────────────────────
-function renderLeave(){
-  var wrap = el('<div></div>');
-  var isAdmin = CURRENT_USER_ROLE==='Admin';
-  var items = isAdmin ? DB.leave : DB.leave.filter(function(l){return l.team_member_name===CURRENT_USER;});
-  wrap.innerHTML = `<div class="section-title">${isAdmin?'Leave Requests':'My Leave Requests'}</div>
-    <div style="margin-bottom:12px;"><button class="btn btn-primary" onclick="openRequestLeave()">Request Leave</button></div>
-    <div class="card table-scroll"><table>
-      <tr><th>${isAdmin?'Team Member':'Type'}</th><th>${isAdmin?'Type':'Dates'}</th><th>${isAdmin?'Dates':'Reason'}</th><th>Status</th>${isAdmin?'<th></th>':''}</tr>
-      ${items.map(function(l){
-        return `<tr>
-          <td>${isAdmin?l.team_member_name:l.type}</td>
-          <td>${isAdmin?l.type:(l.start_date+' to '+l.end_date)}</td>
-          <td>${isAdmin?(l.start_date+' to '+l.end_date):(l.reason||'-')}</td>
-          <td><span class="pill" style="background:${l.status==='Approved'?'var(--green-bg)':l.status==='Declined'?'var(--red-bg)':'var(--surface2)'};color:${l.status==='Approved'?'var(--green)':l.status==='Declined'?'var(--red)':'var(--text-dim)'};">${l.status}</span></td>
-          ${isAdmin && l.status==='Pending' ? `<td><button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="decideLeaveClick('${l.leave_id}','Approved')">Approve</button> <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;color:var(--red);" onclick="decideLeaveClick('${l.leave_id}','Declined')">Decline</button></td>` : (isAdmin?'<td></td>':'')}
-        </tr>`;
-      }).join('') || '<tr><td colspan="5" class="empty">No leave requests yet.</td></tr>'}
-    </table></div>`;
-  return wrap;
-}
-function openRequestLeave(){
-  ['lvf_start','lvf_end','lvf_reason'].forEach(function(id){ document.getElementById(id).value=''; });
-  openModal('requestLeaveModalBg');
-}
-function saveLeaveRequest(){
-  var payload = {
-    type: document.getElementById('lvf_type').value,
-    start_date: document.getElementById('lvf_start').value,
-    end_date: document.getElementById('lvf_end').value,
-    reason: document.getElementById('lvf_reason').value
-  };
-  api('requestLeave', payload).then(function(res){
-    if(!res.ok){ alert('Could not submit request: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE && res.leave) DB.leave.push(res.leave);
-    closeModal('requestLeaveModalBg');
-    render();
-  });
-}
-function decideLeaveClick(id, status){
-  api('decideLeave', {leave_id:id, status:status}).then(function(res){
-    if(!res.ok){ alert('Could not update: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE){ var l=DB.leave.filter(function(x){return x.leave_id===id;})[0]; if(l){ l.status=status; l.approved_by=CURRENT_USER; } }
-    render();
-  });
-}
 
 var CAL_EVENTS_BY_DATE = {};
 
@@ -2109,123 +1609,14 @@ function departmentPills(departmentsStr){
   }).join(' ');
 }
 
-function renderProjects(){
-  var wrap = el('<div></div>');
-  wrap.innerHTML = '<div class="section-title">Projects <button class="btn btn-ghost" style="margin-left:10px" onclick="openNewProjectModal()">+ New Project</button></div><div class="stat-grid" id="projGrid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>';
-  var grid = wrap.querySelector('#projGrid');
-  grid.innerHTML = DB.projects.map(function(p){
-    var tix = DB.tickets.filter(function(t){return t.project_id===p.project_id;});
-    var done = tix.filter(function(t){return t.status==='Done';}).length;
-    var pct = tix.length ? Math.round(done/tix.length*100) : 0;
-    return `<div class="card" style="cursor:pointer;" onclick="openProjectDetail('${p.project_id}')">
-      <div class="card-h">${p.name}</div>
-      <div style="margin-bottom:8px;">${departmentPills(p.departments||p.department)}</div>
-      <div class="thin-tag" style="margin-bottom:8px;">Phase: <b>${p.phase}</b> - Target ${fmtDate(p.target_date)}</div>
-      <div class="wl-bar-track" style="margin-bottom:6px;"><div class="wl-bar-fill" style="width:${pct}%"></div></div>
-      <div class="thin-tag">${done}/${tix.length} tickets done</div>
-    </div>`;
-  }).join('') || '<div class="empty">No projects yet. Click "+ New Project" to create one.</div>';
-  return wrap;
-}
 
 var NEW_PROJECT_DEPTS = [];
 
-function openNewProjectModal(){
-  NEW_PROJECT_DEPTS = [];
-  document.getElementById('proj_name').value = '';
-  document.getElementById('proj_phase').value = '';
-  document.getElementById('proj_start').value = '';
-  document.getElementById('proj_target').value = '';
-  document.getElementById('proj_status').value = 'Active';
-  renderProjectDeptPicker();
-  renderProjectTicketPicker();
-  openModal('newProjectModalBg');
-}
 
-function renderProjectDeptPicker(){
-  var box = document.getElementById('proj_depts_picker');
-  var depts = ['Engineering','Operations','Growth'];
-  box.innerHTML = depts.map(function(d){
-    var active = NEW_PROJECT_DEPTS.indexOf(d) > -1;
-    return `<span class="ms-chip${active?' ms-chip-active':''}" onclick="toggleProjectDept('${d}')">${d}</span>`;
-  }).join('');
-}
-function toggleProjectDept(d){
-  var i = NEW_PROJECT_DEPTS.indexOf(d);
-  if(i>-1) NEW_PROJECT_DEPTS.splice(i,1); else NEW_PROJECT_DEPTS.push(d);
-  renderProjectDeptPicker();
-}
 
-function renderProjectTicketPicker(){
-  var box = document.getElementById('proj_tickets_picker');
-  var unassigned = visibleTickets().filter(function(t){ return !t.project_id; });
-  box.innerHTML = unassigned.length ? unassigned.map(function(t){
-    return `<label class="thin-row" style="cursor:pointer;"><input type="checkbox" value="${t.ticket_id}" class="proj-ticket-cb" style="margin-right:6px;"><span class="thin-title">${typeIcon(t.type)} ${t.title}</span><span class="thin-tag">${t.department}</span></label>`;
-  }).join('') : '<div class="thin-tag">No unassigned tickets right now - you can attach tickets to this project later too.</div>';
-}
 
-function saveNewProject(){
-  var name = document.getElementById('proj_name').value.trim();
-  if(!name){ alert('Project name is required.'); return; }
-  var linkedIds = Array.from(document.querySelectorAll('.proj-ticket-cb:checked')).map(function(cb){ return cb.value; });
-  var payload = {
-    name: name,
-    department: NEW_PROJECT_DEPTS.join(','),
-    departments: NEW_PROJECT_DEPTS.join(','),
-    phase: document.getElementById('proj_phase').value,
-    start_date: document.getElementById('proj_start').value,
-    target_date: document.getElementById('proj_target').value,
-    status: document.getElementById('proj_status').value,
-    link_ticket_ids: linkedIds
-  };
-  api('createProject', payload).then(function(res){
-    if(!res.ok){ alert('Could not create project: '+(res.error||'Unknown error')); return; }
-    if(WORKSPACE_MODE && res.project){
-      DB.projects.push(res.project);
-      linkedIds.forEach(function(tid){
-        var t = DB.tickets.filter(function(x){return x.ticket_id===tid;})[0];
-        if(t) t.project_id = res.project.project_id;
-      });
-    }
-    closeModal('newProjectModalBg');
-    render();
-  });
-}
 
-function openProjectDetail(projectId){
-  var p = DB.projects.filter(function(x){return x.project_id===projectId;})[0];
-  if(!p) return;
-  STATE.projectDetailId = projectId;
-  var linked = DB.tickets.filter(function(t){return t.project_id===projectId;});
-  var unassigned = visibleTickets().filter(function(t){return !t.project_id;});
-  var body = document.getElementById('projectDetailModalBody');
-  body.innerHTML = `
-    <div class="modal-h"><h2>${p.name}</h2><button class="close-x" onclick="closeModal('projectDetailModalBg')">X</button></div>
-    <div style="margin-bottom:8px;">${departmentPills(p.departments||p.department)}</div>
-    <div class="thin-tag" style="margin-bottom:14px;">Phase: <b>${p.phase||'-'}</b> - ${fmtDate(p.start_date)} to ${fmtDate(p.target_date)} - Status: ${p.status||'-'}</div>
-    <div class="card-h">Linked Tickets (${linked.length})</div>
-    <div style="margin-bottom:14px;">${linked.length ? linked.map(ticketCardHtml).join('') : '<div class="empty">No tickets linked yet.</div>'}</div>
-    ${unassigned.length ? `
-      <div class="card-h">Attach an unassigned ticket</div>
-      <select id="projAttachTicketSel" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;margin-bottom:8px;">
-        ${unassigned.map(function(t){return `<option value="${t.ticket_id}">${t.title}</option>`;}).join('')}
-      </select>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;" onclick="attachTicketToProject('${projectId}')">Attach Ticket</button>
-    ` : '<div class="thin-tag">No unassigned tickets available to attach right now.</div>'}
-  `;
-  openModal('projectDetailModalBg');
-}
 
-function attachTicketToProject(projectId){
-  var ticketId = document.getElementById('projAttachTicketSel').value;
-  if(!ticketId) return;
-  api('updateTicket', {ticket_id:ticketId, project_id:projectId, actor:CURRENT_USER}).then(function(res){
-    if(!res.ok){ alert('Could not attach ticket: '+(res.error||'Unknown error')); return; }
-    var t = DB.tickets.filter(function(x){return x.ticket_id===ticketId;})[0];
-    if(t) t.project_id = projectId;
-    openProjectDetail(projectId);
-  });
-}
 
 function renderMeetings(){
   var wrap = el('<div></div>');
@@ -2535,33 +1926,6 @@ function renderWorkload(){
   return wrap;
 }
 
-function renderTeamSpaces(){
-  var wrap = el('<div></div>');
-  var depts = ['Engineering','Operations','Growth'];
-  var html = '<div class="section-title">Team Spaces <button class="btn btn-ghost" style="margin-left:10px" onclick="openAddMemberModal()">+ Add Team Member</button></div>';
-  html += '<div class="dash-grid" style="grid-template-columns:repeat(3,1fr)">';
-  depts.forEach(function(dept){
-    var tix = DB.tickets.filter(function(t){return t.department===dept;});
-    var members = DB.team.filter(function(p){return p.department===dept;});
-    var kpi = tix.length ? Math.round(tix.filter(t=>t.status==='Done').length/tix.length*100) : 0;
-    html += `<div class="card">
-      <div class="card-h">${dept}</div>
-      <div class="thin-tag" style="margin-bottom:8px;">${members.map(m=>m.name).join(', ') || 'No members yet'}</div>
-      <div class="stat-num" style="font-size:20px">${tix.length}</div><div class="stat-lbl">Tickets</div>
-      <div style="margin-top:10px;" class="thin-tag">Completion rate: ${kpi}%</div>
-    </div>`;
-  });
-  html += '</div>';
-
-  html += '<div class="section-title">All Team Members - book a meeting with anyone, any department</div><div class="card" style="padding:0;"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th><th></th></tr></thead><tbody>' +
-    (DB.team.length ? DB.team.map(function(p){
-      return `<tr><td>${p.name}</td><td>${p.email}</td><td>${p.department||' - '}</td><td>${p.role||' - '}</td><td><button class="btn btn-ghost" style="padding:4px 9px;font-size:11px;" onclick="scheduleMeetingWith('${p.name}')">Meet</button></td></tr>`;
-    }).join('') : '<tr><td colspan="5" class="empty">No team members yet.</td></tr>') +
-    '</tbody></table></div>';
-
-  wrap.innerHTML = html;
-  return wrap;
-}
 
 function openAddMemberModal(){
   document.getElementById('tm_name').value = '';
@@ -2596,30 +1960,7 @@ function saveTeamMember(){
   });
 }
 
-function renderCommand(){
-  var wrap = el('<div></div>');
-  wrap.innerHTML = `<div class="section-title">AI Command Center</div>
-  <div class="card">
-    <div class="thin-tag" style="margin-bottom:10px;">Ask in plain language  -  e.g. "Show all blocked Engineering tickets" or "What's delaying the Guinness project?"</div>
-    <div style="display:flex;gap:8px;">
-      <input class="field" id="cmdInput" placeholder="Ask a question..." style="flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;">
-      <button class="btn btn-primary" onclick="runCommand()">Ask</button>
-    </div>
-    <div id="cmdResult" style="margin-top:14px;"></div>
-  </div>`;
-  return wrap;
-}
 
-function runCommand(){
-  var q = document.getElementById('cmdInput').value;
-  var result = document.getElementById('cmdResult');
-  result.innerHTML = '<div class="thin-tag">Thinking...</div>';
-  api('commandQuery', {query:q}).then(function(res){
-    if(!res.ok){ result.innerHTML = '<div class="empty">'+res.error+'</div>'; return; }
-    result.innerHTML = `<div class="thin-tag" style="margin-bottom:10px;">${res.explanation}</div>` +
-      (res.results.length ? res.results.map(ticketCardHtml).join('') : '<div class="empty">No matching tickets.</div>');
-  });
-}
 
 function renderDecisions(){
   var wrap = el('<div></div>');
@@ -3011,54 +2352,8 @@ function saveOneOnOneNotes(sessionId){
   });
 }
 
-function renderNewsDigest(){
-  var wrap = el('<div></div>');
-  wrap.innerHTML = `<div class="section-title">Industry News <button class="btn btn-ghost" style="margin-left:10px" onclick="runNewsDigestNow()">Refresh Now</button></div>
-  <div class="thin-tag" style="margin-bottom:14px;">Auto-generated from live web search - covers WeCollect's industry, competitors, and customer sectors across Africa. Also DMs admins on Slack when it runs on schedule.</div>
-  <div id="newsDigestBox"><div class="empty">Loading...</div></div>`;
 
-  api('getLatestNewsDigest', {}).then(function(res){
-    var box = document.getElementById('newsDigestBox');
-    if(!box) return;
-    if(!res.ok){ box.innerHTML = '<div class="empty">Could not load: '+(res.error||'Unknown error')+'</div>'; return; }
-    if(!res.digest){ box.innerHTML = '<div class="empty">No digest generated yet. Click "Refresh Now" to generate the first one, or set up the weekly trigger in Apps Script.</div>'; return; }
-    box.innerHTML = newsDigestHtml(res.digest);
-  });
 
-  return wrap;
-}
-
-function newsDigestHtml(digest){
-  function section(title, jsonStr){
-    var items = [];
-    try { items = JSON.parse(jsonStr || '[]'); } catch(e){ items = []; }
-    if(!items.length) return '';
-    return `<div class="card" style="margin-bottom:14px;">
-      <div class="card-h">${title}</div>
-      ${items.map(function(n){
-        return `<div class="proposal">
-          <b>${n.title}</b>
-          <div class="thin-tag" style="margin:6px 0;">${n.summary||''}</div>
-          ${n.source_url ? `<a href="${n.source_url}" target="_blank" style="font-size:11.5px;color:var(--blue);">${n.source_name||'Source'}</a>` : ''}
-        </div>`;
-      }).join('')}
-    </div>`;
-  }
-  return `<div class="thin-tag" style="margin-bottom:10px;">Generated ${fmtDateTime(digest.generated_at)}</div>` +
-    section('Funding & Opportunities', digest.funding_news_json) +
-    section('Industry', digest.industry_news_json) +
-    section('Competitors', digest.competitor_news_json) +
-    section('Customers', digest.customer_news_json);
-}
-
-function runNewsDigestNow(){
-  var box = document.getElementById('newsDigestBox');
-  if(box) box.innerHTML = '<div class="empty">Searching the web and generating your digest - this can take 20-30 seconds...</div>';
-  api('runNewsDigestNow', {}).then(function(res){
-    if(!res.ok){ if(box) box.innerHTML = '<div class="empty">Could not generate digest: '+(res.error||'Unknown error')+'</div>'; return; }
-    if(box) box.innerHTML = newsDigestHtml(res.digest);
-  });
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 //  TRAINING MODULE
@@ -4206,6 +3501,2182 @@ function closeSearch(){
   document.getElementById('globalSearch').value = '';
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  v2 FRONTEND — approved design (light sidebar, Space Grotesk / Work Sans,
+//  indigo), shared helpers, navigation, stale-backend banner, dashboard.
+//  Everything below overrides same-named earlier functions on purpose.
+// ═══════════════════════════════════════════════════════════════════════
+var EXPECTED_BACKEND = '2026.10.05-1';
+
+var DESIGN_CSS = `
+:root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
+  --brand:#4C50E3;--brand-hover:#3A3DC0;--brand-bg:#EEF0FD;--green:#1F9254;--green-bg:#E7F6ED;--amber:#B9770E;--amber-bg:#FBF0DE;--red:#D14343;--red-bg:#FBE8E8;
+  --radius:14px;--shadow:0 1px 2px rgba(20,22,31,.05),0 4px 14px rgba(20,22,31,.05);}
+body,input,select,textarea,button{font-family:'Work Sans',system-ui,sans-serif !important;}
+h1,h2,h3,.disp,.page-title,.section-title,.card-h,.stat-num,.brand-name,.modal-h h2{font-family:'Space Grotesk',sans-serif !important;}
+body{background:var(--paper);}
+#sidebar{--on-ink:#14161F;--on-ink-dim:#5B5F73;--line2:#EEF0FD;background:#fff !important;border-right:1px solid var(--line);width:260px;color:var(--text);}
+#sidebar.collapsed{width:72px;}
+#sidebar .brand{height:auto;padding:16px 16px 14px;border-bottom:1px solid var(--line);gap:10px;}
+#sidebar .brand-mark{width:36px;height:36px;border-radius:10px;background:var(--brand);color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:15px;}
+#sidebar .brand-name{font-size:14px;font-weight:600;color:var(--text);line-height:1.2;}
+#sidebar .brand-sub{display:block;font-size:11px;color:var(--text-faint);letter-spacing:0;text-transform:none;margin:0;}
+#sidebar .greet{display:none;}
+#sidebar nav{padding:4px 0 10px;}
+#sidebar .nav-label{padding:16px 20px 6px;font-size:10.5px;font-weight:600;letter-spacing:.08em;color:var(--text-faint);}
+#sidebar .nav-item{border-radius:0;padding:9px 20px;font-size:13.5px;font-weight:500;color:var(--text-dim);gap:10px;}
+#sidebar .nav-item:hover{background:#F6F7FD;color:var(--text);}
+#sidebar .nav-item.active{background:var(--brand-bg);color:var(--brand);font-weight:600;border-right:2px solid var(--brand);}
+#sidebar .nav-item.active::before{display:none;}
+#sidebar .nav-ico{opacity:.8;display:inline-flex;}
+#sidebar .nav-badge{margin-left:auto;background:var(--brand);color:#fff;border-radius:20px;font-size:10px;padding:1px 7px;font-weight:600;}
+#sidebar.collapsed .nav-item{justify-content:center;padding:11px 0;}
+#sidebar.collapsed .nav-badge{display:none;}
+#sidebar .sidebar-foot{border-top:1px solid var(--line);padding:12px 16px;color:var(--text);}
+#sidebar .avatar{width:30px;height:30px;background:var(--brand-bg);color:var(--brand);font-weight:600;font-size:12px;}
+#footLabel{font-size:12.5px;font-weight:600;line-height:1.25;}
+#footLabel small{display:block;font-weight:400;color:var(--text-faint);font-size:11px;}
+#topbar{height:68px;padding:0 28px;background:#fff;}
+#topbar .page-title{font-size:19px;font-weight:600;line-height:1.15;}
+#topbar .page-sub{font-size:12px;color:var(--text-faint);font-weight:400;font-family:'Work Sans',sans-serif;margin-top:2px;}
+.search-input{border-radius:10px;background:var(--surface2);}
+#content{padding:26px 32px 70px;}
+.card{border-radius:14px;box-shadow:none;}
+.btn{border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;}
+.btn-ghost{background:#fff;border:1px solid var(--line);}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:7px;}
+.btn-danger{background:var(--red-bg);color:var(--red);border:none;}
+.btn-good{background:var(--green-bg);color:var(--green);border:none;}
+.btn[disabled]{opacity:.55;cursor:not-allowed;}
+.pill{border-radius:999px;font-weight:600;padding:3px 10px;font-size:11.5px;}
+.pill.good{background:var(--green-bg);color:var(--green);} .pill.warn{background:var(--amber-bg);color:var(--amber);}
+.pill.bad{background:var(--red-bg);color:var(--red);} .pill.info{background:var(--brand-bg);color:var(--brand);} .pill.mute{background:var(--surface2);color:var(--text-dim);}
+.stat-card{border-radius:14px;padding:16px 18px;}
+.stat-card .stat-lbl{order:-1;text-transform:uppercase;font-size:11.5px;font-weight:600;letter-spacing:.02em;color:var(--text-faint);margin:0 0 4px;}
+.stat-card{display:flex;flex-direction:column;}
+.stat-sub{font-size:12px;color:var(--text-faint);margin-top:2px;}
+.stat-sub.good{color:var(--green);} .stat-sub.warn{color:var(--amber);} .stat-sub.bad{color:var(--red);}
+.wc-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
+.wc-head h2{font-size:20px;font-weight:600;}
+.wc-head .sub{font-size:12.5px;color:var(--text-dim);margin-top:3px;max-width:680px;}
+.wc-head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+.wc-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto;}
+.wc-tab{padding:9px 14px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+.wc-tab:hover{color:var(--text);} .wc-tab.on{color:var(--brand);border-bottom-color:var(--brand);}
+.wc-tab .n{background:var(--surface2);border-radius:20px;padding:0 7px;font-size:10.5px;margin-left:4px;}
+.wc-tab.on .n{background:var(--brand-bg);}
+.wc-grid{display:grid;gap:14px;}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr));} .g3{grid-template-columns:repeat(3,minmax(0,1fr));} .g4{grid-template-columns:repeat(4,minmax(0,1fr));}
+.wc-seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+.wc-seg button{border:none;background:#fff;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;}
+.wc-seg button.on{background:var(--brand);color:#fff;}
+.wc-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.wc-table th{position:sticky;top:0;background:#fff;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+.wc-table td{padding:9px 10px;border-bottom:1px solid #F0F1F7;vertical-align:top;}
+.wc-table tr:hover td{background:#FAFAFE;}
+.wc-scroll{overflow-x:auto;}
+.wc-note{background:var(--brand-bg);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--text-dim);}
+.wc-note.warn{background:var(--amber-bg);color:#6b4a0a;} .wc-note.bad{background:var(--red-bg);color:#8a2b2b;} .wc-note.good{background:var(--green-bg);color:#14633a;}
+.wc-bar{height:8px;background:var(--surface2);border-radius:20px;overflow:hidden;} .wc-bar>i{display:block;height:100%;background:var(--brand);border-radius:20px;}
+.wc-bar.good>i{background:var(--green);} .wc-bar.bad>i{background:var(--red);}
+.wc-check{width:18px;height:18px;border-radius:5px;border:1.5px solid #C9CCDC;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;background:#fff;color:#fff;font-size:12px;}
+.wc-check.on{background:var(--brand);border-color:var(--brand);}
+.wc-check.lock{opacity:.4;cursor:not-allowed;}
+.wc-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F1F2F7;font-size:13px;}
+.wc-row:last-child{border-bottom:none;}
+.wc-muted{color:var(--text-faint);font-size:12px;}
+.wc-modal-bg{position:fixed;inset:0;background:rgba(20,22,31,.5);display:none;align-items:center;justify-content:center;z-index:60;padding:14px;}
+.wc-modal-bg.open{display:flex;}
+.wc-modal{background:#fff;border-radius:16px;width:640px;max-width:100%;max-height:92vh;overflow-y:auto;padding:22px 24px;}
+.wc-modal.wide{width:960px;}
+.wc-modal .mh{display:flex;align-items:center;margin-bottom:14px;gap:10px;} .wc-modal .mh h2{font-size:17px;}
+.wc-modal .mh .x{margin-left:auto;border:none;background:none;font-size:22px;color:var(--text-faint);cursor:pointer;line-height:1;}
+.wc-toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#14161F;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:200;max-width:92vw;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+.wc-toast.bad{background:var(--red);}
+#wcBanner{background:#FFF4E5;border-bottom:1px solid #F3C98B;color:#6b4a0a;padding:12px 28px;font-size:13px;display:none;}
+#wcBanner.show{display:block;} #wcBanner b{color:#4a3206;} #wcBanner ol{margin:6px 0 0 18px;} #wcBanner code{background:#fff;padding:1px 5px;border-radius:4px;}
+.wc-input,.wc-sel,.wc-ta{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;outline:none;background:#fff;}
+.wc-input:focus,.wc-sel:focus,.wc-ta:focus{border-color:var(--brand);}
+.wc-ta{min-height:70px;resize:vertical;}
+.wc-lbl{display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin:0 0 4px;}
+.wc-f{margin-bottom:12px;}
+.wc-help{font-size:11.5px;color:var(--text-faint);margin-top:3px;}
+.wc-chip{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;background:var(--surface2);cursor:pointer;user-select:none;margin:0 4px 4px 0;}
+.wc-chip.on{background:var(--brand);color:#fff;}
+.wc-kind{border:2px solid var(--line);border-radius:14px;padding:16px;cursor:pointer;flex:1 1 240px;background:#fff;}
+.wc-kind.on{border-color:var(--brand);background:var(--brand-bg);} .wc-kind b{display:block;font-family:'Space Grotesk';font-size:15px;margin-bottom:4px;}
+.wc-steps{counter-reset:s;} .wc-steps li{margin:6px 0;}
+.wc-phase{border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:12px;overflow:hidden;}
+.wc-phase-h{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;background:#FBFBFE;}
+.wc-phase-h b{font-family:'Space Grotesk';font-size:14px;}
+.wc-phase.locked .wc-phase-h{opacity:.6;}
+.wc-task{display:flex;align-items:center;gap:10px;padding:8px 16px;border-top:1px solid #F1F2F7;font-size:13px;}
+.wc-task .t{flex:1;min-width:0;} .wc-task.done .t{text-decoration:line-through;color:var(--text-faint);}
+.wc-task .who{font-size:11.5px;color:var(--text-dim);white-space:nowrap;}
+.wc-task .due{font-size:11.5px;color:var(--text-faint);white-space:nowrap;}
+.wc-task .due.late{color:var(--red);font-weight:600;}
+.wc-subh{padding:6px 16px;background:#F7F8FC;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);border-top:1px solid #F1F2F7;}
+.uat-case{border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px 20px;}
+.uat-case ol{margin:6px 0 0 18px;font-size:13px;line-height:1.6;}
+.res-btn{padding:10px 18px;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-weight:600;cursor:pointer;font-size:13.5px;}
+.res-btn.pass:hover,.res-btn.pass.on{background:var(--green-bg);border-color:var(--green);color:var(--green);}
+.res-btn.fail:hover,.res-btn.fail.on{background:var(--red-bg);border-color:var(--red);color:var(--red);}
+.res-btn.block:hover,.res-btn.block.on{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
+.res-btn.skip:hover,.res-btn.skip.on{background:var(--surface2);border-color:var(--text-faint);}
+#loginScreen{background:#F7F8FC !important;}
+#loginScreen .login-title{color:var(--text) !important;} #loginScreen .login-sub,#loginScreen .login-loading{color:var(--text-dim) !important;}
+#loginScreen .login-person{background:#fff !important;border:1px solid var(--line) !important;} #loginScreen .login-person-name{color:var(--text) !important;} #loginScreen .login-person-role{color:var(--text-faint) !important;}
+#loginScreen .login-avatar{background:var(--brand-bg) !important;color:var(--brand) !important;}
+#loginScreen .login-mark{background:var(--brand);}
+.modal-bg,.wc-modal-bg{z-index:80;}
+@media (max-width:900px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:760px){
+  #content{padding:16px 14px 90px !important;} #topbar{padding:0 14px !important;height:60px;}
+  .g2,.g3,.g4{grid-template-columns:minmax(0,1fr);} .g4.keep2{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .wc-head .actions{margin-left:0;} .wc-modal{padding:18px 16px;border-radius:14px;} #wcBanner{padding:10px 14px;}
+  #mobileNav{background:#fff !important;border-top:1px solid var(--line);} .mn-item{color:var(--text-faint) !important;} .mn-item.active{color:var(--brand) !important;font-weight:600;}
+  #topbar .btn-primary{padding:7px 10px;font-size:12px;} #pageSub{display:none;} #topbar .page-title{font-size:16px;}
+  .wc-task{flex-wrap:wrap;} .wc-seg button{padding:8px 10px;}
+}
+`;
+
+function installDesign(){
+  try {
+    if(!document.getElementById('wcFonts')){
+      var lk = document.createElement('link'); lk.id = 'wcFonts'; lk.rel = 'stylesheet';
+      lk.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap';
+      document.head.appendChild(lk);
+    }
+    var st = document.getElementById('wcDesignCss');
+    if(!st){ st = document.createElement('style'); st.id = 'wcDesignCss'; document.head.appendChild(st); }
+    st.textContent = DESIGN_CSS;                      // appended last so it wins over Index.html + SHELL_CSS
+    var tc = document.querySelector('meta[name=theme-color]'); if(tc) tc.content = '#4C50E3';
+    var bm = document.querySelector('#sidebar .brand-mark');
+    if(bm && !bm.getAttribute('data-we')){ bm.setAttribute('data-we','1'); var im = bm.querySelector('img'); if(im){ im.onerror = null; } bm.textContent = 'we'; }
+    var bn = document.querySelector('#sidebar .brand-name');
+    if(bn){ bn.innerHTML = 'WeCollect OS<span class="brand-sub">Internal Operations</span>'; }
+    var sub = document.querySelector('#sidebar .brand .brand-sub:not(.brand-name .brand-sub)'); if(sub && sub.parentNode.className==='brand') sub.remove();
+    var main = document.getElementById('main');
+    if(main && !document.getElementById('wcBanner')){
+      var b = document.createElement('div'); b.id = 'wcBanner'; main.insertBefore(b, main.firstChild);
+    }
+    var tb = document.getElementById('topbar'), pt = document.getElementById('pageTitle');
+    if(tb && pt && !document.getElementById('pageSub')){
+      var box = document.createElement('div'); box.id = 'pageTitleBox'; pt.parentNode.insertBefore(box, pt); box.appendChild(pt);
+      var ps = document.createElement('div'); ps.id = 'pageSub'; ps.className = 'page-sub'; box.appendChild(ps);
+    }
+  } catch(e){ if(window.console) console.error('installDesign', e); }
+}
+
+// ── generic helpers ─────────────────────────────────────────────────────
+function esc(s){ return bpEsc(s); }
+function isAdminUser(){ return CURRENT_USER_ROLE === 'Admin'; }
+function today10(){ return new Date().toISOString().slice(0,10); }
+function money(n, cur){
+  var v = Number(n); if(isNaN(v)) v = 0;
+  var sym = (cur||'NGN')==='NGN' ? '₦' : (cur==='USD' ? '$' : (cur==='GBP' ? '£' : (cur==='EUR' ? '€' : (cur||'')+' ')));
+  return (v<0?'-':'') + sym + Math.abs(v).toLocaleString('en-US',{maximumFractionDigits:2});
+}
+function pill(text, tone){ return '<span class="pill '+(tone||'mute')+'">'+esc(text)+'</span>'; }
+function parseJson(s, d){ try { var v = JSON.parse(s||''); return v==null ? d : v; } catch(e){ return d; } }
+function teamNames(){ return DB.team.map(function(p){ return p.name; }); }
+function optionsHtml(list, sel, blank){
+  return (blank!==undefined ? '<option value="">'+esc(blank)+'</option>' : '') + list.map(function(v){
+    var val = typeof v==='object' ? v.value : v, lab = typeof v==='object' ? v.label : v;
+    return '<option value="'+esc(val)+'"'+(String(val)===String(sel)?' selected':'')+'>'+esc(lab)+'</option>';
+  }).join('');
+}
+function fld(label, inner, help){ return '<div class="wc-f"><label class="wc-lbl">'+label+'</label>'+inner+(help?'<div class="wc-help">'+help+'</div>':'')+'</div>'; }
+function inp(id, val, type, ph, extra){ return '<input class="wc-input" id="'+id+'" type="'+(type||'text')+'" value="'+esc(val==null?'':val)+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+(extra||'')+'>'; }
+function sel(id, list, val, blank, extra){ return '<select class="wc-sel" id="'+id+'"'+(extra||'')+'>'+optionsHtml(list, val, blank)+'</select>'; }
+function ta(id, val, ph, rows){ return '<textarea class="wc-ta" id="'+id+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+(rows?' style="min-height:'+rows*22+'px"':'')+'>'+esc(val||'')+'</textarea>'; }
+function val(id){ var e = document.getElementById(id); return e ? e.value : ''; }
+function wcHead(title, sub, actionsHtml){
+  return '<div class="wc-head"><div><h2>'+title+'</h2>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>'+(actionsHtml?'<div class="actions">'+actionsHtml+'</div>':'')+'</div>';
+}
+function wcPage(html){ var w = document.createElement('div'); w.innerHTML = html; return w; }
+
+function wcModal(id, title, html, wide){
+  var bg = document.getElementById('wcm_'+id);
+  if(!bg){ bg = document.createElement('div'); bg.id = 'wcm_'+id; bg.className = 'wc-modal-bg'; document.body.appendChild(bg); }
+  bg.innerHTML = '<div class="wc-modal'+(wide?' wide':'')+'"><div class="mh"><h2>'+title+'</h2><button class="x" onclick="wcClose(\''+id+'\')" aria-label="Close">×</button></div>'+html+'</div>';
+  bg.classList.add('open');
+  return bg;
+}
+function wcClose(id){ var bg = document.getElementById('wcm_'+id); if(bg) bg.classList.remove('open'); }
+function wcToast(msg, bad){
+  Array.prototype.slice.call(document.querySelectorAll('.wc-toast')).forEach(function(o){ o.parentNode.removeChild(o); });
+  var t = document.createElement('div'); t.className = 'wc-toast'+(bad?' bad':''); t.textContent = msg; document.body.appendChild(t);
+  setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, bad ? 6000 : 3200);
+}
+function wcFail(prefix, res){ wcToast(prefix + ': ' + ((res && res.error) || 'unknown error'), true); }
+
+// Re-read everything from the backend (after multi-table actions) and repaint.
+function applyAll(d){
+  d = d || {};
+  var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories'];
+  keys.forEach(function(k){ DB[k] = d[k] || []; });
+  DB.config = d.config || {};
+  DB.backend_version = d.backend_version || '';
+  checkBackendVersion();
+}
+function refreshData(thenRender){
+  if(!WORKSPACE_MODE){ if(thenRender!==false) render(); return Promise.resolve(); }
+  return api('getAll', {}).then(function(res){ if(res.ok) applyAll(res.data); if(thenRender!==false) render(); });
+}
+
+// ── stale deployment detection ──────────────────────────────────────────
+function showStaleBanner(detail){
+  var b = document.getElementById('wcBanner'); if(!b) return;
+  b.className = 'show';
+  b.innerHTML = '<b>The backend (Code.gs) is older than this page.</b> '+esc(detail||'')+
+    '<ol><li>Apps Script → paste the latest <code>apps-script.js</code> into Code.gs and the latest <code>appsscript.json</code> (View → Show manifest).</li>'+
+    '<li><b>Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy</b> (saving the file alone does not update the live web app).</li>'+
+    '<li>Reload this page with Ctrl+Shift+R. Admins: open Settings and press <b>Check setup</b>.</li></ol>';
+}
+function checkBackendVersion(){
+  if(!WORKSPACE_MODE) return;
+  var b = document.getElementById('wcBanner'); if(!b) return;
+  if(DB.backend_version !== EXPECTED_BACKEND){
+    showStaleBanner(DB.backend_version ? ('Live backend is "'+DB.backend_version+'", this page expects "'+EXPECTED_BACKEND+'".') : 'The live backend does not report a version, so it is a pre-update copy.');
+  } else { b.className = ''; b.innerHTML = ''; }
+}
+var __apiRaw = api;
+api = function(action, payload){
+  return __apiRaw(action, payload).then(function(r){
+    if(r && r.ok === false && /Unknown action/i.test(r.error||'')) showStaleBanner(r.error);
+    return r;
+  });
+};
+
+// ── navigation (design naming) ──────────────────────────────────────────
+NAV_ICON.grants = 'award'; NAV_ICON.employees = 'users'; NAV_ICON.settings = 'sliders'; NAV_ICON.teamspaces = 'users';
+MODULES = [
+  {group:'', items:[{id:'dashboard',label:'Dashboard',sub:'greet'}]},
+  {group:'Work', items:[
+    {id:'tickets',label:'Ticket System'},{id:'board',label:'Engineering Board'},{id:'calendar',label:'Calendar'},
+    {id:'projects',label:'Projects'},{id:'filemanager',label:'Files'}]},
+  {group:'Team', items:[
+    {id:'teamspaces',label:'Team Directory'},{id:'meetings',label:'Meetings'},{id:'oneonones',label:'One-on-Ones',adminOnly:true},
+    {id:'standup',label:'Stand-up Mode'},{id:'workload',label:'Workload'},{id:'feed',label:'Activity Feed'}]},
+  {group:'Growth', items:[
+    {id:'crm',label:'CRM Pipeline'},{id:'grants',label:'Grants & Accelerators'},{id:'content',label:'Content Calendar'}]},
+  {group:'Training & Quality', items:[
+    {id:'training',label:'My Training'},{id:'trainingadmin',label:'Training Admin',adminOnly:true},{id:'uat',label:'UAT / QA Tracker'}]},
+  {group:'Finance & HR', items:[
+    {id:'payroll',label:'Payroll',adminOnly:true},{id:'finance',label:'Finance Dashboard',adminOnly:true},
+    {id:'employees',label:'Employee Directory',adminOnly:true},{id:'leave',label:'Leave'}]},
+  {group:'Intelligence', items:[
+    {id:'command',label:'AI Command Center'},{id:'newsdigest',label:'Industry News',adminOnly:true},{id:'decisions',label:'Decision Register'},
+    {id:'adminlog',label:'Admin Activity Log',adminOnly:true},{id:'notifications',label:'Notifications'},{id:'settings',label:'Settings',adminOnly:true}]}
+];
+var PAGE_SUB = {
+  dashboard: function(){ return 'Good '+(new Date().getHours()<12?'morning':new Date().getHours()<18?'afternoon':'evening')+', '+CURRENT_USER+' — here\'s what\'s moving today'; },
+  projects:'Team projects and client projects with the full SOP checklist', crm:'Prospects moving through the funnel', grants:'Open grants, accelerators and fellowships — verified, with closing dates',
+  newsdigest:'Industry, competitor and customer news', payroll:'Salaries come from the Employee Directory', finance:'Income and expenditure, per project and company-wide',
+  employees:'Contact, role, bank and salary details — the source for Payroll', leave:'Requests, approvals and everyone\'s time off', uat:'Guided test runs — a failed check becomes an engineering bug',
+  command:'Ask Claude about your tickets, projects, leads and money', settings:'Slack channels, CRM links, triggers and connections', teamspaces:'Everyone at WeCollect'
+};
+
+function navBadge(id){
+  var n = 0;
+  if(id==='leave' && isAdminUser()) n = DB.leave.filter(function(l){ return l.status==='Pending' && l.team_member_name!==CURRENT_USER; }).length;
+  if(id==='crm') n = DB.leads.filter(function(l){ return (l.owner===CURRENT_USER) && l.next_follow_up_due && l.next_follow_up_due.slice(0,10) <= today10() && l.stage!=='Declined / Cold Leads'; }).length;
+  if(id==='projects') n = (DB.projectTasks||[]).filter(function(t){ return t.assignee===CURRENT_USER && t.status!=='Done' && t.due_date && t.due_date <= today10(); }).length;
+  return n ? '<span class="nav-badge">'+n+'</span>' : '';
+}
+function renderNav(){
+  var html = '';
+  MODULES.forEach(function(g){
+    var items = g.items.filter(function(m){ return !(m.adminOnly && !isAdminUser()); });
+    if(!items.length) return;
+    if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
+    items.forEach(function(m){
+      html += '<div class="nav-item'+(STATE.module===m.id?' active':'')+'" title="'+esc(m.label)+'" onclick="goTo(\''+m.id+'\')"><span class="nav-ico">'+svgIco(NAV_ICON[m.id]||'grid')+'</span><span class="nav-label-text">'+m.label+'</span>'+navBadge(m.id)+'</div>';
+    });
+  });
+  var nl = document.getElementById('navList'); if(nl) nl.innerHTML = html;
+  document.querySelectorAll('#mobileNav .mn-item[data-id]').forEach(function(btn){ btn.classList.toggle('active', btn.getAttribute('data-id')===STATE.module); });
+}
+function goTo(id){
+  STATE.module = id;
+  renderNav();
+  var titles = {}; MODULES.forEach(function(g){ g.items.forEach(function(m){ titles[m.id] = m.label; }); });
+  document.getElementById('pageTitle').textContent = titles[id] || id;
+  var s = PAGE_SUB[id]; var ps = document.getElementById('pageSub'); if(ps) ps.textContent = typeof s==='function' ? s() : (s||'');
+  closeMobileDrawer();
+  render();
+  var c = document.getElementById('content'); if(c) c.scrollTop = 0;
+}
+function render(){
+  var c = document.getElementById('content');
+  var renderers = {
+    dashboard: renderDashboard, tickets: renderTickets, board: renderBoard, calendar: renderCalendar, projects: renderProjects,
+    meetings: renderMeetings, standup: renderStandup, feed: renderFeed, workload: renderWorkload, teamspaces: renderTeamSpaces,
+    command: renderCommand, decisions: renderDecisions, adminlog: renderAdminLog, notifications: renderNotifications,
+    oneonones: renderOneOnOnes, newsdigest: renderNewsDigest, training: renderTraining, trainingadmin: renderTrainingAdmin,
+    filemanager: renderFileManager, uat: renderUat, crm: renderCrm, content: renderContent, payroll: renderPayroll,
+    finance: renderFinance, leave: renderLeave, grants: renderGrants, employees: renderEmployees, settings: renderSettings
+  };
+  var fn = renderers[STATE.module] || renderDashboard;
+  c.innerHTML = '';
+  try { c.appendChild(fn()); }
+  catch(e){ c.innerHTML = '<div class="card"><div class="card-h">Something went wrong on this page</div><div class="wc-note bad">'+esc(e && e.message || e)+'</div></div>'; if(window.console) console.error(e); }
+  try { populateSelects(); } catch(e){}
+  renderNav();
+}
+// selectUser: set the sidebar footer in the design's two-line style
+(function(){
+  var _sel = selectUser;
+  selectUser = function(name){
+    _sel(name);
+    var person = DB.team.filter(function(p){ return p.name===name; })[0];
+    var fl = document.getElementById('footLabel');
+    if(fl) fl.innerHTML = esc(name) + '<small>' + esc(person ? ((person.role||'') + (person.department?' · '+person.department:'')) : '') + '</small>';
+    var ps = document.getElementById('pageSub'); var s = PAGE_SUB[STATE.module]; if(ps) ps.textContent = typeof s==='function' ? s() : (s||'');
+    if(isAdminUser() && DB.projects.length===0 && WORKSPACE_MODE) { /* nothing */ }
+  };
+})();
+
+// ── Dashboard ───────────────────────────────────────────────────────────
+function uatStats(){
+  var runs = (DB.uatRuns||[]).filter(function(r){ return r.status==='Finished' || r.status==='Complete' || r.status==='Completed'; });
+  var last = runs[0];
+  if(last && Number(last.total) > 0){
+    var done = Number(last.passed)+Number(last.failed)+Number(last.blocked);
+    return { rate: done ? Math.round(Number(last.passed)/done*100) : 0, failing: Number(last.failed), from: 'last run' };
+  }
+  var tc = DB.testCases||[], tested = tc.filter(function(t){ return t.result==='Pass' || t.result==='Fail'; });
+  return { rate: tested.length ? Math.round(tested.filter(function(t){return t.result==='Pass';}).length/tested.length*100) : 0, failing: tc.filter(function(t){return t.result==='Fail';}).length, from: 'all cases' };
+}
+function nextPayrollInfo(){
+  var now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  var day = Number((DB.config||{}).payroll_pay_day || 25);
+  var due = new Date(y, m, day); if(due < new Date(y, m, now.getDate())) due = new Date(y, m+1, day);
+  var days = Math.round((due - new Date(y, m, now.getDate()))/86400000);
+  var team = DB.team.filter(function(p){ return Number(p.salary_amount) > 0; });
+  return { days: days, due: due, withSalary: team.length, total: DB.team.length };
+}
+function renderDashboard(){
+  var t = visibleTickets();
+  var open = t.filter(function(x){ return x.status!=='Done'; });
+  var activeProjects = DB.projects.filter(function(p){ return p.status!=='Closed' && p.status!=='Completed'; });
+  var clientN = activeProjects.filter(function(p){ return p.kind==='Client'; }).length;
+  var ut = uatStats();
+  var td = today10();
+  var myTickets = t.filter(function(x){ return x.owner===CURRENT_USER && x.status!=='Done'; }).slice(0,5);
+  var myTasks = (DB.projectTasks||[]).filter(function(x){ return x.assignee===CURRENT_USER && x.status!=='Done' && x.due_date && x.due_date <= td; })
+    .sort(function(a,b){ return (a.due_date+a.due_time).localeCompare(b.due_date+b.due_time); }).slice(0,6);
+  var admin = isAdminUser();
+  var pr = nextPayrollInfo();
+  var fourth = admin
+    ? '<div class="card stat-card"><div class="stat-lbl">Payroll</div><div class="stat-num">'+(pr.days===0?'Today':'Due in '+pr.days+'d')+'</div><div class="stat-sub '+(pr.withSalary<pr.total?'warn':'')+'">'+pr.withSalary+' of '+pr.total+' salaries set</div></div>'
+    : '<div class="card stat-card"><div class="stat-lbl">My leave</div><div class="stat-num">'+DB.leave.filter(function(l){return l.team_member_name===CURRENT_USER&&l.status==='Pending';}).length+'</div><div class="stat-sub">pending requests</div></div>';
+  var pendingLeave = admin ? DB.leave.filter(function(l){ return l.status==='Pending' && l.team_member_name!==CURRENT_USER; }) : [];
+  var awaitingPay = admin ? DB.projects.filter(function(p){ return p.kind==='Client'; }).map(function(p){
+    var ag = (DB.projectAgents||[]).filter(function(a){ return a.project_id===p.project_id; });
+    var unpaid = ag.filter(function(a){ return Number(a.amount_due)>0 && String(a.paid).toLowerCase()!=='yes'; });
+    return unpaid.length ? {p:p, n:unpaid.length} : null; }).filter(Boolean) : [];
+  var meetings = DB.meetings.filter(function(m){ return m.date >= td; }).sort(function(a,b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }).slice(0,4);
+  var acts = DB.activities.slice().sort(function(a,b){ return String(b.timestamp).localeCompare(String(a.timestamp)); }).slice(0,5);
+  var out = (DB.timeOff||[]).filter(function(l){ return l.start_date <= td && l.end_date >= td; });
+  var opps = (DB.opportunities||[]).filter(function(o){ return o.kind==='Opportunity' && o.status!=='Expired' && o.status!=='Not a fit' && (!/^\d{4}/.test(o.end_date||'') || o.end_date >= td); });
+  var newOpps = opps.filter(function(o){ return o.status==='New'; });
+  var h = '';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px"><button class="btn btn-primary" onclick="openNewTicket()">+ New Ticket</button><button class="btn btn-ghost" onclick="openScheduleMeetingModal()">Schedule Meeting</button>'+(admin?'<button class="btn btn-ghost" onclick="goTo(\'oneonones\')">Log 1:1</button>':'')+'<button class="btn btn-ghost" onclick="openRequestLeave()">Request Leave</button></div>';
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+
+    '<div class="card stat-card"><div class="stat-lbl">Open tickets</div><div class="stat-num">'+open.length+'</div><div class="stat-sub">'+open.filter(function(x){return x.status==='Blocked';}).length+' blocked</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Active projects</div><div class="stat-num">'+activeProjects.length+'</div><div class="stat-sub">'+clientN+' client, '+(activeProjects.length-clientN)+' team</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">UAT pass rate</div><div class="stat-num">'+ut.rate+'%</div><div class="stat-sub '+(ut.failing?'warn':'good')+'">'+ut.failing+' failing case'+(ut.failing===1?'':'s')+' open</div></div>'+fourth+'</div>';
+
+  if(admin && (pendingLeave.length || awaitingPay.length)){
+    h += '<div class="card" style="padding:16px 20px;margin-bottom:16px;border-color:#F3C98B;background:#FFFBF3"><div class="card-h" style="margin-bottom:8px">Needs your decision</div>';
+    pendingLeave.slice(0,4).forEach(function(l){ h += '<div class="wc-row"><span class="t" style="flex:1"><b>'+esc(l.team_member_name)+'</b> asked for '+esc(l.type)+' · '+esc(leaveWhen(l))+'</span><button class="btn btn-good btn-sm" onclick="decideLeaveClick(\''+l.leave_id+'\',\'Approved\')">Approve</button><button class="btn btn-danger btn-sm" onclick="decideLeaveClick(\''+l.leave_id+'\',\'Declined\')">Decline</button></div>'; });
+    if(pendingLeave.length>4) h += '<div class="wc-row"><a href="#" onclick="goTo(\'leave\');return false" style="color:var(--brand);font-weight:600">+'+(pendingLeave.length-4)+' more leave requests →</a></div>';
+    awaitingPay.forEach(function(a){ h += '<div class="wc-row"><span style="flex:1">Agent payments waiting to be confirmed on <b>'+esc(a.p.name)+'</b> ('+a.n+' agents)</span><button class="btn btn-ghost btn-sm" onclick="openProject(\''+a.p.project_id+'\',\'agents\')">Open</button></div>'; });
+    h += '</div>';
+  }
+
+  h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">';
+  h += '<div class="card" style="flex:1 1 420px;padding:18px 20px"><div class="card-h">My tasks today</div>';
+  if(!myTasks.length && !myTickets.length) h += '<div class="wc-muted" style="padding:10px 0">Nothing assigned to you that is due. 🎉</div>';
+  myTasks.forEach(function(x){ var pj = DB.projects.filter(function(p){return p.project_id===x.project_id;})[0];
+    h += '<div class="wc-row" style="cursor:pointer" onclick="openProject(\''+x.project_id+'\',\'tasks\')"><span class="wc-check'+(x.status==='Done'?' on':'')+'"></span><span style="flex:1">'+esc(x.title)+'<div class="wc-muted">'+esc(pj?pj.name:'')+(x.due_time?' · '+esc(x.due_time):'')+'</div></span>'+(x.due_date<td?pill('Overdue','bad'):pill('Due today','warn'))+'</div>'; });
+  myTickets.forEach(function(x){ h += '<div class="wc-row" style="cursor:pointer" onclick="openTicketDetail(\''+x.ticket_id+'\')"><span class="wc-check"></span><span style="flex:1">'+esc(x.title)+'<div class="wc-muted">'+esc(x.ticket_id)+' · '+esc(x.status)+'</div></span>'+pill(x.priority||'Medium', x.priority==='Urgent'||x.priority==='High'?'bad':(x.priority==='Low'?'good':'warn'))+'</div>'; });
+  h += '</div>';
+  h += '<div class="card" style="flex:1 1 320px;padding:18px 20px"><div class="card-h">Team activity</div>'+
+    (acts.length ? acts.map(function(a){ return '<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:10px"><b style="color:var(--text)">'+esc(a.actor)+'</b> '+esc(String(a.action||'').toLowerCase())+(a.ticket_id?' on '+esc(a.ticket_id):'')+(a.new_value?' → '+esc(a.new_value):'')+'</div>'; }).join('') : '<div class="wc-muted">No activity yet.</div>')+'</div>';
+  h += '</div>';
+
+  h += '<div style="display:flex;gap:16px;flex-wrap:wrap">';
+  h += '<div class="card" style="flex:1 1 420px;padding:18px 20px"><div class="card-h">Upcoming meetings</div>'+
+    (meetings.length ? meetings.map(function(m){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span>'+esc(m.title)+'</span><span class="wc-muted">'+esc(fmtDate(m.date))+(m.time?' · '+esc(m.time):'')+'</span></div>'; }).join('') : '<div class="wc-muted">No meetings scheduled.</div>')+
+    (out.length ? '<div class="card-h" style="margin-top:14px">Out today</div><div style="font-size:12.5px">'+out.map(function(o){ return esc(o.team_member_name); }).join(', ')+'</div>' : '')+'</div>';
+  h += '<div class="card" style="flex:1 1 320px;padding:18px 20px;background:var(--brand-bg);border-color:transparent"><div class="card-h" style="margin-bottom:6px">Grants & accelerators</div>'+
+    '<div style="font-size:12.5px;color:var(--text-dim)">'+opps.length+' open opportunit'+(opps.length===1?'y':'ies')+' on the board'+(newOpps.length?', '+newOpps.length+' new this week':'')+'. Expired ones are removed automatically.</div>'+
+    '<a href="#" onclick="goTo(\'grants\');return false" style="display:inline-block;margin-top:10px;font-size:12.5px;font-weight:600;color:var(--brand)">Open the table →</a></div>';
+  h += '</div>';
+  return wcPage(h);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PROJECTS — Team project vs Client project (SOP workflow, one task per
+//  activity, assigned by SOP role), agent tracker, per-project finance.
+// ═══════════════════════════════════════════════════════════════════════
+var SOP_ROLE_LIST = ['Operations Lead','Field Operations Manager','Application Operations Manager','Temp Community Manager','Mobile App Developer','Web App Developer'];
+var PHASES = ['Kickoff','Pre-Fieldwork','Fieldwork','Close'];
+var SOP_SYSTEMS = ['Mobile App','PMD','OTG','Super Admin'];
+var NEW_PROJ = {kind:'Team', depts:[], members:[]};
+
+function projectById(id){ return DB.projects.filter(function(p){ return p.project_id===id; })[0]; }
+function projTasks(id){ return (DB.projectTasks||[]).filter(function(t){ return t.project_id===id; }).sort(function(a,b){ return Number(a.seq)-Number(b.seq); }); }
+function projAgents(id){ return (DB.projectAgents||[]).filter(function(a){ return a.project_id===id; }); }
+function projEntries(id){ return (DB.financeEntries||[]).filter(function(e){ return e.project_id===id; }); }
+function projRoles(p){ var r = parseJson(p.roles_json, {}); return r || {}; }
+function yes(v){ return String(v).toLowerCase()==='yes' || v===true; }
+function projProgress(p){
+  if(p.kind==='Client'){
+    var t = projTasks(p.project_id); var d = t.filter(function(x){ return x.status==='Done'; }).length;
+    return {done:d, total:t.length, label:d+'/'+t.length+' activities'};
+  }
+  var tix = DB.tickets.filter(function(x){ return x.project_id===p.project_id; });
+  var dn = tix.filter(function(x){ return x.status==='Done'; }).length;
+  return {done:dn, total:tix.length, label:dn+'/'+tix.length+' tickets done'};
+}
+function phaseTone(ph){ return ph==='Close' ? 'good' : (ph==='Fieldwork' ? 'warn' : 'info'); }
+
+function renderProjects(){
+  if(STATE.pv && STATE.pv.id && projectById(STATE.pv.id)) return renderProjectDetail();
+  STATE.pv = null;
+  var f = STATE.projFilter || (STATE.projFilter = {kind:'All', status:'Active'});
+  var list = DB.projects.filter(function(p){
+    if(f.kind!=='All' && (p.kind||'Team')!==f.kind) return false;
+    var closed = p.status==='Completed' || p.status==='Closed';
+    return f.status==='All' || (f.status==='Active' ? !closed : closed);
+  });
+  var h = wcHead('Projects', 'Pick <b>Team project</b> for internal work, or <b>Client project</b> to run the full SOP checklist with every activity assigned to the right person.',
+    '<button class="btn btn-primary" onclick="openNewProject()">+ New Project</button>');
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px"><div class="wc-seg">'+['All','Client','Team'].map(function(k){ return '<button class="'+(f.kind===k?'on':'')+'" onclick="setProjFilter(\'kind\',\''+k+'\')">'+k+'</button>'; }).join('')+'</div>'+
+    '<div class="wc-seg">'+['Active','Completed','All'].map(function(k){ return '<button class="'+(f.status===k?'on':'')+'" onclick="setProjFilter(\'status\',\''+k+'\')">'+k+'</button>'; }).join('')+'</div></div>';
+  h += '<div class="wc-grid g3">';
+  h += list.map(function(p){
+    var pr = projProgress(p), pct = pr.total ? Math.round(pr.done/pr.total*100) : 0, roles = projRoles(p);
+    var lead = p.kind==='Client' ? roles['Operations Lead'] : roles.lead;
+    return '<div class="card" style="cursor:pointer;padding:16px 18px" onclick="openProject(\''+p.project_id+'\')">'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+pill(p.kind==='Client'?'Client project':'Team project', p.kind==='Client'?'info':'mute')+(p.kind==='Client'?pill(p.phase||'Kickoff', phaseTone(p.phase)):'')+
+      (p.status==='Completed'?pill('Completed','good'):'')+'</div>'+
+      '<div class="disp" style="font-size:16px;font-weight:600;margin-bottom:2px">'+esc(p.name)+'</div>'+
+      '<div class="wc-muted" style="margin-bottom:10px">'+(p.kind==='Client' ? esc(p.client_name||'') : esc(String(p.departments||p.department||'').replace(/,/g,', ')))+'</div>'+
+      '<div class="wc-bar"><i style="width:'+pct+'%"></i></div>'+
+      '<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--text-dim)"><span>'+esc(pr.label)+'</span><span>Target '+esc(fmtDate(p.target_date))+'</span></div>'+
+      (lead?'<div class="wc-muted" style="margin-top:8px">Lead: '+esc(String(lead).split(',')[0])+'</div>':'')+'</div>';
+  }).join('') || '<div class="empty" style="grid-column:1/-1">No projects here yet. Click “+ New Project”.</div>';
+  h += '</div>';
+  return wcPage(h);
+}
+function setProjFilter(k, v){ STATE.projFilter[k] = v; render(); }
+
+// ── create ──────────────────────────────────────────────────────────────
+function openNewProject(){
+  NEW_PROJ = {kind:'Team', depts:[], members:[]};
+  drawNewProject();
+}
+function setNewProjKind(k){
+  NEW_PROJ.kind = k;
+  NEW_PROJ.name = val('np_name') || NEW_PROJ.name;
+  drawNewProject();
+}
+function drawNewProject(){
+  var k = NEW_PROJ.kind, team = teamNames();
+  var h = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+
+    '<div class="wc-kind'+(k==='Team'?' on':'')+'" onclick="setNewProjKind(\'Team\')"><b>Team project</b><span class="wc-muted">Internal work: a lead, a few members, tickets linked to it. No SOP checklist.</span></div>'+
+    '<div class="wc-kind'+(k==='Client'?' on':'')+'" onclick="setNewProjKind(\'Client\')"><b>Client project</b><span class="wc-muted">Follows the Project Tracker workflow: Kickoff → Pre-Fieldwork → Daily check-ins &amp; QA → Close. Every activity becomes a task for the SOP role.</span></div></div>';
+  h += fld('Project name', inp('np_name', NEW_PROJ.name||'', 'text', k==='Client'?'e.g. Lagos Household Survey':'e.g. Dashboard revamp'));
+  if(k==='Team'){
+    h += '<div class="wc-f"><label class="wc-lbl">Departments</label>'+['Engineering','Operations','Growth','Leadership'].map(function(d){ return '<span class="wc-chip'+(NEW_PROJ.depts.indexOf(d)>-1?' on':'')+'" onclick="toggleNP(\'depts\',\''+d+'\')">'+d+'</span>'; }).join('')+'</div>';
+    h += '<div class="wc-grid g2">'+fld('Project lead', sel('np_lead', team, NEW_PROJ.lead||CURRENT_USER, ''))+fld('Phase', inp('np_phase', NEW_PROJ.phase||'', 'text', 'e.g. Planning'))+'</div>';
+    h += '<div class="wc-f"><label class="wc-lbl">Members</label>'+team.map(function(n){ return '<span class="wc-chip'+(NEW_PROJ.members.indexOf(n)>-1?' on':'')+'" onclick="toggleNP(\'members\',\''+esc(n)+'\')">'+esc(n)+'</span>'; }).join('')+'</div>';
+    h += '<div class="wc-grid g3">'+fld('Start', inp('np_start','', 'date'))+fld('Target date', inp('np_target','', 'date'))+fld('Status', sel('np_status',['Active','On hold'],'Active'))+'</div>';
+    var un = visibleTickets().filter(function(t){ return !t.project_id; });
+    if(un.length) h += '<div class="wc-f"><label class="wc-lbl">Attach existing tickets (optional)</label><div style="max-height:130px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px">'+un.slice(0,40).map(function(t){ return '<label style="display:flex;gap:8px;font-size:12.5px;padding:3px 0"><input type="checkbox" class="np-tix" value="'+esc(t.ticket_id)+'">'+esc(t.title)+'</label>'; }).join('')+'</div></div>';
+  } else {
+    h += '<div class="wc-grid g2">'+fld('Client', inp('np_client','', 'text', 'e.g. Sahel Analytics'))+fld('Contract value', '<div style="display:flex;gap:6px"><select class="wc-sel" id="np_cur" style="width:90px"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select>'+inp('np_value','', 'number', '0')+'</div>', 'Booked in Finance as expected income straight away.')+'</div>';
+    h += fld('Scope', ta('np_scope','', 'What are we collecting, from whom, and what does the client get?', 2));
+    h += '<div class="wc-grid g3">'+fld('Locations', inp('np_loc','', 'text', 'e.g. Lagos, Ibadan'))+fld('Agent headcount', inp('np_head','', 'number'))+fld('Daily quota / agent', inp('np_quota','', 'number'))+'</div>';
+    h += '<div class="wc-grid g3">'+fld('Start date', inp('np_start', today10(), 'date'))+fld('Fieldwork starts', inp('np_fw','', 'date'), 'Pre-Fieldwork is due the workday before.')+fld('Field days', inp('np_days','2','number'))+'</div>';
+    h += '<div class="wc-grid g2">'+fld('Pay per approved record', inp('np_rate','', 'number'), 'Used for the agent payment summary.')+fld('Project Slack channel ID (optional)', inp('np_chan','', 'text', 'C0123ABCD'), 'Blank = the “Projects” channel from Settings.')+'</div>';
+    h += '<div class="card-h" style="margin-top:6px">Who holds each SOP role on this project</div><div class="wc-help" style="margin:-6px 0 10px">Each checklist activity is assigned to the person in the matching role. Roles pre-fill from the Employee Directory.</div><div class="wc-grid g2">';
+    SOP_ROLE_LIST.forEach(function(r, i){
+      var def = (DB.team.filter(function(p){ return String(p.sop_role||'').split(',').map(function(x){return x.trim();}).indexOf(r)>-1; })[0]||{}).name || '';
+      h += fld(esc(r), sel('np_role_'+i, team, (NEW_PROJ.roles||{})[r]||def, '— unassigned —'));
+    });
+    h += '</div>';
+  }
+  h += '<div style="display:flex;gap:10px;margin-top:8px"><button class="btn btn-primary" id="np_go" onclick="saveNewProject()">'+(k==='Client'?'Create client project':'Create team project')+'</button><button class="btn btn-ghost" onclick="wcClose(\'newproj\')">Cancel</button></div>';
+  wcModal('newproj', 'New project', h, true);
+}
+function toggleNP(key, v){
+  NEW_PROJ.name = val('np_name'); NEW_PROJ.lead = val('np_lead'); NEW_PROJ.phase = val('np_phase');
+  var a = NEW_PROJ[key], i = a.indexOf(v); if(i>-1) a.splice(i,1); else a.push(v);
+  drawNewProject();
+}
+function saveNewProject(){
+  var name = val('np_name').trim();
+  if(!name){ wcToast('Give the project a name.', true); return; }
+  var k = NEW_PROJ.kind, payload = {name:name, kind:k, actor:CURRENT_USER};
+  if(k==='Team'){
+    payload.departments = NEW_PROJ.depts.join(','); payload.department = payload.departments;
+    payload.lead = val('np_lead'); payload.members = NEW_PROJ.members; payload.phase = val('np_phase');
+    payload.start_date = val('np_start'); payload.target_date = val('np_target'); payload.status = val('np_status');
+    payload.link_ticket_ids = Array.prototype.slice.call(document.querySelectorAll('.np-tix:checked')).map(function(c){ return c.value; });
+  } else {
+    if(!val('np_client').trim()){ wcToast('Client projects need a client name.', true); return; }
+    payload.client_name = val('np_client').trim(); payload.contract_value = val('np_value'); payload.currency = val('np_cur');
+    payload.scope = val('np_scope'); payload.locations = val('np_loc'); payload.headcount = val('np_head'); payload.daily_quota = val('np_quota');
+    payload.start_date = val('np_start'); payload.fieldwork_start = val('np_fw'); payload.field_days = val('np_days') || 2;
+    payload.rate_per_record = val('np_rate'); payload.slack_channel_id = val('np_chan');
+    payload.roles = {}; SOP_ROLE_LIST.forEach(function(r, i){ var v = val('np_role_'+i); if(v) payload.roles[r] = v; });
+  }
+  var b = document.getElementById('np_go'); if(b){ b.disabled = true; b.textContent = 'Creating…'; }
+  api('createProject', payload).then(function(res){
+    if(!res.ok){ if(b){ b.disabled = false; b.textContent = 'Create'; } wcFail('Could not create project', res); return; }
+    wcClose('newproj');
+    refreshData(false).then(function(){
+      var msg = 'Project created.';
+      if(k==='Client') msg = res.tasks_created+' tasks created and assigned'+(res.finance_linked?' · contract added to Finance':'')+(res.notified?' · '+res.notified+' people notified':'');
+      wcToast(msg);
+      STATE.module = 'x'; openProject(res.project.project_id, k==='Client' ? 'tasks' : 'overview');
+    });
+  });
+}
+
+// ── detail ──────────────────────────────────────────────────────────────
+function openProject(id, tab){
+  var p = projectById(id); if(!p) return;
+  STATE.pv = {id:id, tab:tab || (p.kind==='Client' ? 'tasks' : 'overview'), mine:false, openKeys:{}, showDone:true};
+  if(STATE.module!=='projects') goTo('projects'); else render();
+}
+function setPvTab(t){ STATE.pv.tab = t; render(); }
+function closeProjectView(){ STATE.pv = null; render(); }
+
+function renderProjectDetail(){
+  var p = projectById(STATE.pv.id), pv = STATE.pv, client = p.kind==='Client';
+  var tabs = client ? [['tasks','Checklist'],['agents','Agent tracker'],['finance','Finance'],['overview','Overview'],['tickets','Tickets']] : [['overview','Overview'],['tickets','Tickets'],['finance','Finance']];
+  if(!isAdminUser()) tabs = tabs.filter(function(t){ return t[0]!=='finance'; });
+  if(!tabs.some(function(t){ return t[0]===pv.tab; })) pv.tab = tabs[0][0];
+  var pr = projProgress(p);
+  var h = '<a href="#" onclick="closeProjectView();return false" style="font-size:12.5px;color:var(--brand);font-weight:600">← All projects</a>';
+  h += wcHead(esc(p.name), (client ? esc(p.client_name||'')+' · ' : '')+'<span>'+esc(fmtDate(p.start_date))+' → '+esc(fmtDate(p.target_date))+'</span> · '+esc(pr.label),
+    pill(client?'Client project':'Team project', client?'info':'mute')+' '+(client?pill(p.phase||'Kickoff', phaseTone(p.phase)):'')+' '+(p.status==='Completed'?pill('Completed','good'):''));
+  if(client) h += phaseStepper(p);
+  h += '<div class="wc-tabs">'+tabs.map(function(t){
+    var n = t[0]==='agents' ? projAgents(p.project_id).length : (t[0]==='tickets' ? DB.tickets.filter(function(x){return x.project_id===p.project_id;}).length : 0);
+    return '<div class="wc-tab'+(pv.tab===t[0]?' on':'')+'" onclick="setPvTab(\''+t[0]+'\')">'+t[1]+(n?'<span class="n">'+n+'</span>':'')+'</div>'; }).join('')+'</div>';
+  h += ({tasks:pvTasks, agents:pvAgents, finance:pvFinance, overview:pvOverview, tickets:pvTickets})[pv.tab](p);
+  return wcPage(h);
+}
+function phaseStepper(p){
+  var tasks = projTasks(p.project_id);
+  return '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">'+PHASES.map(function(ph, i){
+    var t = tasks.filter(function(x){ return x.phase===ph; }), d = t.filter(function(x){ return x.status==='Done'; }).length;
+    var done = t.length && d===t.length, cur = p.phase===ph;
+    return '<div style="flex:1 1 150px;border:1px solid '+(cur?'var(--brand)':'var(--line)')+';background:'+(cur?'var(--brand-bg)':'#fff')+';border-radius:12px;padding:10px 14px">'+
+      '<div style="font-size:11px;font-weight:600;color:var(--text-faint)">STEP '+(i+1)+'</div><div class="disp" style="font-weight:600;font-size:13.5px">'+ph+(done?' ✓':'')+'</div><div class="wc-muted">'+d+'/'+t.length+' done</div></div>';
+  }).join('')+'</div>';
+}
+
+function pvOverview(p){
+  var client = p.kind==='Client', roles = projRoles(p), admin = isAdminUser();
+  var h = '<div class="wc-grid g2" style="align-items:start"><div class="card" style="padding:18px 20px"><div class="card-h">Details</div>';
+  var rows = client ? [['Client',p.client_name],['Scope',p.scope],['Locations',p.locations],['Agent headcount',p.headcount],['Daily quota / agent',p.daily_quota],['Field days',p.field_days],['Fieldwork starts',fmtDate(p.fieldwork_start)],['Pay per approved record',p.rate_per_record?money(p.rate_per_record,p.currency):''],['Contract value',admin&&p.contract_value?money(p.contract_value,p.currency):''],['Slack channel',p.slack_channel_id||'(default Projects channel)']]
+    : [['Departments',String(p.departments||p.department||'').replace(/,/g,', ')],['Phase',p.phase],['Lead',roles.lead],['Members',(roles.members||[]).join(', ')]];
+  rows.push(['Status',p.status],['Created by',p.created_by]);
+  h += rows.filter(function(r){ return r[1]!==undefined && r[1]!==''; }).map(function(r){ return '<div class="wc-row"><span class="wc-muted" style="width:150px;flex-shrink:0">'+r[0]+'</span><span style="flex:1">'+esc(r[1])+'</span></div>'; }).join('');
+  if(admin) h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="openEditProject(\''+p.project_id+'\')">Edit details</button>'+
+    (p.status!=='Completed' ? '<button class="btn btn-good btn-sm" onclick="setProjectStatus(\''+p.project_id+'\',\'Completed\')">Mark completed</button>' : '<button class="btn btn-ghost btn-sm" onclick="setProjectStatus(\''+p.project_id+'\',\'Active\')">Reopen</button>')+'</div>';
+  h += '</div>';
+  if(client){
+    h += '<div class="card" style="padding:18px 20px"><div class="card-h">SOP roles on this project</div>'+SOP_ROLE_LIST.map(function(r){ return '<div class="wc-row"><span style="flex:1;font-size:13px">'+esc(r)+'</span><b>'+esc(roles[r]||'—')+'</b></div>'; }).join('')+
+      (admin||STATE.pv && roles['Operations Lead']===CURRENT_USER ? '<div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="openEditRoles(\''+p.project_id+'\')">Change who holds a role</button><div class="wc-help">Open tasks are re-assigned and the new person is notified on Slack.</div></div>' : '')+'</div>';
+  }
+  h += '</div>';
+  return h;
+}
+function openEditRoles(id){
+  var p = projectById(id), roles = projRoles(p), team = teamNames();
+  var h = SOP_ROLE_LIST.map(function(r, i){ return fld(esc(r), sel('er_'+i, team, String(roles[r]||'').split(',')[0].trim(), '— unassigned —')); }).join('');
+  h += '<button class="btn btn-primary" onclick="saveEditRoles(\''+id+'\')">Save roles</button>';
+  wcModal('roles', 'SOP roles — '+esc(p.name), h);
+}
+function saveEditRoles(id){
+  var roles = {}; SOP_ROLE_LIST.forEach(function(r, i){ var v = val('er_'+i); if(v) roles[r] = v; });
+  api('updateProject', {project_id:id, roles:roles, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not save roles', res);
+    wcClose('roles'); refreshData().then(function(){ wcToast(res.reassigned+' open tasks re-assigned.'); });
+  });
+}
+function openEditProject(id){
+  var p = projectById(id), c = p.kind==='Client';
+  var h = '<div class="wc-grid g2">'+fld('Name', inp('ep_name', p.name))+(c?fld('Client', inp('ep_client', p.client_name)):fld('Phase', inp('ep_phase', p.phase)))+'</div>';
+  h += '<div class="wc-grid g3">'+fld('Start', inp('ep_start', p.start_date, 'date'))+fld('Target', inp('ep_target', p.target_date, 'date'))+(c?fld('Contract value', inp('ep_value', p.contract_value, 'number')):fld('Status', sel('ep_status',['Active','On hold','Completed'],p.status)))+'</div>';
+  if(c) h += '<div class="wc-grid g3">'+fld('Headcount', inp('ep_head', p.headcount, 'number'))+fld('Pay / approved record', inp('ep_rate', p.rate_per_record, 'number'))+fld('Slack channel ID', inp('ep_chan', p.slack_channel_id))+'</div>'+fld('Scope', ta('ep_scope', p.scope,'',2));
+  h += '<button class="btn btn-primary" onclick="saveEditProject(\''+id+'\')">Save</button>';
+  wcModal('editproj','Edit project', h);
+}
+function saveEditProject(id){
+  var p = projectById(id), c = p.kind==='Client';
+  var u = {project_id:id, actor:CURRENT_USER, name:val('ep_name'), start_date:val('ep_start'), target_date:val('ep_target')};
+  if(c){ u.client_name = val('ep_client'); u.contract_value = val('ep_value'); u.headcount = val('ep_head'); u.rate_per_record = val('ep_rate'); u.slack_channel_id = val('ep_chan'); u.scope = val('ep_scope'); }
+  else { u.phase = val('ep_phase'); u.status = val('ep_status'); }
+  api('updateProject', u).then(function(res){ if(!res.ok) return wcFail('Could not save', res); wcClose('editproj'); refreshData().then(function(){ wcToast('Project updated.'); }); });
+}
+function setProjectStatus(id, status){
+  api('updateProject', {project_id:id, status:status, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData().then(function(){ wcToast('Project '+status.toLowerCase()+'.'); }); });
+}
+
+function pvTickets(p){
+  var linked = DB.tickets.filter(function(t){ return t.project_id===p.project_id; });
+  var un = visibleTickets().filter(function(t){ return !t.project_id; });
+  var h = '<div class="card" style="padding:6px 16px 10px">'+(linked.length ? linked.map(function(t){ return '<div class="wc-row" style="cursor:pointer" onclick="openTicketDetail(\''+t.ticket_id+'\')"><span class="wc-muted" style="width:70px">'+esc(t.ticket_id)+'</span><span style="flex:1">'+esc(t.title)+'</span>'+pill(t.status, t.status==='Done'?'good':(t.status==='Blocked'?'bad':'mute'))+'<span class="wc-muted" style="width:80px;text-align:right">'+esc(t.owner||'')+'</span></div>'; }).join('') : '<div class="empty">No tickets linked yet.</div>')+'</div>';
+  if(un.length) h += '<div class="card" style="padding:14px 16px;margin-top:14px"><div class="card-h">Attach an unassigned ticket</div><div style="display:flex;gap:8px"><select class="wc-sel" id="pv_attach">'+optionsHtml(un.map(function(t){ return {value:t.ticket_id,label:t.ticket_id+' — '+t.title}; }))+'</select><button class="btn btn-primary" onclick="attachTicketToProject(\''+p.project_id+'\')">Attach</button></div></div>';
+  return h;
+}
+function attachTicketToProject(projectId){
+  var id = val('pv_attach'); if(!id) return;
+  api('updateTicket', {ticket_id:id, project_id:projectId, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not attach', res);
+    var t = DB.tickets.filter(function(x){ return x.ticket_id===id; })[0]; if(t) t.project_id = projectId; render();
+  });
+}
+
+// ── checklist ───────────────────────────────────────────────────────────
+function pvTasks(p){
+  var pv = STATE.pv, tasks = projTasks(p.project_id), td = today10();
+  if(!tasks.length) return '<div class="empty">No checklist tasks on this project.</div>';
+  var h = '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><div class="wc-seg"><button class="'+(!pv.mine?'on':'')+'" onclick="setPvMine(false)">Everyone</button><button class="'+(pv.mine?'on':'')+'" onclick="setPvMine(true)">Only mine</button></div>'+
+    '<span class="wc-muted">A later phase unlocks when the earlier one is fully done (SOP). Items marked <b>auto</b> tick themselves from the Agent tracker.</span></div>';
+  var firstOpenPhase = null;
+  PHASES.forEach(function(ph){
+    var t = tasks.filter(function(x){ return x.phase===ph; }); if(!t.length) return;
+    var done = t.filter(function(x){ return x.status==='Done'; }).length;
+    var earlier = tasks.filter(function(x){ return PHASES.indexOf(x.phase) < PHASES.indexOf(ph) && x.status!=='Done'; });
+    var locked = earlier.length > 0;
+    if(!firstOpenPhase && done < t.length) firstOpenPhase = ph;
+    var key = 'ph_'+ph, open = pv.openKeys[key]!==undefined ? pv.openKeys[key] : (ph===(p.phase||'Kickoff') || ph===firstOpenPhase);
+    h += '<div class="wc-phase'+(locked?' locked':'')+'"><div class="wc-phase-h" onclick="togglePv(\''+key+'\','+(open?'false':'true')+')"><b>'+ph+'</b>'+(done===t.length?pill('Complete','good'):(locked?pill('Locked','mute'):pill('In progress','info')))+
+      '<span class="wc-muted">'+done+'/'+t.length+'</span><div class="wc-bar" style="flex:1;max-width:220px"><i style="width:'+Math.round(done/t.length*100)+'%"></i></div><span style="margin-left:auto">'+(open?'▾':'▸')+'</span></div>';
+    if(open){
+      var groups = []; t.forEach(function(x){ var g = x.group+(x.day?' · Day '+x.day:''); if(groups.indexOf(g)===-1) groups.push(g); });
+      var gname = function(x){ return x.group+(x.day?' · Day '+x.day:''); };
+      var firstOpenG = groups.filter(function(q){ return t.some(function(x){ return gname(x)===q && x.status!=='Done'; }); })[0];
+      groups.forEach(function(g){
+        var gt = t.filter(function(x){ return gname(x)===g; });
+        var gd = gt.filter(function(x){ return x.status==='Done'; }).length;
+        var gk = 'g_'+ph+'_'+g, gopen = pv.openKeys[gk]!==undefined ? pv.openKeys[gk] : (groups.length<=2 || g===firstOpenG);
+        if(groups.length>1) h += '<div class="wc-subh" style="cursor:pointer" onclick="togglePv(\''+esc(gk).replace(/'/g,"\\'")+'\','+(gopen?'false':'true')+')">'+(gopen?'▾':'▸')+' '+esc(g)+' <span style="font-weight:400">· '+gd+'/'+gt.length+'</span></div>';
+        if(groups.length>1 && !gopen) return;
+        gt.filter(function(x){ return !pv.mine || x.assignee===CURRENT_USER || x.co_assignee===CURRENT_USER; }).forEach(function(x){ h += taskRowHtml(x, locked, td); });
+      });
+    }
+    h += '</div>';
+  });
+  return h;
+}
+function taskRowHtml(x, locked, td){
+  var done = x.status==='Done', late = !done && x.due_date && x.due_date < td, canEdit = isAdminUser() || x.assignee===CURRENT_USER || x.co_assignee===CURRENT_USER;
+  var who = esc(x.assignee||'unassigned')+(x.co_assignee?' + '+esc(x.co_assignee):'');
+  return '<div class="wc-task'+(done?' done':'')+'"><span class="wc-check'+(done?' on':'')+((locked&&!isAdminUser())||(!canEdit)?' lock':'')+'" title="'+(canEdit?(locked?'Earlier phase still open':'Tick when done'):'Only the assignee or an admin can tick this')+'" onclick="toggleTask(\''+x.task_id+'\')">'+(done?'✓':'')+'</span>'+
+    '<div class="t">'+esc(x.title)+(x.auto_key?' <span class="pill info" style="font-size:10px">auto</span>':'')+(x.status==='Blocked'?' '+pill('Blocked','bad'):'')+'<div class="wc-muted">'+esc(x.role)+(x.co_role?' + '+esc(x.co_role):'')+(done&&x.done_by?' · done by '+esc(x.done_by):'')+(x.notes?' · '+esc(x.notes):'')+'</div></div>'+
+    '<span class="who" title="Assigned via SOP role">'+who+'</span><span class="due'+(late?' late':'')+'">'+esc(fmtDate(x.due_date))+(x.due_time?' '+esc(x.due_time):'')+'</span>'+
+    (canEdit&&!done?'<button class="btn btn-ghost btn-sm" title="Reassign, flag blocked, add a note" onclick="openTaskMenu(\''+x.task_id+'\')">⋯</button>':'')+'</div>';
+}
+function setPvMine(v){ STATE.pv.mine = v; render(); }
+function togglePv(k, v){ STATE.pv.openKeys[k] = v; render(); }
+function taskById(id){ return (DB.projectTasks||[]).filter(function(t){ return t.task_id===id; })[0]; }
+function toggleTask(id){
+  var x = taskById(id); if(!x) return;
+  var to = x.status==='Done' ? 'Todo' : 'Done';
+  var p = {task_id:id, status:to, actor:CURRENT_USER};
+  api('updateProjectTask', p).then(function(res){
+    if(!res.ok){
+      if(res.gated && isAdminUser() && confirm(res.error+'\n\nAs admin you can override the SOP order. Override?')){
+        p.override = true; return api('updateProjectTask', p).then(function(r2){ if(!r2.ok) return wcFail('Could not update', r2); refreshData(); });
+      }
+      return wcFail('Not yet', res);
+    }
+    if(res.phase_changed) wcToast('Phase moved on to '+res.phase+'.');
+    refreshData();
+  });
+}
+function openTaskMenu(id){
+  var x = taskById(id); if(!x) return;
+  var h = '<div class="wc-muted" style="margin-bottom:10px">'+esc(x.title)+'</div>'+
+    '<div class="wc-grid g2">'+fld('Assigned to', sel('tm_who', teamNames(), x.assignee, '— unassigned —'))+fld('Status', sel('tm_status',['Todo','In progress','Blocked','Done'], x.status))+'</div>'+
+    '<div class="wc-grid g2">'+fld('Due date', inp('tm_due', x.due_date, 'date'))+fld('Due time', inp('tm_time', x.due_time, 'time'))+'</div>'+
+    fld('Note (visible on the task; goes to the Ops Lead if blocked)', inp('tm_note', x.notes))+
+    '<button class="btn btn-primary" onclick="saveTaskMenu(\''+id+'\')">Save</button>';
+  wcModal('task','Task', h);
+}
+function saveTaskMenu(id){
+  var p = {task_id:id, actor:CURRENT_USER, assignee:val('tm_who'), status:val('tm_status'), due_date:val('tm_due'), due_time:val('tm_time'), notes:val('tm_note')};
+  api('updateProjectTask', p).then(function(res){ if(!res.ok) return wcFail('Could not save', res); wcClose('task'); refreshData(); });
+}
+
+// ── agent tracker ───────────────────────────────────────────────────────
+var AG_FLAGS = [['consent','Consent'],['briefed','Briefed'],['in_group','In group'],['accepted','Accepted'],['sample_done','Sample'],['cleared','Cleared']];
+function pvAgents(p){
+  var ag = projAgents(p.project_id), admin = isAdminUser();
+  var active = ag.filter(function(a){ return ['Active','On watch'].indexOf(a.status)>-1; }), wait = ag.filter(function(a){ return a.status==='Waitlist'; });
+  var head = Number(p.headcount)||0, rate = Number(p.rate_per_record)||0;
+  var due = ag.reduce(function(s,a){ return s+(Number(a.amount_due)||0); },0), unpaid = ag.filter(function(a){ return Number(a.amount_due)>0 && !yes(a.paid); });
+  var unpaidSum = unpaid.reduce(function(s,a){ return s+Number(a.amount_due); },0);
+  var h = '<div class="wc-grid g4 keep2" style="margin-bottom:14px">'+
+    '<div class="card stat-card"><div class="stat-lbl">Active agents</div><div class="stat-num">'+active.length+(head?' / '+head:'')+'</div><div class="stat-sub">target headcount</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Waitlist</div><div class="stat-num">'+wait.length+'</div><div class="stat-sub">'+(head?'aim for '+Math.ceil(head*0.2)+'–'+Math.ceil(head*0.3):'20–30% extra')+'</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Approved records</div><div class="stat-num">'+ag.reduce(function(s,a){return s+(Number(a.approved)||0);},0)+'</div><div class="stat-sub">'+ag.reduce(function(s,a){return s+(Number(a.declined)||0);},0)+' declined</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Agent pay due</div><div class="stat-num">'+money(unpaidSum,p.currency)+'</div><div class="stat-sub '+(rate?'':'warn')+'">'+(rate?money(rate,p.currency)+' per approved record':'Set pay per record (Edit details)')+'</div></div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openAgentImport(\''+p.project_id+'\')">Import agents (paste from sheet)</button><button class="btn btn-ghost btn-sm" onclick="openAddAgent(\''+p.project_id+'\')">+ Add agent</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="bulkAgents(\''+p.project_id+'\',\'consent\')">Everyone consented</button><button class="btn btn-ghost btn-sm" onclick="bulkAgents(\''+p.project_id+'\',\'briefed\')">Everyone briefed</button><button class="btn btn-ghost btn-sm" onclick="bulkAgents(\''+p.project_id+'\',\'in_group\')">Everyone in group</button>'+
+    '<span style="margin-left:auto"></span>'+(unpaid.length?'<button class="btn btn-ghost btn-sm" onclick="doSendPaymentRequest(\''+p.project_id+'\')">Send payment request to Ops Lead</button>':'')+
+    (admin||roleHolder(p,'Operations Lead')===CURRENT_USER ? (unpaid.length?'<button class="btn btn-good btn-sm" onclick="doConfirmPayment(\''+p.project_id+'\')">Confirm payment made ('+money(unpaidSum,p.currency)+')</button>':'') : '')+'</div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Agent</th><th>Phone</th><th>Location</th>'+AG_FLAGS.map(function(f){ return '<th style="text-align:center">'+f[1]+'</th>'; }).join('')+'<th>Approved</th><th>Declined</th><th>Status</th><th>Due</th><th>Paid</th><th></th></tr></thead><tbody>'+
+    (ag.map(function(a){
+      var tot = (Number(a.approved)||0)+(Number(a.declined)||0), dr = tot ? Math.round((Number(a.declined)||0)/tot*100) : 0;
+      return '<tr><td style="white-space:nowrap"><b>'+esc(a.name)+'</b></td><td style="white-space:nowrap">'+esc(a.phone)+'</td><td>'+esc(a.location)+'</td>'+
+        AG_FLAGS.map(function(f){ return '<td style="text-align:center"><span class="wc-check'+(yes(a[f[0]])?' on':'')+'" onclick="toggleAgentFlag(\''+a.agent_id+'\',\''+f[0]+'\')">'+(yes(a[f[0]])?'✓':'')+'</span></td>'; }).join('')+
+        '<td><input class="wc-input" style="width:64px;padding:4px 6px" type="number" min="0" value="'+(Number(a.approved)||0)+'" onchange="setAgentNum(\''+a.agent_id+'\',\'approved\',this.value)"></td>'+
+        '<td><input class="wc-input" style="width:64px;padding:4px 6px" type="number" min="0" value="'+(Number(a.declined)||0)+'" onchange="setAgentNum(\''+a.agent_id+'\',\'declined\',this.value)">'+(tot>=4?'<div class="wc-muted">'+dr+'%</div>':'')+'</td>'+
+        '<td><select class="wc-sel" style="padding:4px 6px;width:100px" onchange="setAgentField(\''+a.agent_id+'\',\'status\',this.value)">'+optionsHtml(['Active','On watch','Suspended','Waitlist','Removed'], a.status)+'</select></td>'+
+        '<td>'+(Number(a.amount_due)?money(a.amount_due,p.currency):'—')+'</td>'+
+        '<td>'+(Number(a.amount_due)>0?'<span class="wc-check'+(yes(a.paid)?' on':'')+'" onclick="toggleAgentFlag(\''+a.agent_id+'\',\'paid\')">'+(yes(a.paid)?'✓':'')+'</span>':'')+'</td>'+
+        '<td><button class="btn btn-ghost btn-sm" title="Remove" onclick="removeAgent(\''+a.agent_id+'\')">✕</button></td></tr>';
+    }).join('') || '<tr><td colspan="16" class="empty">No agents yet. Import them from your recruitment sheet — name, phone, location.</td></tr>')+'</tbody></table></div>'+
+    '<div class="wc-note" style="margin-top:12px">Decline rate above <b>15%</b> puts an agent <b>on watch</b>, above <b>25%</b> <b>suspends</b> them (needs 4+ reviewed records) and Field Ops is notified. Ticking everything here ticks the matching Pre-Fieldwork checklist items automatically.</div>';
+  return h;
+}
+function roleHolder(p, role){ return String(projRoles(p)[role]||'').split(',')[0].trim(); }
+function agentById(id){ return (DB.projectAgents||[]).filter(function(a){ return a.agent_id===id; })[0]; }
+function afterAgent(res){ if(!res.ok) return wcFail('Could not save', res); if(res.auto_ticked) wcToast(res.auto_ticked+' checklist item(s) ticked automatically.'); refreshData(); }
+function toggleAgentFlag(id, f){ var a = agentById(id); var p = {agent_id:id, actor:CURRENT_USER}; p[f] = yes(a[f]) ? 'no' : 'yes'; api('updateProjectAgent', p).then(afterAgent); }
+function setAgentNum(id, f, v){ var p = {agent_id:id, actor:CURRENT_USER}; p[f] = Number(v)||0; api('updateProjectAgent', p).then(afterAgent); }
+function setAgentField(id, f, v){ var p = {agent_id:id, actor:CURRENT_USER}; p[f] = v; api('updateProjectAgent', p).then(afterAgent); }
+function bulkAgents(pid, f){ var fields = {}; fields[f] = 'yes'; api('bulkUpdateProjectAgents', {project_id:pid, fields:fields, actor:CURRENT_USER}).then(afterAgent); }
+function removeAgent(id){ var a = agentById(id); if(!confirm('Remove '+a.name+' from this project?')) return; api('deleteProjectAgent', {agent_id:id, actor:CURRENT_USER}).then(afterAgent); }
+function openAddAgent(pid){
+  var h = '<div class="wc-grid g2">'+fld('Name', inp('aa_name'))+fld('Phone', inp('aa_phone'))+'</div><div class="wc-grid g2">'+fld('Location', inp('aa_loc'))+fld('Start as', sel('aa_status',['Active','Waitlist'],'Active'))+'</div><button class="btn btn-primary" onclick="saveAddAgent(\''+pid+'\')">Add agent</button>';
+  wcModal('agent','Add agent', h);
+}
+function saveAddAgent(pid){
+  if(!val('aa_name').trim()) return wcToast('Name is required.', true);
+  api('importProjectAgents', {project_id:pid, mode:'append', rows:[{name:val('aa_name'), phone:val('aa_phone'), location:val('aa_loc'), status:val('aa_status')}], actor:CURRENT_USER}).then(function(res){ if(res.ok) wcClose('agent'); afterAgent(res); });
+}
+function openAgentImport(pid){
+  var h = '<div class="wc-note" style="margin-bottom:10px">Copy rows straight from your recruitment sheet (Name, Phone, Location — one agent per line, tab- or comma-separated). Optional 4th column: <b>Waitlist</b>.</div>'+
+    ta('ai_text','', 'Amina Yusuf\t0803 000 0000\tLagos\nChinedu Obi\t0805 000 0000\tIbadan\tWaitlist', 8)+
+    '<div style="display:flex;gap:8px;margin-top:10px;align-items:center"><select class="wc-sel" id="ai_mode" style="width:auto"><option value="append">Add to existing agents</option><option value="replace">Replace all agents</option></select><button class="btn btn-primary" onclick="saveAgentImport(\''+pid+'\')">Import</button></div><div class="wc-help">Duplicates (same phone or name) are skipped.</div>';
+  wcModal('agentimp','Import agents', h);
+}
+function saveAgentImport(pid){
+  var rows = val('ai_text').split(/\r?\n/).map(function(l){ return l.split(/\t|,/).map(function(c){ return c.trim(); }); }).filter(function(c){ return c[0]; })
+    .filter(function(c){ return !/^name$/i.test(c[0]); }).map(function(c){ return {name:c[0], phone:c[1]||'', location:c[2]||'', status:/wait/i.test(c[3]||'')?'Waitlist':'Active'}; });
+  if(!rows.length) return wcToast('Paste at least one agent.', true);
+  api('importProjectAgents', {project_id:pid, mode:val('ai_mode'), rows:rows, actor:CURRENT_USER}).then(function(res){ if(res.ok){ wcClose('agentimp'); wcToast(res.created+' added'+(res.skipped?', '+res.skipped+' skipped (duplicates/blank)':'')); } afterAgent(res); });
+}
+function doSendPaymentRequest(pid){
+  api('sendPaymentRequest', {project_id:pid, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not send', res); wcToast('Payment request for '+money(res.total)+' sent to '+res.sent_to+'.'); refreshData(); });
+}
+function doConfirmPayment(pid){
+  var p = projectById(pid);
+  if(!confirm('Confirm that all outstanding agent payments for “'+p.name+'” have actually been paid out? This records the expense in Finance and ticks the “Payment confirmed” step.')) return;
+  api('confirmProjectPayment', {project_id:pid, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not confirm', res); wcToast(res.agents+' agents marked paid ('+money(res.total)+') — expense recorded in Finance.'); refreshData(); });
+}
+
+// ── project finance (income / expenditure with dates) ───────────────────
+function sumEntries(list, type, onlyDone){
+  return list.filter(function(e){ return e.type===type && (!onlyDone || ['Received','Paid'].indexOf(e.status)>-1); }).reduce(function(s,e){ return s+(Number(e.amount)||0); },0);
+}
+function pvFinance(p){
+  var list = projEntries(p.project_id).sort(function(a,b){ return String(b.entry_date).localeCompare(String(a.entry_date)); });
+  var inc = sumEntries(list,'Income',true), incAll = sumEntries(list,'Income'), exp = sumEntries(list,'Expense',true), expAll = sumEntries(list,'Expense');
+  var h = '<div class="wc-grid g4 keep2" style="margin-bottom:14px">'+
+    '<div class="card stat-card"><div class="stat-lbl">Income received</div><div class="stat-num" style="color:var(--green)">'+money(inc,p.currency)+'</div><div class="stat-sub">'+money(incAll,p.currency)+' incl. expected</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Spent</div><div class="stat-num" style="color:var(--red)">'+money(exp,p.currency)+'</div><div class="stat-sub">'+money(expAll,p.currency)+' incl. planned</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Net so far</div><div class="stat-num">'+money(inc-exp,p.currency)+'</div><div class="stat-sub">received − spent</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Projected margin</div><div class="stat-num">'+(incAll?Math.round((incAll-expAll)/incAll*100):0)+'%</div><div class="stat-sub">if everything lands</div></div></div>';
+  h += '<div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openFinanceEntry(\''+p.project_id+'\',\'Income\')">+ Income</button><button class="btn btn-ghost btn-sm" onclick="openFinanceEntry(\''+p.project_id+'\',\'Expense\')">+ Expenditure</button></div>';
+  h += financeTable(list, false);
+  return h;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FINANCE · PAYROLL (fed by the Employee Directory) · EMPLOYEES · LEAVE
+// ═══════════════════════════════════════════════════════════════════════
+var INCOME_CATS = ['Client contract','Client payment','Grant','Prize / competition','Other income'];
+var EXPENSE_CATS = ['Agent payments','Data & airtime','Transport','Software & tools','Salaries','Marketing','Equipment','Rent & utilities','Professional fees','Other expense'];
+var INCOME_STATUS = ['Expected','Invoiced','Received'], EXPENSE_STATUS = ['Planned','Paid'];
+
+function entryProjectName(e){ var p = projectById(e.project_id); return p ? p.name : '— company —'; }
+function financeTable(list, showProject){
+  if(!list.length) return '<div class="card"><div class="empty">No entries yet.</div></div>';
+  return '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Date</th><th>Type</th>'+(showProject?'<th>Project</th>':'')+'<th>Category</th><th>Description</th><th>Counterparty</th><th style="text-align:right">Amount</th><th>Status</th><th>Invoice</th><th></th></tr></thead><tbody>'+
+    list.map(function(e){
+      var inc = e.type==='Income', done = ['Received','Paid'].indexOf(e.status)>-1;
+      return '<tr><td style="white-space:nowrap">'+esc(fmtDate(e.entry_date))+'</td><td>'+pill(e.type, inc?'good':'bad')+'</td>'+(showProject?'<td>'+esc(entryProjectName(e))+'</td>':'')+
+        '<td>'+esc(e.category||'—')+'</td><td>'+esc(e.description||'')+'</td><td>'+esc(e.counterparty||'')+'</td><td style="text-align:right;white-space:nowrap;font-weight:600;color:'+(inc?'var(--green)':'var(--red)')+'">'+(inc?'+':'−')+money(e.amount,e.currency).replace('-','')+'</td>'+
+        '<td>'+pill(e.status||(inc?'Received':'Paid'), done?'good':'warn')+'</td><td>'+(e.invoice_url?'<a href="'+esc(e.invoice_url)+'" target="_blank" rel="noopener" style="color:var(--brand)">View</a>':'<span class="wc-muted">—</span>')+'</td>'+
+        '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openFinanceEntry(\'\',\'\',\''+e.entry_id+'\')">Edit</button> <button class="btn btn-ghost btn-sm" onclick="deleteFinanceEntryClick(\''+e.entry_id+'\')">✕</button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+var FIN_DRAFT = null;
+function openFinanceEntry(projectId, type, entryId){
+  var e = entryId ? DB.financeEntries.filter(function(x){ return x.entry_id===entryId; })[0] : null;
+  FIN_DRAFT = e ? Object.assign({}, e) : {entry_id:'', project_id:projectId||'', type:type||'Expense', category:'', amount:'', currency:'NGN', entry_date:today10(), status:(type==='Income'?'Expected':'Paid'), counterparty:'', description:''};
+  drawFinanceEntry();
+}
+function drawFinanceEntry(){
+  var d = FIN_DRAFT, inc = d.type==='Income';
+  var cats = inc ? INCOME_CATS : EXPENSE_CATS;
+  var h = '<div class="wc-seg" style="margin-bottom:14px"><button class="'+(inc?'on':'')+'" onclick="setFinType(\'Income\')">Income</button><button class="'+(!inc?'on':'')+'" onclick="setFinType(\'Expense\')">Expenditure</button></div>'+
+    '<div class="wc-grid g2">'+fld('Project', sel('fe_proj', DB.projects.map(function(p){ return {value:p.project_id,label:p.name+(p.kind==='Client'?' (client)':'')}; }), d.project_id, '— company-wide (no project) —'))+
+    fld('Date', inp('fe_date', d.entry_date, 'date'))+'</div>'+
+    '<div class="wc-grid g2">'+fld('Category', sel('fe_cat', cats.concat(cats.indexOf(d.category)===-1&&d.category?[d.category]:[]), d.category, 'Choose…'))+fld('Status', sel('fe_status', inc?INCOME_STATUS:EXPENSE_STATUS, d.status))+'</div>'+
+    '<div class="wc-grid g2">'+fld('Amount', inp('fe_amt', d.amount, 'number', '0', ' step="0.01" min="0"'))+fld('Currency', sel('fe_cur', ['NGN','USD','GBP','EUR'], d.currency||'NGN'))+'</div>'+
+    fld(inc?'Paid by':'Paid to', inp('fe_cp', d.counterparty, 'text', inc?'Client / funder':'Vendor / person'))+fld('Description', inp('fe_desc', d.description))+
+    fld('Invoice / receipt (optional)', '<input type="file" id="fe_file" class="wc-input" accept=".pdf,.png,.jpg,.jpeg,.webp">'+(d.invoice_url?'<div class="wc-help">Current: <a href="'+esc(d.invoice_url)+'" target="_blank" rel="noopener">view</a> — choosing a new file replaces it.</div>':''), 'Saved to your Drive.')+
+    '<button class="btn btn-primary" id="fe_go" onclick="saveFinanceEntry()">'+(d.entry_id?'Save changes':'Add entry')+'</button>';
+  wcModal('fin', d.entry_id?'Edit entry':'New entry', h);
+}
+function readFinDraft(){
+  var d = FIN_DRAFT; d.project_id = val('fe_proj'); d.entry_date = val('fe_date'); d.category = val('fe_cat'); d.status = val('fe_status');
+  d.amount = val('fe_amt'); d.currency = val('fe_cur'); d.counterparty = val('fe_cp'); d.description = val('fe_desc');
+}
+function setFinType(t){ readFinDraft(); FIN_DRAFT.type = t; FIN_DRAFT.category = ''; FIN_DRAFT.status = t==='Income'?'Expected':'Paid'; drawFinanceEntry(); }
+function saveFinanceEntry(){
+  var fileEl = document.getElementById('fe_file'), file = fileEl && fileEl.files && fileEl.files[0];
+  readFinDraft(); var d = FIN_DRAFT;
+  if(!(Number(d.amount) > 0)) return wcToast('Enter an amount greater than zero.', true);
+  if(!d.entry_date) return wcToast('Pick the date.', true);
+  if(file && file.size > 6*1024*1024) return wcToast('That file is over 6 MB — please attach a smaller one.', true);
+  var b = document.getElementById('fe_go'); b.disabled = true; b.textContent = 'Saving…';
+  var payload = {project_id:d.project_id, type:d.type, category:d.category, amount:Number(d.amount), currency:d.currency, entry_date:d.entry_date, status:d.status, counterparty:d.counterparty, description:d.description, actor:CURRENT_USER};
+  var p = d.entry_id ? api('updateFinanceEntry', Object.assign({entry_id:d.entry_id}, payload)) : api('createFinanceEntry', payload);
+  p.then(function(res){
+    if(!res.ok){ b.disabled = false; b.textContent = 'Save'; return wcFail('Could not save', res); }
+    var id = d.entry_id || (res.entry && res.entry.entry_id);
+    var done = function(){ wcClose('fin'); refreshData().then(function(){ wcToast('Saved.'); }); };
+    if(!file) return done();
+    var rd = new FileReader();
+    rd.onload = function(){
+      api('uploadFinanceInvoice', {entry_id:id, file_name:file.name, mime_type:file.type||'application/octet-stream', data_base64:String(rd.result).split(',')[1]||''}).then(function(r2){
+        if(!r2.ok) wcFail('Saved, but the invoice upload failed', r2);
+        done();
+      });
+    };
+    rd.readAsDataURL(file);
+  });
+}
+function deleteFinanceEntryClick(id){
+  if(!confirm('Delete this finance entry?')) return;
+  api('deleteFinanceEntry', {entry_id:id}).then(function(res){
+    if(!res.ok) return wcFail('Could not delete', res);
+    DB.financeEntries = DB.financeEntries.filter(function(e){ return e.entry_id!==id; }); render();
+  });
+}
+
+function renderFinance(){
+  if(!isAdminUser()) return wcPage('<div class="empty">Finance is restricted to Admins.</div>');
+  var f = STATE.fin || (STATE.fin = {period:'All', type:'All', project:'', q:''});
+  var all = DB.financeEntries.slice();
+  var months = all.map(function(e){ return String(e.entry_date).slice(0,7); }).filter(function(m,i,a){ return m && a.indexOf(m)===i; }).sort().reverse();
+  var list = all.filter(function(e){
+    if(f.period!=='All' && String(e.entry_date).slice(0,7)!==f.period) return false;
+    if(f.type!=='All' && e.type!==f.type) return false;
+    if(f.project==='__none' && e.project_id) return false;
+    if(f.project && f.project!=='__none' && e.project_id!==f.project) return false;
+    if(f.q && [e.description,e.category,e.counterparty,entryProjectName(e)].join(' ').toLowerCase().indexOf(f.q.toLowerCase())===-1) return false;
+    return true;
+  }).sort(function(a,b){ return String(b.entry_date).localeCompare(String(a.entry_date)); });
+  var cur = 'NGN', main = list.filter(function(e){ return (e.currency||'NGN')===cur; });
+  var other = list.filter(function(e){ return (e.currency||'NGN')!==cur; });
+  var inc = sumEntries(main,'Income',true), exp = sumEntries(main,'Expense',true), recv = sumEntries(main,'Income') - inc, planned = sumEntries(main,'Expense') - exp;
+  var h = wcHead('Finance Dashboard', 'Every project lands here when it is created. Record income and expenditure against it, with dates and invoices.',
+    '<button class="btn btn-primary" onclick="openFinanceEntry(\'\',\'Income\')">+ Income</button><button class="btn btn-ghost" onclick="openFinanceEntry(\'\',\'Expense\')">+ Expenditure</button>');
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+
+    '<div class="card stat-card"><div class="stat-lbl">Income received</div><div class="stat-num" style="color:var(--green)">'+money(inc)+'</div><div class="stat-sub">'+money(recv)+' still expected</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Spent</div><div class="stat-num" style="color:var(--red)">'+money(exp)+'</div><div class="stat-sub">'+money(planned)+' planned</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Net cash</div><div class="stat-num">'+money(inc-exp)+'</div><div class="stat-sub '+(inc-exp<0?'bad':'good')+'">'+(inc-exp<0?'spending ahead of income':'in the green')+'</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Entries</div><div class="stat-num">'+list.length+'</div><div class="stat-sub">'+(other.length?other.length+' in other currencies (listed, not summed)':'in this view')+'</div></div></div>';
+
+  // per-project summary
+  var byProj = {};
+  main.forEach(function(e){ var k = e.project_id||'__none'; if(!byProj[k]) byProj[k] = {inc:0,exp:0,incAll:0,expAll:0}; var r = byProj[k], a = Number(e.amount)||0, done = ['Received','Paid'].indexOf(e.status)>-1;
+    if(e.type==='Income'){ r.incAll += a; if(done) r.inc += a; } else { r.expAll += a; if(done) r.exp += a; } });
+  var projRows = DB.projects.map(function(p){ return {p:p, r:byProj[p.project_id]||{inc:0,exp:0,incAll:0,expAll:0}}; });
+  h += '<div class="card" style="padding:16px 18px;margin-bottom:16px"><div class="card-h">By project</div><div class="wc-scroll"><table class="wc-table"><thead><tr><th>Project</th><th>Type</th><th style="text-align:right">Income (received / expected)</th><th style="text-align:right">Spent (paid / planned)</th><th style="text-align:right">Net</th><th></th></tr></thead><tbody>'+
+    (projRows.map(function(x){ return '<tr><td><b>'+esc(x.p.name)+'</b></td><td>'+pill(x.p.kind==='Client'?'Client':'Team', x.p.kind==='Client'?'info':'mute')+'</td><td style="text-align:right">'+money(x.r.inc)+' / '+money(x.r.incAll)+'</td><td style="text-align:right">'+money(x.r.exp)+' / '+money(x.r.expAll)+'</td><td style="text-align:right;font-weight:600">'+money(x.r.inc-x.r.exp)+'</td><td><button class="btn btn-ghost btn-sm" onclick="openProject(\''+x.p.project_id+'\',\'finance\')">Open</button></td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">No projects yet — create one and it appears here.</td></tr>')+
+    (byProj.__none ? '<tr><td><i>Company-wide (no project)</i></td><td></td><td style="text-align:right">'+money(byProj.__none.inc)+' / '+money(byProj.__none.incAll)+'</td><td style="text-align:right">'+money(byProj.__none.exp)+' / '+money(byProj.__none.expAll)+'</td><td style="text-align:right;font-weight:600">'+money(byProj.__none.inc-byProj.__none.exp)+'</td><td></td></tr>' : '')+'</tbody></table></div></div>';
+
+  // monthly bars
+  var mm = {}; main.forEach(function(e){ if(['Received','Paid'].indexOf(e.status)===-1) return; var m = String(e.entry_date).slice(0,7); if(!mm[m]) mm[m] = {i:0,e:0}; if(e.type==='Income') mm[m].i += Number(e.amount)||0; else mm[m].e += Number(e.amount)||0; });
+  var mk = Object.keys(mm).sort().slice(-6), mx = Math.max.apply(null, [1].concat(mk.map(function(k){ return Math.max(mm[k].i, mm[k].e); })));
+  if(mk.length) h += '<div class="card" style="padding:16px 18px;margin-bottom:16px"><div class="card-h">Cash by month <span class="wc-muted" style="font-weight:400">green income · red spend</span></div><div style="display:flex;gap:18px;align-items:flex-end;height:120px">'+
+    mk.map(function(k){ return '<div style="flex:1;text-align:center"><div style="display:flex;gap:4px;align-items:flex-end;height:96px;justify-content:center"><div title="Income '+money(mm[k].i)+'" style="width:40%;max-width:34px;background:var(--green);border-radius:5px 5px 0 0;height:'+Math.max(2,Math.round(mm[k].i/mx*96))+'px"></div><div title="Spend '+money(mm[k].e)+'" style="width:40%;max-width:34px;background:var(--red);border-radius:5px 5px 0 0;height:'+Math.max(2,Math.round(mm[k].e/mx*96))+'px"></div></div><div class="wc-muted" style="margin-top:4px">'+k+'</div></div>'; }).join('')+'</div></div>';
+
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><select class="wc-sel" style="width:auto" onchange="setFin(\'period\',this.value)">'+optionsHtml(['All'].concat(months), f.period)+'</select>'+
+    '<select class="wc-sel" style="width:auto" onchange="setFin(\'type\',this.value)">'+optionsHtml([{value:'All',label:'Income & expenditure'},{value:'Income',label:'Income only'},{value:'Expense',label:'Expenditure only'}], f.type)+'</select>'+
+    '<select class="wc-sel" style="width:auto" onchange="setFin(\'project\',this.value)"><option value="">All projects</option><option value="__none"'+(f.project==='__none'?' selected':'')+'>Company-wide</option>'+DB.projects.map(function(p){ return '<option value="'+p.project_id+'"'+(f.project===p.project_id?' selected':'')+'>'+esc(p.name)+'</option>'; }).join('')+'</select>'+
+    '<input class="wc-input" style="width:200px" placeholder="Search…" value="'+esc(f.q)+'" onchange="setFin(\'q\',this.value)"></div>';
+  h += financeTable(list, true);
+  return wcPage(h);
+}
+function setFin(k, v){ STATE.fin[k] = v; render(); }
+
+// ── Payroll — pulls salary + bank details from the Employee Directory ───
+function curMonth(){ return new Date().toISOString().slice(0,7); }
+function renderPayroll(){
+  if(!isAdminUser()) return wcPage('<div class="empty">Payroll is restricted to Admins.</div>');
+  if(!STATE.payrollMonth) STATE.payrollMonth = curMonth();
+  var m = STATE.payrollMonth;
+  var months = DB.payroll.map(function(p){ return p.month; }).filter(function(x,i,a){ return x && a.indexOf(x)===i; });
+  if(months.indexOf(curMonth())===-1) months.push(curMonth()); if(months.indexOf(m)===-1) months.push(m);
+  months.sort().reverse();
+  var items = DB.payroll.filter(function(p){ return p.month===m; });
+  var total = items.reduce(function(s,p){ return s+(Number(p.salary_amount)||0); },0);
+  var missingSalary = DB.team.filter(function(p){ return !(Number(p.salary_amount)>0); });
+  var missingBank = DB.team.filter(function(p){ return Number(p.salary_amount)>0 && !(p.account_number && p.bank_code); });
+  var inSync = items.filter(function(p){ var t = DB.team.filter(function(x){ return x.name===p.team_member_name; })[0]; return t && p.status!=='Paid' && (String(t.salary_amount)!==String(p.salary_amount) || String(t.account_number)!==String(p.account_number)); });
+  var h = wcHead('Payroll', 'This app <b>never moves money</b>. It prepares the run, verifies bank accounts with Paystack and gives you a bulk-transfer CSV to upload in your own Paystack dashboard.',
+    '<button class="btn btn-ghost" onclick="goTo(\'employees\')">Edit salaries in Employee Directory</button>');
+  h += '<div class="wc-note" style="margin-bottom:14px"><b>Where the data comes from:</b> each person’s salary and bank details are entered once in <a href="#" onclick="goTo(\'employees\');return false" style="color:var(--brand);font-weight:600">Employee Directory</a>. “Pull from directory” copies them into the month’s run; “Re-sync” refreshes unpaid rows after you edit the directory.</div>';
+  if(missingSalary.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>No salary set yet for:</b> '+missingSalary.map(function(p){ return esc(p.name); }).join(', ')+' — they will be skipped until you add it in the Employee Directory.</div>';
+  if(missingBank.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>Salary but no bank details:</b> '+missingBank.map(function(p){ return esc(p.name); }).join(', ')+'.</div>';
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+
+    '<div class="card stat-card"><div class="stat-lbl">Month total</div><div class="stat-num">'+money(total)+'</div><div class="stat-sub">'+items.length+' people</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Accounts verified</div><div class="stat-num">'+items.filter(function(p){ return p.account_verified==='yes'; }).length+' / '+items.length+'</div><div class="stat-sub '+(items.some(function(p){return p.account_verified!=='yes';})?'warn':'good')+'">needed before export</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Paid</div><div class="stat-num">'+items.filter(function(p){ return p.status==='Paid'; }).length+' / '+items.length+'</div><div class="stat-sub">marked after you transfer</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Next pay day</div><div class="stat-num">'+nextPayrollInfo().days+'d</div><div class="stat-sub">'+esc(fmtDate(nextPayrollInfo().due))+'</div></div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><select class="wc-sel" style="width:auto" onchange="setPayrollMonth(this.value)">'+optionsHtml(months, m)+'</select>'+
+    '<button class="btn btn-primary" onclick="pullPayroll()">Pull from directory</button>'+
+    '<button class="btn btn-ghost" onclick="syncPayroll()">Re-sync'+(inSync.length?' ('+inSync.length+' changed)':'')+'</button>'+
+    '<button class="btn btn-ghost" onclick="verifyAllPayroll()">Verify all accounts</button>'+
+    '<button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export Paystack CSV</button></div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Team member</th><th>Bank</th><th>Account</th><th>Verified as</th><th style="text-align:right">Salary</th><th>Status</th><th></th></tr></thead><tbody>'+
+    (items.map(function(p){ return '<tr><td><b>'+esc(p.team_member_name)+'</b></td><td>'+esc(p.bank_name||'—')+'</td><td>'+esc(p.account_number||'—')+'</td><td>'+(p.account_verified==='yes'?pill(p.account_name||'Verified','good'):pill('Not verified','warn'))+'</td>'+
+      '<td style="text-align:right">'+(p.status==='Paid'?money(p.salary_amount):'<input class="wc-input" type="number" style="width:120px;text-align:right;padding:4px 8px" value="'+(Number(p.salary_amount)||0)+'" onchange="savePayrollField(\''+p.payroll_id+'\',\'salary_amount\',this.value)">')+'</td>'+
+      '<td>'+pill(p.status, p.status==='Paid'?'good':'mute')+'</td><td style="white-space:nowrap">'+(p.status!=='Paid'?'<button class="btn btn-ghost btn-sm" onclick="verifyPayrollAcct(\''+p.payroll_id+'\')">Verify</button> <button class="btn btn-good btn-sm" onclick="markPayrollPaidClick(\''+p.payroll_id+'\')">Mark paid</button>':'')+'</td></tr>'; }).join('') ||
+      '<tr><td colspan="7" class="empty">No run for '+esc(m)+' yet. Press <b>Pull from directory</b> to create it from everyone’s salary details.</td></tr>')+'</tbody></table></div>';
+  return wcPage(h);
+}
+function setPayrollMonth(m){ STATE.payrollMonth = m; render(); }
+function pullPayroll(){
+  var m = STATE.payrollMonth;
+  api('generateMonthlyPayrollBatch', {month:m, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not pull payroll', res);
+    refreshData().then(function(){
+      var sk = res.skipped_no_salary; var skn = Array.isArray(sk) ? sk.length : (sk||0);
+      wcToast(res.created+' entries created for '+m+(skn?' · '+skn+' skipped (no salary in directory)':'')+(res.created===0&&!skn?' · already pulled':''));
+    });
+  });
+}
+function syncPayroll(){
+  api('syncPayrollFromTeam', {month:STATE.payrollMonth, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not re-sync', res); refreshData().then(function(){ wcToast(res.updated+' unpaid rows refreshed from the directory.'); }); });
+}
+function verifyPayrollAcct(id){
+  var p = DB.payroll.filter(function(x){ return x.payroll_id===id; })[0];
+  if(!p.account_number || !p.bank_code) return wcToast('Add this person’s bank and account number in the Employee Directory first.', true);
+  api('verifyPayrollAccount', {payroll_id:id, account_number:p.account_number, bank_code:p.bank_code}).then(function(res){
+    if(!res.ok) return wcFail('Verification failed', res);
+    p.account_verified = 'yes'; p.account_name = res.account_name; render(); wcToast('Verified: '+res.account_name);
+  });
+}
+function verifyAllPayroll(){
+  var todo = DB.payroll.filter(function(p){ return p.month===STATE.payrollMonth && p.status!=='Paid' && p.account_verified!=='yes' && p.account_number && p.bank_code; });
+  if(!todo.length) return wcToast('Nothing left to verify.');
+  var n = 0, bad = [];
+  (function next(i){
+    if(i>=todo.length){ refreshData().then(function(){ wcToast(n+' verified'+(bad.length?' · failed: '+bad.join(', '):''), bad.length>0); }); return; }
+    api('verifyPayrollAccount', {payroll_id:todo[i].payroll_id, account_number:todo[i].account_number, bank_code:todo[i].bank_code}).then(function(r){ if(r.ok) n++; else bad.push(todo[i].team_member_name); next(i+1); });
+  })(0);
+}
+function savePayrollField(id, field, value){
+  var payload = {payroll_id:id}; payload[field] = field==='salary_amount' ? Number(value)||0 : value;
+  api('updatePayrollEntry', payload).then(function(res){ if(!res.ok) return wcFail('Could not save', res); var p = DB.payroll.filter(function(x){ return x.payroll_id===id; })[0]; if(p) p[field] = payload[field]; render(); });
+}
+function markPayrollPaidClick(id){
+  if(!confirm('Mark this as paid? Only do this after you have actually transferred the salary in your Paystack dashboard.')) return;
+  api('markPayrollPaid', {payroll_id:id, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData(); });
+}
+function exportPayrollCsvClick(){
+  api('exportPayrollCsv', {month:STATE.payrollMonth}).then(function(res){
+    if(!res.ok) return wcFail('Could not export', res);
+    var blob = new Blob([res.csv], {type:'text/csv'}), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'wecollect-payroll-'+STATE.payrollMonth+'.csv'; document.body.appendChild(a); a.click(); a.remove();
+    wcToast('CSV for '+res.count+' people downloaded — upload it in Paystack → Transfers → Bulk.');
+  });
+}
+
+// ── Employee Directory (admin) — the single source for salary/bank/SOP role ─
+var BANKS = null, EMP_DRAFT = null;
+function renderEmployees(){
+  if(!isAdminUser()) return wcPage('<div class="empty">The Employee Directory is restricted to Admins.</div>');
+  var q = (STATE.empQ||'').toLowerCase();
+  var list = DB.team.filter(function(p){ return !q || [p.name,p.email,p.department,p.role,p.sop_role].join(' ').toLowerCase().indexOf(q)>-1; });
+  var h = wcHead('Employee Directory', 'Salary, bank and SOP-role details live here. Payroll reads salary and bank from this page; project roles read the SOP role.',
+    '<button class="btn btn-primary" onclick="openEmployee(\'\')">+ Add team member</button>');
+  h += '<div style="margin-bottom:12px"><input class="wc-input" style="max-width:320px" placeholder="Search people…" value="'+esc(STATE.empQ||'')+'" onchange="STATE.empQ=this.value;render()"></div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Name</th><th>Role · Dept</th><th>SOP role(s)</th><th>Systems</th><th>Phone</th><th style="text-align:right">Salary / month</th><th>Bank</th><th></th></tr></thead><tbody>'+
+    list.map(function(p){
+      var sal = Number(p.salary_amount)>0, bank = p.account_number && p.bank_code;
+      return '<tr><td><b>'+esc(p.name)+'</b><div class="wc-muted">'+esc(p.email)+'</div></td><td>'+esc(p.role||'')+'<div class="wc-muted">'+esc(p.department||'')+'</div></td><td>'+esc(String(p.sop_role||'—'))+'</td><td>'+esc(String(p.systems||'—'))+'</td><td>'+esc(p.phone||'—')+'</td>'+
+        '<td style="text-align:right">'+(sal?money(p.salary_amount):pill('Not set','warn'))+'</td><td>'+(bank?esc(p.bank_name||p.bank_code)+'<div class="wc-muted">'+esc(p.account_number)+'</div>':pill('Not set','warn'))+'</td>'+
+        '<td><button class="btn btn-ghost btn-sm" onclick="openEmployee(\''+esc(p.email)+'\')">Edit</button></td></tr>'; }).join('')+'</tbody></table></div>';
+  return wcPage(h);
+}
+function chipList(id, all, selected){ return all.map(function(v){ return '<span class="wc-chip'+(selected.indexOf(v)>-1?' on':'')+'" data-v="'+esc(v)+'" onclick="this.classList.toggle(\'on\')">'+esc(v)+'</span>'; }).join(''); }
+function chipVals(id){ return Array.prototype.slice.call(document.querySelectorAll('#'+id+' .wc-chip.on')).map(function(c){ return c.getAttribute('data-v'); }); }
+function openEmployee(email){
+  var p = email ? DB.team.filter(function(x){ return x.email===email; })[0] : {name:'',email:'',role:'Staff',department:'Operations'};
+  EMP_DRAFT = p;
+  var csv = function(v){ return String(v||'').split(',').map(function(x){ return x.trim(); }).filter(Boolean); };
+  var h = '<div class="wc-grid g2">'+fld('Full name', inp('em_name', p.name))+fld('Work email (their Google account)', inp('em_email', p.email, 'email', '', email?' readonly':''))+'</div>'+
+    '<div class="wc-grid g3">'+fld('Department', sel('em_dept',['Engineering','Operations','Growth','Leadership','Marketing','Finance'], p.department))+fld('Access role', sel('em_role',['Staff','Team Lead','Admin'], p.role||'Staff'), 'Admin sees finance, payroll and settings.')+fld('Slack Member ID', inp('em_slack', p.slack_handle, 'text', 'U01ABCDEF'), 'Profile → ⋯ → Copy member ID.')+'</div>'+
+    '<div class="wc-f"><label class="wc-lbl">SOP role(s) on client projects</label><div id="em_sop">'+chipList('em_sop', SOP_ROLE_LIST, csv(p.sop_role))+'</div><div class="wc-help">Pre-fills the role pickers when you create a client project.</div></div>'+
+    '<div class="wc-f"><label class="wc-lbl">Systems they own (bugs from UAT route to them)</label><div id="em_sys">'+chipList('em_sys', SOP_SYSTEMS, csv(p.systems))+'</div></div>'+
+    '<div class="wc-grid g3">'+fld('Phone', inp('em_phone', p.phone))+fld('Birthday', inp('em_bday', p.birthday, 'date'))+fld('Start date', inp('em_start', p.start_date, 'date'))+'</div>'+
+    '<div class="card-h" style="margin-top:6px">Pay</div><div class="wc-grid g2">'+fld('Monthly salary (₦)', inp('em_sal', p.salary_amount, 'number', '0'))+fld('Emergency contact', inp('em_emerg', p.emergency_contact))+'</div>'+
+    '<div class="wc-grid g3">'+fld('Bank', '<select class="wc-sel" id="em_bank" onchange="pickBank(this)"><option value="">'+(p.bank_name?esc(p.bank_name):'Choose bank…')+'</option></select>')+fld('Bank code', inp('em_bcode', p.bank_code, 'text', '058'))+fld('Account number', inp('em_acct', p.account_number))+'</div>'+
+    '<div class="wc-help" id="em_bankhelp" style="margin:-6px 0 10px"></div>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-primary" id="em_go" onclick="saveEmployee('+(email?'true':'false')+')">'+(email?'Save':'Add & send welcome')+'</button><button class="btn btn-ghost" onclick="wcClose(\'emp\')">Cancel</button></div>';
+  wcModal('emp', email?esc(p.name):'Add team member', h, true);
+  loadBanks(p.bank_code);
+}
+function loadBanks(cur){
+  var s = document.getElementById('em_bank'); if(!s) return;
+  var fill = function(){ s.innerHTML = '<option value="">Choose bank…</option>'+BANKS.map(function(b){ return '<option value="'+esc(b.code)+'" data-n="'+esc(b.name)+'"'+(String(b.code)===String(cur)?' selected':'')+'>'+esc(b.name)+'</option>'; }).join(''); };
+  if(BANKS) return fill();
+  api('listPaystackBanks', {}).then(function(res){
+    if(res.ok && res.banks){ BANKS = res.banks; fill(); }
+    else { var hp = document.getElementById('em_bankhelp'); if(hp) hp.textContent = 'Bank list unavailable ('+((res&&res.error)||'no Paystack key')+') — type the bank name and Paystack bank code by hand.'; var f = document.getElementById('em_bank'); if(f) f.outerHTML = inp('em_bname', (EMP_DRAFT||{}).bank_name, 'text', 'Bank name'); }
+  });
+}
+function pickBank(s){ var o = s.options[s.selectedIndex]; document.getElementById('em_bcode').value = o.value; }
+function saveEmployee(isEdit){
+  var payload = {name:val('em_name').trim(), email:val('em_email').trim(), department:val('em_dept'), role:val('em_role'), slack_handle:val('em_slack').trim(),
+    sop_role:chipVals('em_sop').join(', '), systems:chipVals('em_sys').join(', '), phone:val('em_phone'), birthday:val('em_bday'), start_date:val('em_start'),
+    salary_amount:Number(val('em_sal'))||'', emergency_contact:val('em_emerg'), bank_code:val('em_bcode'), account_number:val('em_acct'), actor:CURRENT_USER};
+  var bs = document.getElementById('em_bank'); var bname = bs ? (bs.selectedIndex>0 ? bs.options[bs.selectedIndex].getAttribute('data-n') : (EMP_DRAFT||{}).bank_name) : val('em_bname');
+  payload.bank_name = bname || '';
+  var old = EMP_DRAFT||{}; if(String(old.account_number||'')!==String(payload.account_number) || String(old.bank_code||'')!==String(payload.bank_code)) payload.account_name = '';
+  if(!payload.name || !payload.email) return wcToast('Name and email are required.', true);
+  if(isEdit) payload.quiet = true;
+  var b = document.getElementById('em_go'); b.disabled = true;
+  api(isEdit?'updateTeamMember':'createTeamMember', payload).then(function(res){
+    b.disabled = false;
+    if(!res.ok) return wcFail('Could not save', res);
+    wcClose('emp'); refreshData().then(function(){
+      var m = '';
+      if(!isEdit) m = ' · welcome email '+(res.email_status&&res.email_status.ok?'sent':'not sent')+', Slack DM '+(res.slack_status&&res.slack_status.ok?'sent':'not sent'+(res.slack_status&&res.slack_status.error?' ('+res.slack_status.error+')':''));
+      wcToast(payload.name+(isEdit?' updated.':' added')+m, !isEdit && !(res.slack_status&&res.slack_status.ok) && false);
+    });
+  });
+}
+
+// ── Team Directory (everyone) + my own profile ──────────────────────────
+function renderTeamSpaces(){
+  var q = (STATE.teamQ||'').toLowerCase();
+  var list = DB.team.filter(function(p){ return !q || [p.name,p.department,p.role,p.sop_role,p.systems].join(' ').toLowerCase().indexOf(q)>-1; });
+  var h = wcHead('Team Directory', 'Everyone at WeCollect. Book a meeting with anyone, and keep your own details up to date.',
+    '<button class="btn btn-ghost" onclick="openMyProfile()">My profile</button>'+(isAdminUser()?'<button class="btn btn-primary" onclick="openEmployee(\'\')">+ Add team member</button>':''));
+  h += '<div style="margin-bottom:12px"><input class="wc-input" style="max-width:320px" placeholder="Search people, roles, systems…" value="'+esc(STATE.teamQ||'')+'" onchange="STATE.teamQ=this.value;render()"></div><div class="wc-grid g3">';
+  h += list.map(function(p){
+    var open = DB.tickets.filter(function(t){ return t.owner===p.name && t.status!=='Done'; }).length, td = today10();
+    var out = (DB.timeOff||[]).some(function(l){ return l.team_member_name===p.name && l.start_date<=td && l.end_date>=td; });
+    return '<div class="card" style="padding:16px 18px"><div style="display:flex;gap:12px;align-items:center;margin-bottom:10px"><div class="avatar" style="width:40px;height:40px;font-size:14px;background:var(--brand-bg);color:var(--brand)">'+esc(initials(p.name))+'</div><div style="min-width:0"><div class="disp" style="font-weight:600;font-size:15px">'+esc(p.name)+'</div><div class="wc-muted">'+esc(p.role||'')+(p.department?' · '+esc(p.department):'')+'</div></div>'+(out?'<span style="margin-left:auto">'+pill('Out today','warn')+'</span>':'')+'</div>'+
+      (p.sop_role?'<div style="font-size:12.5px;margin-bottom:4px"><span class="wc-muted">SOP:</span> '+esc(p.sop_role)+'</div>':'')+(p.systems?'<div style="font-size:12.5px;margin-bottom:4px"><span class="wc-muted">Systems:</span> '+esc(p.systems)+'</div>':'')+
+      '<div style="font-size:12.5px;margin-bottom:10px" class="wc-muted">'+open+' open ticket'+(open===1?'':'s')+(p.phone?' · '+esc(p.phone):'')+'</div>'+
+      '<button class="btn btn-ghost btn-sm" onclick="scheduleMeetingWith(\''+esc(p.name)+'\')">Book a meeting</button></div>';
+  }).join('')+'</div>';
+  return wcPage(h);
+}
+function openMyProfile(){
+  var p = DB.team.filter(function(x){ return x.name===CURRENT_USER; })[0] || {};
+  var h = '<div class="wc-note" style="margin-bottom:12px">You can keep your contact, birthday and bank details current. Your salary, role and department are set by an admin.</div>'+
+    '<div class="wc-grid g2">'+fld('Phone', inp('mp_phone', p.phone))+fld('Birthday', inp('mp_bday', p.birthday, 'date'))+'</div>'+fld('Hobbies', inp('mp_hob', p.hobbies))+fld('Emergency contact', inp('mp_emerg', p.emergency_contact))+fld('Slack Member ID', inp('mp_slack', p.slack_handle))+
+    '<div class="card-h">Bank details (for payroll)</div><div class="wc-grid g3">'+fld('Bank', '<select class="wc-sel" id="em_bank" onchange="pickBankMine(this)"><option value="">'+(p.bank_name?esc(p.bank_name):'Choose bank…')+'</option></select>')+fld('Bank code', inp('mp_bcode', p.bank_code))+fld('Account number', inp('mp_acct', p.account_number))+'</div><div class="wc-help" id="em_bankhelp"></div>'+
+    '<button class="btn btn-primary" onclick="saveMyProfileClick()">Save</button>';
+  wcModal('myprof','My profile', h);
+  EMP_DRAFT = p; loadBanks(p.bank_code);
+}
+function pickBankMine(s){ var o = s.options[s.selectedIndex]; document.getElementById('mp_bcode').value = o.value; STATE._myBank = o.getAttribute('data-n')||''; }
+function saveMyProfileClick(){
+  var p = DB.team.filter(function(x){ return x.name===CURRENT_USER; })[0] || {};
+  var payload = {phone:val('mp_phone'), birthday:val('mp_bday'), hobbies:val('mp_hob'), emergency_contact:val('mp_emerg'), slack_handle:val('mp_slack'), bank_code:val('mp_bcode'), account_number:val('mp_acct'), bank_name:STATE._myBank || p.bank_name || '', actor:CURRENT_USER};
+  if(String(p.account_number||'')!==String(payload.account_number) || String(p.bank_code||'')!==String(payload.bank_code)) payload.account_name = '';
+  api('saveMyProfile', payload).then(function(res){ if(!res.ok) return wcFail('Could not save', res); wcClose('myprof'); STATE._myBank = ''; refreshData().then(function(){ wcToast('Profile saved.'); }); });
+}
+
+// ── Leave: requests, approvals (requester notified), time-off summary ───
+function leaveWhen(l){
+  if(l.unit==='hours') return l.start_date+' '+(l.start_time||'')+'–'+(l.end_time||'')+(l.hours?' ('+l.hours+'h)':'');
+  return l.start_date + (l.end_date && l.end_date!==l.start_date ? ' → '+l.end_date : '');
+}
+function leaveDays(l){
+  if(l.unit==='hours') return Number(l.hours)||0;   // hours, reported separately
+  var a = new Date(l.start_date), b = new Date(l.end_date||l.start_date), n = 0;
+  for(var d = new Date(a); d <= b; d.setDate(d.getDate()+1)){ var w = d.getDay(); if(w!==0 && w!==6) n++; }
+  return n;
+}
+function leaveTone(s){ return s==='Approved'?'good':(s==='Declined'?'bad':(s==='Cancelled'?'mute':'warn')); }
+function renderLeave(){
+  var admin = isAdminUser(), tab = STATE.leaveTab || (admin ? 'approvals' : 'mine');
+  if(!admin && (tab==='approvals' || tab==='summary')) tab = STATE.leaveTab = 'mine';
+  var pending = DB.leave.filter(function(l){ return l.status==='Pending' && l.team_member_name!==CURRENT_USER; });
+  var tabs = (admin ? [['approvals','Approvals',pending.length],['summary','Time-off summary',0]] : []).concat([['mine','My requests',0],['out','Who\'s out',0]]);
+  var h = wcHead('Leave', admin?'See what the team has asked for, approve or decline — they are notified on Slack straight away.':'Request time off and see who else is away.', '<button class="btn btn-primary" onclick="openRequestLeave()">Request time off</button>');
+  h += '<div class="wc-tabs">'+tabs.map(function(t){ return '<div class="wc-tab'+(tab===t[0]?' on':'')+'" onclick="STATE.leaveTab=\''+t[0]+'\';render()">'+t[1]+(t[2]?'<span class="n">'+t[2]+'</span>':'')+'</div>'; }).join('')+'</div>';
+  if(tab==='approvals') h += leaveApprovals();
+  else if(tab==='summary') h += leaveSummary();
+  else if(tab==='out') h += leaveOut();
+  else h += leaveMine();
+  return wcPage(h);
+}
+function leaveApprovals(){
+  var f = STATE.leaveFilter || 'Pending';
+  var list = DB.leave.filter(function(l){ return f==='All' || l.status===f; }).sort(function(a,b){ return String(b.created_at).localeCompare(String(a.created_at)); });
+  var h = '<div class="wc-seg" style="margin-bottom:12px">'+['Pending','Approved','Declined','All'].map(function(s){ return '<button class="'+(f===s?'on':'')+'" onclick="STATE.leaveFilter=\''+s+'\';render()">'+s+'</button>'; }).join('')+'</div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Team member</th><th>Type</th><th>When</th><th>Length</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>'+
+    (list.map(function(l){
+      var mine = l.team_member_name===CURRENT_USER;
+      return '<tr><td><b>'+esc(l.team_member_name)+'</b></td><td>'+esc(l.type)+'</td><td>'+esc(leaveWhen(l))+'</td><td>'+(l.unit==='hours'?(l.hours||'')+' h':leaveDays(l)+' day'+(leaveDays(l)===1?'':'s'))+'</td><td style="max-width:240px">'+esc(l.reason||'—')+'</td>'+
+        '<td>'+pill(l.status, leaveTone(l.status))+(l.approved_by&&l.status!=='Pending'?'<div class="wc-muted">by '+esc(l.approved_by)+'</div>':'')+(l.decision_note?'<div class="wc-muted">“'+esc(l.decision_note)+'”</div>':'')+'</td>'+
+        '<td style="white-space:nowrap">'+(l.status==='Pending'&&!mine?'<button class="btn btn-good btn-sm" onclick="decideLeaveClick(\''+l.leave_id+'\',\'Approved\')">Approve</button> <button class="btn btn-danger btn-sm" onclick="decideLeaveClick(\''+l.leave_id+'\',\'Declined\')">Decline</button>':(l.status==='Pending'?'<span class="wc-muted">your own request</span>':''))+'</td></tr>'; }).join('') ||
+      '<tr><td colspan="7" class="empty">Nothing '+(f==='All'?'':f.toLowerCase()+' ')+'right now.</td></tr>')+'</tbody></table></div>';
+  return h;
+}
+function decideLeaveClick(id, status){
+  var note = '';
+  if(status==='Declined'){ note = prompt('Optional note to send with the decline (why / alternative dates):', ''); if(note===null) return; }
+  api('decideLeave', {leave_id:id, status:status, decision_note:note, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not update', res);
+    var l = DB.leave.filter(function(x){ return x.leave_id===id; })[0]; if(l){ l.status = status; l.approved_by = CURRENT_USER; l.decision_note = note; }
+    refreshData().then(function(){ wcToast(status+' — '+(l?l.team_member_name:'they')+' has been notified on Slack.'); });
+  });
+}
+function leaveMine(){
+  var mine = DB.leave.filter(function(l){ return l.team_member_name===CURRENT_USER; }).sort(function(a,b){ return String(b.created_at).localeCompare(String(a.created_at)); });
+  var yr = String(new Date().getFullYear()), allow = Number((DB.config||{}).leave_annual_days || 20);
+  var used = mine.filter(function(l){ return l.status==='Approved' && l.unit!=='hours' && String(l.start_date).slice(0,4)===yr && /annual/i.test(l.type); }).reduce(function(s,l){ return s+leaveDays(l); },0);
+  var h = '<div class="wc-grid g3" style="margin-bottom:14px"><div class="card stat-card"><div class="stat-lbl">Annual leave used</div><div class="stat-num">'+used+' / '+allow+'</div><div class="stat-sub">working days in '+yr+'</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Pending</div><div class="stat-num">'+mine.filter(function(l){return l.status==='Pending';}).length+'</div><div class="stat-sub">awaiting a decision</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Approved</div><div class="stat-num">'+mine.filter(function(l){return l.status==='Approved';}).length+'</div><div class="stat-sub">this year and upcoming</div></div></div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Type</th><th>When</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>'+
+    (mine.map(function(l){ return '<tr><td>'+esc(l.type)+'</td><td>'+esc(leaveWhen(l))+'</td><td>'+esc(l.reason||'—')+'</td><td>'+pill(l.status, leaveTone(l.status))+(l.decision_note?'<div class="wc-muted">“'+esc(l.decision_note)+'”</div>':'')+'</td><td>'+(l.status==='Pending'||(l.status==='Approved'&&l.end_date>=today10())?'<button class="btn btn-ghost btn-sm" onclick="cancelLeaveClick(\''+l.leave_id+'\')">Cancel</button>':'')+'</td></tr>'; }).join('') || '<tr><td colspan="5" class="empty">You have not requested any time off yet.</td></tr>')+'</tbody></table></div>';
+  return h;
+}
+function cancelLeaveClick(id){
+  if(!confirm('Cancel this request?')) return;
+  api('cancelLeave', {leave_id:id, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not cancel', res); refreshData(); });
+}
+function leaveOut(){
+  var td = today10(), list = (DB.timeOff||[]).filter(function(l){ return l.end_date >= td; }).sort(function(a,b){ return a.start_date.localeCompare(b.start_date); });
+  return '<div class="card" style="padding:6px 18px">'+(list.map(function(l){ var now = l.start_date<=td; return '<div class="wc-row"><b style="width:140px">'+esc(l.team_member_name)+'</b><span style="flex:1">'+esc(leaveWhen(l))+'</span>'+(now?pill('Out now','warn'):pill('Upcoming','info'))+'</div>'; }).join('') || '<div class="empty">Nobody has approved time off coming up.</div>')+'</div>';
+}
+// per-employee summary: days taken, by type, upcoming, pending
+function leaveSummary(){
+  var yr = STATE.leaveYear || String(new Date().getFullYear()), td = today10();
+  var years = [String(new Date().getFullYear()-1), String(new Date().getFullYear()), String(new Date().getFullYear()+1)];
+  var allow = Number((DB.config||{}).leave_annual_days || 20);
+  var types = DB.leave.map(function(l){ return l.type; }).filter(function(x,i,a){ return x && a.indexOf(x)===i; });
+  var rows = DB.team.map(function(p){
+    var ls = DB.leave.filter(function(l){ return l.team_member_name===p.name && String(l.start_date).slice(0,4)===yr; });
+    var appr = ls.filter(function(l){ return l.status==='Approved'; });
+    var byType = {}; appr.forEach(function(l){ var k = l.type; byType[k] = (byType[k]||{d:0,h:0}); if(l.unit==='hours') byType[k].h += leaveDays(l); else byType[k].d += leaveDays(l); });
+    var days = appr.filter(function(l){ return l.unit!=='hours'; }).reduce(function(s,l){ return s+leaveDays(l); },0), hrs = appr.filter(function(l){ return l.unit==='hours'; }).reduce(function(s,l){ return s+leaveDays(l); },0);
+    var annual = (byType['Annual leave']||{d:0}).d;
+    var next = DB.leave.filter(function(l){ return l.team_member_name===p.name && l.status==='Approved' && l.end_date>=td; }).sort(function(a,b){ return a.start_date.localeCompare(b.start_date); })[0];
+    return {p:p, byType:byType, days:days, hrs:hrs, annual:annual, pending:ls.filter(function(l){return l.status==='Pending';}).length, declined:ls.filter(function(l){return l.status==='Declined';}).length, next:next};
+  });
+  var h = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><div class="wc-seg">'+years.map(function(y){ return '<button class="'+(yr===y?'on':'')+'" onclick="STATE.leaveYear=\''+y+'\';render()">'+y+'</button>'; }).join('')+'</div><span class="wc-muted">Approved time off per person · annual allowance '+allow+' days (change in Settings → Leave)</span></div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Employee</th><th style="text-align:right">Days taken</th><th style="text-align:right">Hours</th>'+types.map(function(t){ return '<th style="text-align:right">'+esc(t)+'</th>'; }).join('')+'<th>Annual leave used</th><th>Pending</th><th>Next time off</th></tr></thead><tbody>'+
+    rows.map(function(r){ var pct = Math.min(100, Math.round(r.annual/allow*100));
+      return '<tr><td><b>'+esc(r.p.name)+'</b><div class="wc-muted">'+esc(r.p.department||'')+'</div></td><td style="text-align:right;font-weight:600">'+r.days+'</td><td style="text-align:right">'+(r.hrs||'—')+'</td>'+types.map(function(t){ var b = r.byType[t]; return '<td style="text-align:right">'+(b?(b.d?b.d+'d':'')+(b.h?(b.d?' + ':'')+b.h+'h':''):'—')+'</td>'; }).join('')+
+        '<td style="min-width:150px"><div class="wc-bar'+(pct>=100?' bad':'')+'"><i style="width:'+pct+'%"></i></div><div class="wc-muted">'+r.annual+' / '+allow+' days</div></td><td>'+(r.pending?pill(r.pending+' pending','warn'):'—')+'</td><td>'+(r.next?esc(leaveWhen(r.next))+'<div class="wc-muted">'+esc(r.next.type)+'</div>':'—')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  return h;
+}
+function openRequestLeave(){
+  var h = fld('Type', sel('lv_type', ['Annual leave','Sick leave','Personal / permission','Maternity / paternity','Study leave','Unpaid leave'], 'Annual leave'))+
+    '<div class="wc-seg" style="margin-bottom:12px"><button id="lv_u_d" class="on" onclick="setLeaveUnit(\'days\')">Full days</button><button id="lv_u_h" onclick="setLeaveUnit(\'hours\')">A few hours</button></div>'+
+    '<div class="wc-grid g2">'+fld('From', inp('lv_start', today10(), 'date'))+'<div id="lv_endwrap">'+fld('To', inp('lv_end', today10(), 'date'))+'</div></div>'+
+    '<div class="wc-grid g2 hidden" id="lv_times">'+fld('Start time', inp('lv_st','09:00','time'))+fld('End time', inp('lv_et','13:00','time'))+'</div>'+
+    fld('Reason', ta('lv_reason','', 'Optional — only admins see this', 2))+'<button class="btn btn-primary" id="lv_go" onclick="saveLeaveRequest()">Send request</button>';
+  wcModal('leave','Request time off', h); STATE._lvUnit = 'days';
+}
+function setLeaveUnit(u){
+  STATE._lvUnit = u;
+  document.getElementById('lv_u_d').classList.toggle('on', u==='days'); document.getElementById('lv_u_h').classList.toggle('on', u==='hours');
+  document.getElementById('lv_endwrap').classList.toggle('hidden', u==='hours'); document.getElementById('lv_times').classList.toggle('hidden', u!=='hours');
+}
+function saveLeaveRequest(){
+  var u = STATE._lvUnit || 'days';
+  var payload = {type:val('lv_type'), unit:u, start_date:val('lv_start'), end_date:u==='days'?val('lv_end'):val('lv_start'), reason:val('lv_reason'), actor:CURRENT_USER};
+  if(u==='hours'){ payload.start_time = val('lv_st'); payload.end_time = val('lv_et'); }
+  var b = document.getElementById('lv_go'); b.disabled = true;
+  api('requestLeave', payload).then(function(res){
+    b.disabled = false;
+    if(!res.ok) return wcFail('Could not send', res);
+    wcClose('leave'); STATE.leaveTab = isAdminUser() ? 'mine' : 'mine';
+    refreshData().then(function(){ wcToast('Request sent — admins have been notified.'); if(STATE.module!=='leave') goTo('leave'); });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  UAT — guided runs: walk every check; a Fail becomes an engineering bug
+// ═══════════════════════════════════════════════════════════════════════
+var UAT = {run:null, idx:0};
+function uatRunItems(runId){ return (DB.uatRunItems||[]).filter(function(i){ return i.run_id===runId; }).sort(function(a,b){ return Number(a.seq)-Number(b.seq); }); }
+function uatActiveRun(){ return (DB.uatRuns||[]).filter(function(r){ return r.status==='In progress'; })[0]; }
+function uatModules(){ return bpUniq(DB.testCases.map(function(t){ return t.module; })); }
+function resTone(r){ return r==='Pass'?'good':(r==='Fail'?'bad':(r==='Blocked'?'warn':'mute')); }
+
+function renderUat(){
+  var tab = STATE.uatTab || 'run';
+  if(UAT.run && tab==='run' && (DB.uatRuns||[]).some(function(r){ return r.run_id===UAT.run; })) return wcPage(uatRunnerHtml());
+  var h = wcHead('UAT / QA Tracker', 'Walk through the checks one by one. If something does not work, say what happened — it becomes a bug on the Engineering Board, assigned to the owner of that system.');
+  h += '<div class="wc-tabs">'+[['run','Run checks'],['history','Run history'],['library','Test library ('+DB.testCases.length+')']].map(function(t){ return '<div class="wc-tab'+(tab===t[0]?' on':'')+'" onclick="STATE.uatTab=\''+t[0]+'\';render()">'+t[1]+'</div>'; }).join('')+'</div>';
+  h += tab==='history' ? uatHistoryHtml() : (tab==='library' ? uatLibraryHtml() : uatStartHtml());
+  return wcPage(h);
+}
+function uatStartHtml(){
+  var active = uatActiveRun(), mods = uatModules(), ut = uatStats();
+  var h = '';
+  if(active){
+    var its = uatRunItems(active.run_id), done = its.filter(function(i){ return i.result; }).length;
+    h += '<div class="card" style="padding:16px 20px;margin-bottom:16px;border-color:var(--brand)"><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div class="disp" style="font-weight:600">'+esc(active.title)+'</div><div class="wc-muted">Started by '+esc(active.tester)+' · '+done+' of '+its.length+' checked</div><div class="wc-bar" style="margin-top:8px"><i style="width:'+(its.length?Math.round(done/its.length*100):0)+'%"></i></div></div><button class="btn btn-primary" onclick="resumeUat(\''+active.run_id+'\')">Resume run</button></div></div>';
+  }
+  if(!DB.testCases.length){
+    return h+'<div class="card" style="padding:24px;text-align:center"><div class="disp" style="font-size:16px;font-weight:600;margin-bottom:6px">The UAT library is empty</div><div class="wc-muted" style="margin-bottom:14px">Load the WeCollect UAT tracker checks (Mobile App, PMD, OTG and Super Admin flows) to start testing.</div><button class="btn btn-primary" onclick="seedUat()">Load the WeCollect UAT checks</button></div>';
+  }
+  var failed = DB.testCases.filter(function(t){ return t.result==='Fail'; }).length, untested = DB.testCases.filter(function(t){ return !t.result; }).length;
+  h += '<div class="wc-grid g3" style="margin-bottom:16px"><div class="card stat-card"><div class="stat-lbl">Pass rate</div><div class="stat-num">'+ut.rate+'%</div><div class="stat-sub">'+ut.from+'</div></div><div class="card stat-card"><div class="stat-lbl">Failing now</div><div class="stat-num" style="color:'+(failed?'var(--red)':'inherit')+'">'+failed+'</div><div class="stat-sub">bugs open on the board</div></div><div class="card stat-card"><div class="stat-lbl">Never tested</div><div class="stat-num">'+untested+'</div><div class="stat-sub">of '+DB.testCases.length+' checks</div></div></div>';
+  h += '<div class="card" style="padding:18px 20px"><div class="card-h">Start a new run</div><div class="wc-grid g3">'+
+    fld('Module / system', sel('ur_mod', mods, 'All', 'All modules'))+fld('Which checks', sel('ur_only',[{value:'',label:'All checks in the module'},{value:'untested',label:'Only never-tested'},{value:'failed',label:'Only previously failed (re-test)'}],''))+fld('Run name', inp('ur_title','', 'text', 'e.g. Release 2.4 smoke test'))+'</div>'+
+    '<button class="btn btn-primary" onclick="startUat()">Start guided run</button></div>';
+  return h;
+}
+function seedUat(){
+  api('seedUatLibrary', {actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not load', res); refreshData().then(function(){ wcToast((res.added!==undefined?res.added:'')+' checks loaded.'); }); });
+}
+function startUat(){
+  var mod = val('ur_mod') || 'All';
+  api('startUatRun', {module:mod, only:val('ur_only'), title:val('ur_title'), actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not start', res);
+    refreshData(false).then(function(){ UAT.run = res.run.run_id; UAT.idx = 0; render(); });
+  });
+}
+function resumeUat(id){ UAT.run = id; var its = uatRunItems(id); var n = its.findIndex(function(i){ return !i.result; }); UAT.idx = n<0 ? 0 : n; render(); }
+function leaveUat(){ UAT.run = null; render(); }
+function uatRunnerHtml(){
+  var run = DB.uatRuns.filter(function(r){ return r.run_id===UAT.run; })[0], its = uatRunItems(run.run_id);
+  if(run.status!=='In progress') return uatSummaryHtml(run, its);
+  if(UAT.idx >= its.length) UAT.idx = its.length-1; if(UAT.idx < 0) UAT.idx = 0;
+  var it = its[UAT.idx], done = its.filter(function(i){ return i.result; }).length, hasRes = !!it.result;
+  var steps = String(it.steps||'').split(/\r?\n/).map(function(s){ return s.replace(/^\s*\d+[\.\)]\s*/,'').trim(); }).filter(Boolean);
+  var h = '<a href="#" onclick="leaveUat();return false" style="font-size:12.5px;color:var(--brand);font-weight:600">← Leave run (progress is saved)</a>';
+  h += wcHead(esc(run.title), 'Check '+(UAT.idx+1)+' of '+its.length+' · '+done+' recorded', '<button class="btn btn-ghost" onclick="finishUatClick(\''+run.run_id+'\')">Finish run</button>');
+  h += '<div class="wc-bar" style="margin-bottom:16px"><i style="width:'+Math.round(done/its.length*100)+'%"></i></div>';
+  h += '<div class="wc-grid" style="grid-template-columns:minmax(0,1fr) 230px;align-items:start" id="uatGrid"><div>';
+  h += '<div class="uat-case"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+pill(it.module,'info')+(it.flow?pill(it.flow,'mute'):'')+pill((it.priority||'Medium')+' priority', it.priority==='High'||it.priority==='Urgent'?'bad':'warn')+(it.result?pill('Recorded: '+it.result, resTone(it.result)):'')+'</div>'+
+    '<div class="disp" style="font-size:18px;font-weight:600;margin-bottom:12px">'+esc(it.test_case||it.flow)+'</div>'+
+    '<div class="wc-lbl">Do this</div>'+(steps.length?'<ol>'+steps.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join('')+'</ol>':'<div class="wc-muted">No steps listed.</div>')+
+    '<div class="wc-lbl" style="margin-top:14px">You should see</div><div class="wc-note good">'+esc(it.expected_result||'—')+'</div>'+
+    '<div class="wc-lbl" style="margin-top:16px">Result</div><div style="display:flex;gap:8px;flex-wrap:wrap" id="uatBtns">'+
+    [['Pass','pass','✓ Works'],['Fail','fail','✕ Doesn’t work'],['Blocked','block','⛔ Blocked'],['Skipped','skip','Skip']].map(function(b){ return '<button class="res-btn '+b[1]+(it.result===b[0]?' on':'')+'" onclick="uatPick(\''+b[0]+'\')">'+b[2]+'</button>'; }).join('')+'</div>'+
+    '<div id="uatFail" class="hidden" style="margin-top:14px"><div class="wc-note bad" style="margin-bottom:10px" id="uatFailHint"></div>'+fld('What actually happened? <span style="color:var(--red)">*</span>', ta('uat_notes', it.actual_notes, 'Describe exactly what you saw, what you tapped, and any error text.', 3))+fld('Screenshot / recording link (optional)', inp('uat_ev', it.evidence_url, 'url', 'https://…'))+
+    '<button class="btn btn-primary" id="uatSave" onclick="uatSave()">Record &amp; create bug</button></div>'+
+    (it.ticket_id?'<div class="wc-note" style="margin-top:12px">Bug <b>'+esc(it.ticket_id)+'</b> is on the Engineering Board'+(hasRes?'':'')+'. <a href="#" onclick="openTicketDetail(\''+esc(it.ticket_id)+'\');return false" style="color:var(--brand);font-weight:600">Open it</a></div>':'')+
+    '<div style="display:flex;justify-content:space-between;margin-top:18px"><button class="btn btn-ghost" '+(UAT.idx===0?'disabled':'')+' onclick="uatGo(-1)">← Previous</button><button class="btn btn-ghost" '+(UAT.idx>=its.length-1?'disabled':'')+' onclick="uatGo(1)">Next →</button></div></div></div>';
+  h += '<div class="card" style="padding:12px 14px;max-height:520px;overflow:auto"><div class="wc-lbl">All checks</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+its.map(function(i, n){
+    var c = i.result==='Pass'?'var(--green)':(i.result==='Fail'?'var(--red)':(i.result==='Blocked'?'var(--amber)':(i.result==='Skipped'?'var(--text-faint)':'#fff')));
+    return '<span title="'+esc(i.test_case)+'" onclick="UAT.idx='+n+';render()" style="width:30px;height:30px;border-radius:8px;border:1.5px solid '+(n===UAT.idx?'var(--brand)':'var(--line)')+';display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;background:'+c+';color:'+(i.result?'#fff':'var(--text-dim)')+'">'+(n+1)+'</span>'; }).join('')+'</div></div>';
+  h += '</div>';
+  return h;
+}
+function uatGo(d){ UAT.idx += d; render(); }
+function uatPick(result){
+  var run = DB.uatRuns.filter(function(r){ return r.run_id===UAT.run; })[0], it = uatRunItems(run.run_id)[UAT.idx];
+  if(result==='Pass' || result==='Skipped') return uatRecord(it, result, '', '');
+  var box = document.getElementById('uatFail'); box.classList.remove('hidden');
+  document.getElementById('uatFail').setAttribute('data-result', result);
+  document.getElementById('uatFailHint').textContent = result==='Fail' ? 'This will be recorded as a failure and a Bug ticket is created automatically for the engineer who owns “'+it.module+'”.' : 'Say what is stopping you from running this check — it is logged on the run and the owner is told.';
+  document.getElementById('uatSave').textContent = result==='Fail' ? 'Record failure & create bug' : 'Record as blocked';
+  document.querySelectorAll('#uatBtns .res-btn').forEach(function(b){ b.classList.remove('on'); });
+  document.getElementById('uat_notes').focus();
+}
+function uatSave(){
+  var run = DB.uatRuns.filter(function(r){ return r.run_id===UAT.run; })[0], it = uatRunItems(run.run_id)[UAT.idx];
+  var result = document.getElementById('uatFail').getAttribute('data-result') || 'Fail';
+  var notes = val('uat_notes').trim();
+  if(!notes) return wcToast(result==='Fail' ? 'Describe what actually happened so engineering can fix it.' : 'Say what is blocking this check.', true);
+  uatRecord(it, result, notes, val('uat_ev'));
+}
+function uatRecord(it, result, notes, ev){
+  api('recordUatRunItem', {item_id:it.item_id, result:result, actual_notes:notes, evidence_url:ev, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not record', res);
+    refreshData(false).then(function(){
+      if(res.bug_created) wcToast('Bug '+res.ticket_id+' created'+(res.assigned_to?' and assigned to '+res.assigned_to:' (no owner set for this system yet — set “Systems” in the Employee Directory)')+'.');
+      var its = uatRunItems(UAT.run), n = its.findIndex(function(i, k){ return k>UAT.idx && !i.result; });
+      if(n>-1) UAT.idx = n; else if(UAT.idx < its.length-1) UAT.idx++;
+      render();
+    });
+  });
+}
+function finishUatClick(runId, force){
+  var its = uatRunItems(runId), left = its.filter(function(i){ return !i.result; }).length;
+  if(left && !force && !confirm(left+' check(s) have no result. Finish anyway and mark them skipped?')) return;
+  api('finishUatRun', {run_id:runId, force:!!(left||force), actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not finish', res);
+    refreshData().then(function(){ wcToast('Run finished — summary posted to Slack.'); });
+  });
+}
+function uatSummaryHtml(run, its){
+  var c = {Pass:0,Fail:0,Blocked:0,Skipped:0}; its.forEach(function(i){ if(c[i.result]!==undefined) c[i.result]++; });
+  var tested = c.Pass+c.Fail+c.Blocked, rate = tested ? Math.round(c.Pass/tested*100) : 0, bugs = its.filter(function(i){ return i.ticket_id; });
+  var h = '<a href="#" onclick="leaveUat();return false" style="font-size:12.5px;color:var(--brand);font-weight:600">← Back to UAT</a>'+wcHead(esc(run.title), 'Finished '+esc(fmtDateTime(run.finished_at))+' · tested by '+esc(run.tester));
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px"><div class="card stat-card"><div class="stat-lbl">Pass rate</div><div class="stat-num">'+rate+'%</div></div><div class="card stat-card"><div class="stat-lbl">Passed</div><div class="stat-num" style="color:var(--green)">'+c.Pass+'</div></div><div class="card stat-card"><div class="stat-lbl">Failed</div><div class="stat-num" style="color:var(--red)">'+c.Fail+'</div></div><div class="card stat-card"><div class="stat-lbl">Blocked / skipped</div><div class="stat-num">'+c.Blocked+' / '+c.Skipped+'</div></div></div>';
+  h += '<div class="card" style="padding:16px 20px;margin-bottom:16px"><div class="card-h">Bugs created from this run ('+bugs.length+')</div>'+(bugs.length ? bugs.map(function(i){ var t = DB.tickets.filter(function(x){ return x.ticket_id===i.ticket_id; })[0]; return '<div class="wc-row" style="cursor:pointer" onclick="openTicketDetail(\''+esc(i.ticket_id)+'\')"><span class="wc-muted" style="width:70px">'+esc(i.ticket_id)+'</span><span style="flex:1"><b>'+esc(i.test_case)+'</b><div class="wc-muted">'+esc(i.actual_notes)+'</div></span>'+(t?pill(t.owner||'Unassigned','info')+pill(t.status,'mute'):'')+'</div>'; }).join('') : '<div class="wc-muted">No failures — nice.</div>')+
+    (bugs.length?'<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="goTo(\'board\')">Open Engineering Board</button></div>':'')+'</div>';
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>#</th><th>Module</th><th>Check</th><th>Result</th><th>Notes</th></tr></thead><tbody>'+its.map(function(i){ return '<tr><td>'+i.seq+'</td><td>'+esc(i.module)+'</td><td>'+esc(i.test_case)+'</td><td>'+pill(i.result||'—', resTone(i.result))+'</td><td>'+esc(i.actual_notes||'')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  return h;
+}
+function uatHistoryHtml(){
+  var runs = (DB.uatRuns||[]).slice();
+  return '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Run</th><th>Tester</th><th>Started</th><th>Status</th><th>Passed</th><th>Failed</th><th>Blocked</th><th></th></tr></thead><tbody>'+
+    (runs.map(function(r){ return '<tr><td><b>'+esc(r.title)+'</b></td><td>'+esc(r.tester)+'</td><td>'+esc(fmtDateTime(r.started_at))+'</td><td>'+pill(r.status, r.status==='In progress'?'warn':'good')+'</td><td>'+r.passed+'</td><td>'+(Number(r.failed)?'<b style="color:var(--red)">'+r.failed+'</b>':0)+'</td><td>'+r.blocked+'</td><td><button class="btn btn-ghost btn-sm" onclick="'+(r.status==='In progress'?'resumeUat':'viewUatRun')+'(\''+r.run_id+'\')">'+(r.status==='In progress'?'Resume':'View')+'</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="empty">No runs yet.</td></tr>')+'</tbody></table></div>';
+}
+function viewUatRun(id){ UAT.run = id; render(); }
+function uatLibraryHtml(){
+  var f = STATE.uatLib || (STATE.uatLib = {mod:'All', q:''});
+  var list = DB.testCases.filter(function(t){ return (f.mod==='All'||t.module===f.mod) && (!f.q || [t.test_case,t.flow,t.steps].join(' ').toLowerCase().indexOf(f.q.toLowerCase())>-1); });
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><select class="wc-sel" style="width:auto" onchange="STATE.uatLib.mod=this.value;render()">'+optionsHtml(['All'].concat(uatModules()), f.mod)+'</select><input class="wc-input" style="width:220px" placeholder="Search checks…" value="'+esc(f.q)+'" onchange="STATE.uatLib.q=this.value;render()"><button class="btn btn-ghost" onclick="openNewTestCase()">+ Add check</button><button class="btn btn-ghost" onclick="seedUat()">Load missing WeCollect checks</button></div>'+
+    '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Module</th><th>Flow</th><th>Check</th><th>Priority</th><th>Last result</th><th>Bug</th></tr></thead><tbody>'+
+    (list.map(function(t){ return '<tr style="cursor:pointer" onclick="openTestCaseDetail(\''+t.test_id+'\')"><td>'+esc(t.module)+'</td><td>'+esc(t.flow)+'</td><td>'+esc(t.test_case)+'</td><td>'+esc(t.priority)+'</td><td>'+pill(t.result||'Not run', resTone(t.result))+'</td><td>'+esc(t.linked_ticket_id||'')+'</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">No checks.</td></tr>')+'</tbody></table></div>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CRM — in-app version of the old Google Form: pick an outcome and the
+//  same actions fire. Plus follow-up tracking and a richer lead card.
+// ═══════════════════════════════════════════════════════════════════════
+var CRM_OUTCOME_INFO = {
+  'Entry': {t:'Just logging a new prospect', d:'Added to the Prospecting Pool. Nothing is sent.', acts:['Prospect added to “Prospecting Pool”']},
+  'Requested Brochure': {t:'They asked for the brochure', d:'We email the brochure now and schedule one 48-hour follow-up.', acts:['Brochure emailed to the prospect (link for the chosen offering)','One follow-up email scheduled for 48 hours later','Stage → Requested More Info']},
+  'Agreed to a Meeting': {t:'They agreed to a meeting', d:'A 1-hour Discovery Call invite goes to the prospect, you and the team CC.', acts:['Google Calendar invite (1 hour) with Meet link','Invite sent to prospect + you + team CC list','Meeting added to Meetings','Stage → Agreed to Meeting']},
+  'Declined': {t:'They declined', d:'Moved to Declined / Cold Leads and put on the newsletter-nurture list.', acts:['Stage → Declined / Cold Leads','Reason recorded','Added to newsletter-nurture to re-engage later']}
+};
+var CRM_DECLINES = ['Price','Timing','Using a competitor','No current need','Not the decision maker','No response','Other'];
+var INTAKE = {outcome:'Entry'};
+function openNewLead(){ INTAKE = {outcome:'Entry'}; drawIntake(); }
+function drawIntake(){
+  var o = INTAKE.outcome, info = CRM_OUTCOME_INFO[o], me = CURRENT_USER;
+  var h = '<div class="wc-note" style="margin-bottom:14px">Same as the old prospect form: choose what happened and the right actions run automatically.</div>'+
+    '<div class="wc-grid g2">'+fld('Prospect name <span style="color:var(--red)">*</span>', inp('in_name', INTAKE.name))+fld('Organization', inp('in_org', INTAKE.org))+'</div>'+
+    '<div class="wc-grid g2">'+fld('Position', inp('in_pos', INTAKE.pos))+fld('Offering', sel('in_off', ['Data Collection/ Research','Field Operation'], INTAKE.off||'', 'Choose…'))+'</div>'+
+    '<div class="wc-grid g2">'+fld('Email'+(o==='Requested Brochure'||o==='Agreed to a Meeting'?' <span style="color:var(--red)">*</span>':''), inp('in_email', INTAKE.email, 'email'))+fld('Phone', inp('in_phone', INTAKE.phone))+'</div>'+
+    '<div class="wc-grid g2">'+fld('LinkedIn', inp('in_li', INTAKE.li, 'url'))+fld('Owner', sel('in_owner', teamNames(), INTAKE.owner||me))+'</div>'+
+    '<div class="wc-lbl" style="margin-top:4px">Interaction outcome</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+Object.keys(CRM_OUTCOME_INFO).map(function(k){ return '<div class="wc-kind'+(o===k?' on':'')+'" style="flex:1 1 180px;padding:12px 14px" onclick="setIntakeOutcome(\''+k+'\')"><b style="font-size:13.5px">'+k+'</b><span class="wc-muted">'+CRM_OUTCOME_INFO[k].t+'</span></div>'; }).join('')+'</div>';
+  if(o==='Agreed to a Meeting') h += '<div class="wc-grid g2">'+fld('Discovery call date <span style="color:var(--red)">*</span>', inp('in_mdate', INTAKE.mdate, 'date'))+fld('Time <span style="color:var(--red)">*</span>', inp('in_mtime', INTAKE.mtime||'10:00', 'time'))+'</div>';
+  if(o==='Declined') h += '<div class="wc-grid g2">'+fld('Reason', sel('in_dec', CRM_DECLINES, INTAKE.dec||'', 'Choose…'))+fld('Competitor (if any)', inp('in_comp', INTAKE.comp))+'</div>';
+  h += fld('Comments', ta('in_comments', INTAKE.comments, 'Anything worth remembering from the conversation', 2));
+  h += '<div class="wc-note good" style="margin-bottom:14px"><b>What will happen when you save</b><ul style="margin:6px 0 0 18px">'+info.acts.map(function(a){ return '<li>'+a+'</li>'; }).join('')+'</ul></div>';
+  h += '<div style="display:flex;gap:8px"><button class="btn btn-primary" id="in_go" onclick="saveIntake()">Save prospect</button><button class="btn btn-ghost" onclick="wcClose(\'intake\')">Cancel</button></div>';
+  wcModal('intake', 'New prospect', h, true);
+}
+function readIntake(){ INTAKE.name = val('in_name'); INTAKE.org = val('in_org'); INTAKE.pos = val('in_pos'); INTAKE.off = val('in_off'); INTAKE.email = val('in_email'); INTAKE.phone = val('in_phone'); INTAKE.li = val('in_li'); INTAKE.owner = val('in_owner'); INTAKE.comments = val('in_comments'); INTAKE.mdate = val('in_mdate')||INTAKE.mdate; INTAKE.mtime = val('in_mtime')||INTAKE.mtime; INTAKE.dec = val('in_dec')||INTAKE.dec; INTAKE.comp = val('in_comp')||INTAKE.comp; }
+function setIntakeOutcome(o){ readIntake(); INTAKE.outcome = o; drawIntake(); }
+function saveIntake(){
+  readIntake(); var o = INTAKE.outcome;
+  if(!INTAKE.name.trim()) return wcToast('Prospect name is required.', true);
+  if((o==='Requested Brochure'||o==='Agreed to a Meeting') && !INTAKE.email.trim()) return wcToast('An email address is needed for this outcome.', true);
+  if(o==='Agreed to a Meeting' && (!INTAKE.mdate || !INTAKE.mtime)) return wcToast('Pick the discovery call date and time.', true);
+  var b = document.getElementById('in_go'); b.disabled = true; b.textContent = 'Saving…';
+  api('submitProspectIntake', {name:INTAKE.name.trim(), organization:INTAKE.org, position:INTAKE.pos, offering:INTAKE.off, email:INTAKE.email.trim(), phone:INTAKE.phone, linkedin_url:INTAKE.li, owner:INTAKE.owner, outcome:o, meeting_date:INTAKE.mdate||'', meeting_time:INTAKE.mtime||'', decline_category:INTAKE.dec||'', competitor:INTAKE.comp||'', comments:INTAKE.comments, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ b.disabled = false; b.textContent = 'Save prospect'; return wcFail('Could not save', res); }
+    refreshData().then(function(){
+      var h = '<div class="wc-note good" style="margin-bottom:12px"><b>'+esc(res.lead.name)+'</b> saved. Here is what happened:</div>'+(res.actions||[]).map(function(a){ return '<div class="wc-row"><span>'+(a.ok?'✅':'⚠️')+'</span><span style="flex:1">'+esc(a.label)+'</span></div>'; }).join('')+
+        '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-primary" onclick="wcClose(\'intake\');openLeadDetail(\''+res.lead.lead_id+'\')">Open prospect</button><button class="btn btn-ghost" onclick="openNewLead()">Add another</button></div>';
+      wcModal('intake','Prospect saved', h);
+    });
+  });
+}
+function saveNewLead(){ saveIntake(); }
+
+function crmDue(){
+  var now = new Date().toISOString(), admin = isAdminUser();
+  return DB.leads.filter(function(l){
+    if(l.stage==='Declined / Cold Leads' || l.stage==='Onboarding') return false;
+    if(!admin && l.owner!==CURRENT_USER) return false;
+    var a = l.next_follow_up_due && l.next_follow_up_due <= now, b = l.followup_due_at && l.followup_due_at <= now && !l.follow_up_sent;
+    return a || b;
+  });
+}
+(function(){
+  var _crm = renderCrm;
+  renderCrm = function(){
+    var w = _crm(), due = crmDue();
+    var strip = document.createElement('div');
+    strip.innerHTML = '<div class="wc-note'+(due.length?' warn':'')+'" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>'+(due.length?due.length+' prospect'+(due.length===1?'':'s')+' need a follow-up':'No follow-ups due')+'</b>'+
+      due.slice(0,6).map(function(l){ return '<span class="wc-chip" style="margin:0" onclick="openLeadDetail(\''+l.lead_id+'\')">'+esc(l.name)+(l.follow_up_count?' · '+l.follow_up_count+'/5':'')+'</span>'; }).join('')+
+      '<span class="wc-muted" style="margin-left:auto">Rule: follow up every 3 days, up to 5 times over 15 days, then mark cold.</span></div>';
+    w.insertBefore(strip.firstChild, w.firstChild);
+    return w;
+  };
+})();
+function healthTone(h){ return h==='Hot'?'good':(h==='Warm'?'warn':(h==='Cold'?'bad':'mute')); }
+function openLeadDetail(id){
+  var l = DB.leads.filter(function(x){ return x.lead_id===id; })[0]; if(!l) return;
+  var notes = parseJson(l.meeting_notes_json, []), fc = Number(l.follow_up_count)||0;
+  var showDisc = ['Agreed to Meeting','Intro Call','Requested More Info','Prospecting Pool'].indexOf(l.stage)>-1 && l.meeting_booked!=='yes';
+  var showDemo = (l.stage==='Demo Session'||l.stage==='Follow Up'||l.stage==='Intro Call') && l.demo_meeting_booked!=='yes';
+  var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+pill(l.stage,'info')+(l.health?pill(l.health, healthTone(l.health)):'')+(l.nurture?pill('Newsletter nurture','mute'):'')+(l.offering?pill(l.offering,'mute'):'')+'</div>'+
+    '<div class="wc-grid g2" style="margin-bottom:10px"><div><div class="wc-muted">Organization</div>'+esc(l.organization||'—')+(l.position?' · '+esc(l.position):'')+'</div><div><div class="wc-muted">Owner</div>'+sel('ld_owner', teamNames(), l.owner, '', ' onchange="reassignLead(\''+id+'\',this.value)"')+'</div>'+
+    '<div><div class="wc-muted">Email</div>'+(l.email?'<a href="mailto:'+esc(l.email)+'" style="color:var(--brand)">'+esc(l.email)+'</a>':'—')+'</div><div><div class="wc-muted">Phone / LinkedIn</div>'+esc(l.phone||'—')+(l.linkedin_url?' · <a href="'+esc(l.linkedin_url)+'" target="_blank" rel="noopener" style="color:var(--brand)">profile</a>':'')+'</div></div>';
+  h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Move to stage</div>'+CRM_STAGES.map(function(s){ return '<span class="wc-chip'+(l.stage===s?' on':'')+'" onclick="setLeadStage(\''+id+'\',\''+s+'\')">'+s+'</span>'; }).join('')+'</div>';
+  if(l.meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">📅 Discovery call: '+esc(l.meeting_date)+'</div>';
+  if(l.demo_meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">🖥 Demo: '+esc(l.demo_date)+'</div>';
+  if(showDisc||showDemo){
+    var kind = showDemo && !showDisc ? 'demo' : 'discovery';
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Schedule a meeting</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div>'+sel('ld_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'}], kind)+'</div><div>'+inp('ld_date','','date')+'</div><div>'+inp('ld_time','10:00','time')+'</div><button class="btn btn-primary btn-sm" onclick="bookLeadMeeting(\''+id+'\')">Send invite</button></div><div class="wc-help">Invite goes to the prospect, you and the team CC list, with a Meet link.</div></div>';
+  }
+  if(l.stage==='Declined / Cold Leads') h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Why they declined</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+sel('ld_dec', CRM_DECLINES, l.decline_category, 'Choose…')+inp('ld_comp', l.competitor, 'text', 'Competitor (if any)')+'<button class="btn btn-ghost btn-sm" onclick="saveDeclineReason(\''+id+'\')">Save</button></div></div>';
+  if(l.stage!=='Declined / Cold Leads' && l.stage!=='Onboarding'){
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="wc-lbl" style="margin:0">Follow-ups</div><div class="wc-bar" style="flex:1;max-width:160px"><i style="width:'+fc*20+'%"></i></div><span class="wc-muted">'+fc+' of 5'+(l.next_follow_up_due?' · next due '+esc(fmtDate(l.next_follow_up_due)):'')+'</span></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+sel('fu_ch',['Email','Call','WhatsApp','LinkedIn','In person'],'Email')+inp('fu_note','', 'text', 'What did you say / hear?')+'</div>'+
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="logFollowUp(\''+id+'\',false)">Log follow-up (no reply yet)</button><button class="btn btn-good btn-sm" onclick="logFollowUp(\''+id+'\',true)">They replied</button></div></div>';
+  }
+  h += '<div class="card-h">Notes & history</div>'+(notes.length ? notes.slice().reverse().map(function(n){ return '<div class="wc-row" style="align-items:flex-start"><span class="wc-muted" style="width:92px;flex-shrink:0">'+esc(fmtDate(n.at))+'<br>'+esc(n.by||'')+'</span><span style="flex:1">'+(n.type==='follow_up'?pill((n.responded?'Reply':'Follow-up')+(n.channel?' · '+n.channel:''), n.responded?'good':'mute')+' ':'')+esc(n.text)+'</span></div>'; }).join('') : '<div class="wc-muted">No notes yet.</div>')+
+    '<div style="display:flex;gap:8px;margin-top:10px"><input class="wc-input" id="ld_note_text" placeholder="Add a note…"><button class="btn btn-ghost btn-sm" onclick="addLeadNote(\''+id+'\')">Save note</button></div>'+
+    '<div class="card-h" style="margin-top:16px">AI lead health <button class="btn btn-ghost btn-sm" onclick="runAiLeadHealth(\''+id+'\')">Ask Claude</button></div><div id="ld_health" class="ai-box" style="display:none"></div>';
+  wcModal('lead', esc(l.name), h, true);
+}
+function refreshLead(id){ refreshData().then(function(){ openLeadDetail(id); }); }
+function setLeadStage(id, stage){ api('updateLeadStage', {lead_id:id, stage:stage, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update stage', res); refreshLead(id); }); }
+function reassignLead(id, newOwner){ api('reassignLead', {lead_id:id, new_owner:newOwner, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not reassign', res); refreshData(false); wcToast('Reassigned to '+newOwner+'.'); }); }
+function bookLeadMeeting(id){
+  var kind = val('ld_kind'), date = val('ld_date'), time = val('ld_time');
+  if(!date) return wcToast('Pick a date.', true);
+  api('bookLeadDemo', {lead_id:id, kind:kind, date:date, time:time, invitees:[CURRENT_USER], actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not book', res); wcToast('Invite sent.'); refreshLead(id); });
+}
+function logFollowUp(id, responded){
+  api('logLeadFollowUp', {lead_id:id, channel:val('fu_ch'), note:val('fu_note'), responded:!!responded, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not log', res); wcToast(res.message || 'Logged.'); refreshLead(id); });
+}
+function addLeadNote(id){
+  var text = val('ld_note_text').trim(); if(!text) return wcToast('Write a note first.', true);
+  var l = DB.leads.filter(function(x){ return x.lead_id===id; })[0], notes = parseJson(l.meeting_notes_json, []);
+  notes.push({text:text, by:CURRENT_USER, at:new Date().toISOString(), type:'note'});
+  api('updateLeadStage', {lead_id:id, stage:l.stage, meeting_notes_json:JSON.stringify(notes), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not save', res); refreshLead(id); });
+}
+function saveDeclineReason(id){
+  api('updateLeadStage', {lead_id:id, stage:'Declined / Cold Leads', decline_category:val('ld_dec'), competitor:val('ld_comp'), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not save', res); refreshLead(id); });
+}
+function runAiLeadHealth(id){
+  var box = document.getElementById('ld_health'); box.style.display = 'block'; box.innerHTML = '<div class="ai-box-h">Claude</div>Thinking…';
+  api('aiLeadHealthSummary', {lead_id:id}).then(function(res){
+    if(!res.ok){ box.innerHTML = '<div class="ai-box-h">Claude</div>Could not get a summary: '+esc(res.error||'unknown error'); return; }
+    var h = res.health || {}; box.innerHTML = '<div class="ai-box-h">Claude · Risk: '+esc(h.risk_level||'Unknown')+'</div>'+esc(h.summary||'')+'<div style="margin-top:8px"><b>Next:</b> '+esc(h.suggested_next_action||'—')+'</div>';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  GRANTS & ACCELERATORS / INDUSTRY NEWS — verified tables with end dates.
+//  Anything whose end date has passed is hidden (and expired server-side).
+// ═══════════════════════════════════════════════════════════════════════
+var OPP_STATUS = ['New','Reviewing','Applied','Won','Not a fit'];
+function isYmd(s){ return /^\d{4}-\d{2}-\d{2}/.test(String(s||'')); }
+function oppExpired(o){ return o.status==='Expired' || (isYmd(o.end_date) && String(o.end_date).slice(0,10) < today10()); }
+function daysLeft(end){ return Math.round((new Date(String(end).slice(0,10)+'T12:00:00') - new Date(today10()+'T12:00:00'))/86400000); }
+function endCell(o){
+  if(!o.end_date) return pill('Not stated','warn');
+  if(/rolling/i.test(o.end_date)) return pill('Rolling','info');
+  var d = daysLeft(o.end_date), tone = d<0?'bad':(d<=7?'bad':(d<=21?'warn':'good'));
+  return '<b>'+esc(fmtDate(o.end_date))+'</b> '+(d<0?pill('Closed','bad'):'<span class="pill '+tone+'" style="font-size:10.5px">'+(d===0?'today':d+'d left')+'</span>');
+}
+function oppFilterState(kind){ STATE.opp = STATE.opp || {}; return STATE.opp[kind] || (STATE.opp[kind] = {q:'', status:'Open', cat:'', sort:'end', expired:false}); }
+function renderGrants(){ return oppPage('Opportunity'); }
+function renderNewsDigest(){ return oppPage('News'); }
+function oppPage(kind){
+  var news = kind==='News', f = oppFilterState(kind), td = today10();
+  var all = (DB.opportunities||[]).filter(function(o){ return o.kind===kind; });
+  var hidden = all.filter(oppExpired).length;
+  var list = all.filter(function(o){
+    if(!f.expired && oppExpired(o)) return false;
+    if(f.status==='Open' && ['Not a fit'].indexOf(o.status)>-1) return false;
+    if(f.status!=='Open' && f.status!=='All' && o.status!==f.status) return false;
+    if(f.cat && o.category!==f.cat) return false;
+    if(f.q && [o.title,o.organization,o.summary,o.category,o.region].join(' ').toLowerCase().indexOf(f.q.toLowerCase())===-1) return false;
+    return true;
+  }).sort(function(a,b){
+    if(f.sort==='fit') return (Number(b.fit_score)||0)-(Number(a.fit_score)||0);
+    if(f.sort==='found') return String(b.found_at).localeCompare(String(a.found_at));
+    var ka = isYmd(a.end_date)?String(a.end_date).slice(0,10):(a.end_date?'9998':'9999'), kb = isYmd(b.end_date)?String(b.end_date).slice(0,10):(b.end_date?'9998':'9999');
+    return ka.localeCompare(kb);
+  });
+  var cats = bpUniq(all.map(function(o){ return o.category; }));
+  var h = wcHead(news?'Industry News':'Grants & Accelerators', news?'Industry, competitor and customer news. Claude searches the web, opens each source and records the published / end date.':'Grants, accelerators, fellowships and competitions. Claude opens each official page, reads the deadline, then re-checks it in a second pass. Anything whose end date has passed is removed.',
+    '<button class="btn btn-ghost" onclick="openAddOpp(\''+kind+'\')">+ Add manually</button><button class="btn btn-primary" id="oppScanBtn" onclick="scanOpps(\''+(news?'news':'grants')+'\')">'+(news?'Refresh news':'Scan the web now')+'</button>');
+  var openN = all.filter(function(o){ return !oppExpired(o) && ['Not a fit'].indexOf(o.status)===-1; }).length;
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:14px"><div class="card stat-card"><div class="stat-lbl">'+(news?'Items':'Open now')+'</div><div class="stat-num">'+openN+'</div></div>'+
+    (news?'':'<div class="card stat-card"><div class="stat-lbl">Closing in 14 days</div><div class="stat-num" style="color:var(--amber)">'+all.filter(function(o){ return !oppExpired(o) && isYmd(o.end_date) && daysLeft(o.end_date)<=14; }).length+'</div></div><div class="card stat-card"><div class="stat-lbl">Reviewing / applied</div><div class="stat-num">'+all.filter(function(o){ return ['Reviewing','Applied'].indexOf(o.status)>-1; }).length+'</div></div>')+
+    '<div class="card stat-card"><div class="stat-lbl">Auto-removed (ended)</div><div class="stat-num">'+hidden+'</div><div class="stat-sub">end date already passed</div></div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="wc-input" style="width:220px" placeholder="Search…" value="'+esc(f.q)+'" onchange="oppFilterState(\''+kind+'\').q=this.value;render()">'+
+    '<select class="wc-sel" style="width:auto" onchange="oppFilterState(\''+kind+'\').status=this.value;render()">'+optionsHtml(['Open','All'].concat(OPP_STATUS), f.status)+'</select>'+
+    '<select class="wc-sel" style="width:auto" onchange="oppFilterState(\''+kind+'\').cat=this.value;render()"><option value="">All types</option>'+cats.map(function(c){ return '<option'+(f.cat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select>'+
+    '<select class="wc-sel" style="width:auto" onchange="oppFilterState(\''+kind+'\').sort=this.value;render()">'+optionsHtml([{value:'end',label:'Sort: closing soonest'}].concat(news?[]:[{value:'fit',label:'Sort: best fit'}]).concat([{value:'found',label:'Sort: newest found'}]), f.sort)+'</select>'+
+    '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" '+(f.expired?'checked':'')+' onchange="oppFilterState(\''+kind+'\').expired=this.checked;render()"> show ended</label></div>';
+  h += '<div id="oppScanMsg"></div><div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>'+(news?'Headline':'Programme')+'</th><th>'+(news?'Source':'Organisation')+'</th><th>Type</th>'+(news?'<th>Published</th>':'<th>Opens</th>')+'<th>End date</th>'+(news?'':'<th>Amount</th><th>Fit for us</th>')+'<th>Status</th><th></th></tr></thead><tbody>'+
+    (list.map(function(o){
+      var ver = o.verified==='yes' || o.verified===true || o.verified==='true';
+      return '<tr><td style="min-width:240px"><b>'+(o.url?'<a href="'+esc(o.url)+'" target="_blank" rel="noopener" style="color:var(--brand)">'+esc(o.title)+'</a>':esc(o.title))+'</b>'+(ver?' <span title="'+esc(o.verified_note||'Deadline re-checked on the official page')+'" style="color:var(--green)">✓</span>':'')+'<div class="wc-muted" style="max-width:420px">'+esc(o.summary||'')+'</div>'+(o.eligibility?'<div class="wc-muted">Eligibility: '+esc(o.eligibility)+'</div>':'')+'</td>'+
+        '<td>'+esc(o.organization||o.source_name||'')+(o.region?'<div class="wc-muted">'+esc(o.region)+'</div>':'')+'</td><td>'+(o.category?pill(o.category,'mute'):'')+'</td><td style="white-space:nowrap">'+esc(isYmd(o.start_date)?fmtDate(o.start_date):'—')+'</td><td style="white-space:nowrap">'+endCell(o)+'</td>'+
+        (news?'':'<td>'+esc(o.amount||'—')+'</td><td style="min-width:150px">'+(o.fit_score!==''&&o.fit_score!==undefined?'<div style="display:flex;gap:6px;align-items:center"><div class="wc-bar'+(Number(o.fit_score)>=70?' good':(Number(o.fit_score)<40?' bad':''))+'" style="width:54px"><i style="width:'+Number(o.fit_score)+'%"></i></div><b>'+Number(o.fit_score)+'</b></div><div class="wc-muted">'+esc(o.fit_reason||'')+'</div>':'<span class="wc-muted">not rated</span>')+'</td>')+
+        '<td><select class="wc-sel" style="padding:4px 6px;width:108px" onchange="setOppStatus(\''+o.opp_id+'\',this.value)">'+optionsHtml(OPP_STATUS.concat(oppExpired(o)?['Expired']:[]), o.status)+'</select></td>'+
+        '<td style="white-space:nowrap">'+(news?'':'<button class="btn btn-ghost btn-sm" title="Ask Claude how well this fits WeCollect" onclick="evalOpp(\''+o.opp_id+'\')">Evaluate</button> ')+'<button class="btn btn-ghost btn-sm" onclick="openOppNotes(\''+o.opp_id+'\')">Notes</button></td></tr>'; }).join('') ||
+      '<tr><td colspan="9" class="empty">'+(all.length?'Nothing matches these filters.':'Nothing here yet. Press <b>'+(news?'Refresh news':'Scan the web now')+'</b> — it takes about a minute.')+'</td></tr>')+'</tbody></table></div>';
+  h += '<div class="wc-note" style="margin-top:12px">✓ = the closing date was confirmed a second time by re-reading the official page. “Not stated” means the page showed no date — check before relying on it. This list also refreshes itself every week (Slack channel “Grants & industry news”).</div>';
+  return wcPage(h);
+}
+function scanOpps(kind){
+  var b = document.getElementById('oppScanBtn'); if(b){ b.disabled = true; b.textContent = 'Reading sources… (≈1 min)'; }
+  var m = document.getElementById('oppScanMsg'); if(m) m.innerHTML = '<div class="wc-note" style="margin-bottom:12px">Claude is searching, opening each official page and verifying closing dates. Keep this tab open.</div>';
+  api('runOpportunitiesScan', {kind:kind, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ if(b){ b.disabled = false; b.textContent = 'Scan the web now'; } return wcFail('Scan failed', res); }
+    var s = res.stats||{};
+    refreshData().then(function(){ wcToast('Found '+s.found+' · added '+s.added+' · dropped '+((s.dropped_expired||0)+(s.dropped_closed||0))+' already closed'+(s.duplicates?' · '+s.duplicates+' duplicates':'')); });
+  });
+}
+function setOppStatus(id, st){ api('updateOpportunity', {opp_id:id, status:st, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); var o = DB.opportunities.filter(function(x){ return x.opp_id===id; })[0]; if(o) o.status = st; render(); }); }
+function evalOpp(id){
+  wcToast('Asking Claude to read the page and judge fit…');
+  api('evaluateOpportunity', {opp_id:id, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not evaluate', res);
+    refreshData().then(function(){ openOppNotes(id); });
+  });
+}
+function openOppNotes(id){
+  var o = DB.opportunities.filter(function(x){ return x.opp_id===id; })[0]; if(!o) return;
+  var h = '<div class="wc-muted" style="margin-bottom:8px">'+esc(o.organization||'')+' · closes '+(o.end_date?esc(/rolling/i.test(o.end_date)?'Rolling':fmtDate(o.end_date)):'not stated')+'</div>'+
+    (o.fit_reason?'<div class="ai-box" style="margin:0 0 12px"><div class="ai-box-h">Claude · fit '+esc(o.fit_score)+'/100</div>'+esc(o.fit_reason)+'</div>':'')+
+    (o.verified_note?'<div class="wc-note" style="margin-bottom:12px">'+esc(o.verified_note)+'</div>':'')+
+    fld('Our notes', ta('on_notes', o.notes, 'Who is applying, what we need, links…', 4))+
+    '<div class="wc-grid g2">'+fld('End date (correct it if the page says otherwise)', inp('on_end', isYmd(o.end_date)?String(o.end_date).slice(0,10):'', 'date'))+fld('Status', sel('on_status', OPP_STATUS, o.status))+'</div>'+
+    '<button class="btn btn-primary" onclick="saveOppNotes(\''+id+'\')">Save</button>';
+  wcModal('opp', esc(o.title), h);
+}
+function saveOppNotes(id){
+  var u = {opp_id:id, notes:val('on_notes'), status:val('on_status'), actor:CURRENT_USER}; var e = val('on_end'); if(e) u.end_date = e;
+  api('updateOpportunity', u).then(function(res){ if(!res.ok) return wcFail('Could not save', res); wcClose('opp'); refreshData(); });
+}
+function openAddOpp(kind){
+  var news = kind==='News';
+  var h = fld('Title', inp('ao_title'))+'<div class="wc-grid g2">'+fld('Organisation / source', inp('ao_org'))+fld('Link', inp('ao_url','', 'url', 'https://…'))+'</div>'+
+    '<div class="wc-grid g3">'+fld('Type', inp('ao_type','', 'text', news?'Industry / Competitor / Customer':'Grant / Accelerator / Fellowship'))+fld(news?'Published':'Opens', inp('ao_start','', 'date'))+fld('End date', inp('ao_end','', 'date'))+'</div>'+
+    (news?'':'<div class="wc-grid g2">'+fld('Amount', inp('ao_amt'))+fld('Region', inp('ao_reg'))+'</div>')+fld('Summary', ta('ao_sum','', '',2))+'<button class="btn btn-primary" onclick="saveAddOpp(\''+kind+'\')">Add</button>';
+  wcModal('addopp','Add '+(news?'news item':'opportunity'), h);
+}
+function saveAddOpp(kind){
+  if(!val('ao_title').trim()) return wcToast('Title is required.', true);
+  api('createOpportunity', {kind:kind, title:val('ao_title'), organization:val('ao_org'), url:val('ao_url'), type:val('ao_type'), start_date:val('ao_start'), end_date:val('ao_end'), amount:val('ao_amt'), region:val('ao_reg'), summary:val('ao_sum'), actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not add', res); wcClose('addopp'); refreshData().then(function(){ wcToast(res.result==='duplicate'?'Already in the list.':'Added.'); });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  AI COMMAND CENTER — Claude only
+// ═══════════════════════════════════════════════════════════════════════
+var CMD_EXAMPLES = ['Which tickets are blocked or overdue?','What is delaying our client projects?','Which prospects need a follow-up this week?','Which grants close in the next 3 weeks?','Who is out of office this week?','Summarise Engineering’s open bugs by system'];
+function renderCommand(){
+  var admin = isAdminUser(), cfg = DB.config||{};
+  var h = wcHead('AI Command Center', 'Powered by <b>Claude</b> (Anthropic). Ask in plain language — answers come only from your own workspace data.');
+  h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div style="display:flex;gap:8px"><input class="wc-input" id="cmdInput" placeholder="Ask a question…" onkeydown="if(event.key===\'Enter\')runCommand()"><button class="btn btn-primary" id="cmdBtn" onclick="runCommand()">Ask</button></div>'+
+    '<div style="margin-top:10px">'+CMD_EXAMPLES.map(function(q){ return '<span class="wc-chip" onclick="document.getElementById(\'cmdInput\').value=this.textContent;runCommand()">'+esc(q)+'</span>'; }).join('')+'</div><div id="cmdResult" style="margin-top:14px"></div></div>';
+  if(admin){
+    h += '<div class="wc-grid g2"><div class="card" style="padding:18px 20px"><div class="card-h">Weekly leadership report</div><div class="wc-muted" style="margin-bottom:10px">A Google Doc summarising tickets, projects, UAT, CRM, finance and people — also sent every Thursday to Leadership.</div>'+
+      (cfg.last_leadership_report_url?'<div class="wc-note" style="margin-bottom:10px">Last: <a href="'+esc(cfg.last_leadership_report_url)+'" target="_blank" rel="noopener" style="color:var(--brand);font-weight:600">open report</a> · '+esc(fmtDateTime(cfg.last_leadership_report_at))+'<br>'+esc(cfg.last_leadership_report_headline||'')+'</div>':'')+
+      '<button class="btn btn-primary btn-sm" id="repBtn" onclick="makeReport()">Generate now</button><div id="repOut" style="margin-top:10px"></div></div>'+
+      '<div class="card" style="padding:18px 20px"><div class="card-h">Weekly content pool</div><div class="wc-muted" style="margin-bottom:10px">Claude drafts this week’s content ideas into the Content Calendar. It also runs by itself every Friday morning.</div><button class="btn btn-primary btn-sm" id="poolBtn" onclick="makePool()">Generate this week’s pool</button><div id="poolOut" style="margin-top:10px"></div></div></div>';
+  }
+  return wcPage(h);
+}
+function runCommand(){
+  var q = val('cmdInput').trim(); if(!q) return;
+  var out = document.getElementById('cmdResult'); out.innerHTML = '<div class="wc-muted">Claude is thinking…</div>';
+  api('commandQuery', {query:q}).then(function(res){
+    if(!res.ok){ out.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Something went wrong')+'</div>'; return; }
+    out.innerHTML = '<div class="ai-box" style="margin:0 0 12px"><div class="ai-box-h">Claude</div><div style="white-space:pre-wrap">'+esc(res.explanation||'')+'</div></div>'+(res.results&&res.results.length?'<div class="wc-lbl">Matching tickets</div>'+res.results.map(ticketCardHtml).join(''):'');
+  });
+}
+function makeReport(){
+  var b = document.getElementById('repBtn'); b.disabled = true; b.textContent = 'Writing…';
+  api('generateLeadershipReport', {actor:CURRENT_USER}).then(function(res){
+    b.disabled = false; b.textContent = 'Generate now';
+    if(!res.ok) return wcFail('Could not generate', res);
+    document.getElementById('repOut').innerHTML = '<div class="wc-note good"><b>'+esc((res.narrative||{}).headline||'Report ready')+'</b>'+(res.url?'<br><a href="'+esc(res.url)+'" target="_blank" rel="noopener" style="color:var(--brand);font-weight:600">Open the Google Doc</a>':'')+'<br>Sent to admins on Slack.</div>';
+    refreshData(false);
+  });
+}
+function makePool(){
+  var b = document.getElementById('poolBtn'); b.disabled = true; b.textContent = 'Drafting…';
+  api('runContentPoolNow', {actor:CURRENT_USER}).then(function(res){
+    b.disabled = false; b.textContent = 'Generate this week’s pool';
+    if(!res.ok) return wcFail('Could not generate content pool', res);
+    document.getElementById('poolOut').innerHTML = '<div class="wc-note good">'+res.created+' ideas added to the Content Calendar.</div>'; refreshData(false);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SETTINGS (admin) — Slack channels per update type, CRM links, triggers
+// ═══════════════════════════════════════════════════════════════════════
+var SETTINGS = null;
+function renderSettings(){
+  if(!isAdminUser()) return wcPage('<div class="empty">Settings are restricted to Admins.</div>');
+  var w = wcPage('<div class="empty">Loading settings…</div>');
+  api('getSettings', {}).then(function(res){
+    if(!res.ok){ w.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Could not load settings')+'</div>'; return; }
+    SETTINGS = res; w.innerHTML = settingsHtml(res);
+  });
+  return w;
+}
+function sdot(ok){ return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(ok?'var(--green)':'var(--red)')+';margin-right:8px"></span>'; }
+function settingsHtml(s){
+  var c = s.config||{}, st = s.status||{}, cats = s.categories||[];
+  var missing = (st.expected_triggers||[]).filter(function(t){ return (st.triggers||[]).indexOf(t)===-1; });
+  var h = wcHead('Settings', 'Everything that was previously hard-coded or in Script Properties-by-hand. API keys are never shown here — they stay in Script Properties.', '<button class="btn btn-primary" onclick="saveAllSettings()">Save all settings</button>');
+  h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Connections <button class="btn btn-ghost btn-sm" onclick="renderSettingsRefresh()">Check setup</button></div>'+
+    [['Claude (Anthropic) API key', st.anthropic_key, 'ANTHROPIC_API_KEY'],['Slack bot token', st.slack_token, 'SLACK_BOT_TOKEN'],['Paystack secret key (account verification only)', st.paystack_key, 'PAYSTACK_SECRET_KEY'],['YouTube API key (training videos)', st.youtube_key, 'YOUTUBE_API_KEY'],['Calendar advanced service', st.calendar_service, 'Services → Google Calendar API']].map(function(r){ return '<div class="wc-row">'+sdot(r[1])+'<span style="flex:1">'+r[0]+'</span><span class="wc-muted">'+(r[1]?'connected':'missing — '+r[2])+'</span></div>'; }).join('')+
+    '<div class="wc-row"><span style="flex:1">AI provider</span><b>'+esc(st.ai_provider||'Claude')+'</b><span class="wc-muted">'+esc(st.ai_model||'')+' · fast: '+esc(st.ai_fast_model||'')+'</span></div>'+
+    '<div class="wc-row"><span style="flex:1">Backend version</span><b>'+esc(s.backend_version||'')+'</b>'+(s.backend_version===EXPECTED_BACKEND?pill('matches this page','good'):pill('page expects '+EXPECTED_BACKEND,'warn'))+'</div>'+
+    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="testClaudeClick()">Test Claude</button><button class="btn btn-ghost btn-sm" onclick="testSlackDmClick()">Send myself a test Slack DM</button></div><div id="sTestOut" style="margin-top:8px"></div></div>';
+
+  h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Slack channels — one per kind of update</div><div class="wc-muted" style="margin-bottom:12px">Paste the channel ID (open the channel → ⋯ → Copy link → the part starting with C). Invite the bot to each channel. People still get their own DMs for things assigned to them. Leave blank to skip posting for that category (it falls back to General).</div>'+
+    cats.map(function(k){ return '<div class="wc-row" style="align-items:flex-start;flex-wrap:wrap"><div style="width:230px"><b style="font-size:13px">'+esc(k.label)+'</b><div class="wc-muted">'+esc(k.hint)+'</div></div><input class="wc-input sv" data-k="slack_channel_'+esc(k.key)+'" style="flex:1;min-width:180px" placeholder="C0123ABCD" value="'+esc(c['slack_channel_'+k.key]||'')+'"><button class="btn btn-ghost btn-sm" onclick="testChannel(\''+esc(k.key)+'\')">Send test</button><span id="tc_'+esc(k.key)+'" class="wc-muted" style="width:100%;padding-left:230px"></span></div>'; }).join('')+
+    '<div class="wc-help" style="margin-top:8px">Each client project can also have its own channel ID when you create it.</div></div>';
+
+  h += '<div class="wc-grid g2" style="margin-bottom:16px"><div class="card" style="padding:18px 20px"><div class="card-h">CRM</div>'+
+    fld('Brochure link — Data Collection / Research', '<input class="wc-input sv" data-k="crm_brochure_url_data" value="'+esc(c.crm_brochure_url_data||'')+'" placeholder="https://drive.google.com/…">')+fld('Brochure link — Field Operation', '<input class="wc-input sv" data-k="crm_brochure_url_field" value="'+esc(c.crm_brochure_url_field||'')+'" placeholder="https://…">')+fld('Fallback brochure link', '<input class="wc-input sv" data-k="crm_brochure_url" value="'+esc(c.crm_brochure_url||'')+'">')+
+    fld('Booking / calendar link (added to follow-up emails)', '<input class="wc-input sv" data-k="crm_calendar_link" value="'+esc(c.crm_calendar_link||'')+'">')+fld('Sender name', '<input class="wc-input sv" data-k="crm_sender_name" value="'+esc(c.crm_sender_name||'')+'" placeholder="WeCollect">')+fld('Reply-to (sales email)', '<input class="wc-input sv" data-k="crm_sales_email" value="'+esc(c.crm_sales_email||'')+'">')+fld('Team CC on discovery calls & brochures', '<input class="wc-input sv" data-k="crm_team_cc" value="'+esc(c.crm_team_cc||'')+'" placeholder="a@wecollect.co, b@wecollect.co">')+'</div>'+
+    '<div class="card" style="padding:18px 20px"><div class="card-h">Company, leave & payroll</div>'+
+    fld('Company name', '<input class="wc-input sv" data-k="company_name" value="'+esc(c.company_name||'WeCollect')+'">')+fld('Company profile (used by Claude to judge grant fit)', '<textarea class="wc-ta sv" data-k="company_profile" style="min-height:110px" placeholder="Stage, country, what we do, team size, sectors, what funding we are looking for…">'+esc(c.company_profile||'')+'</textarea>')+
+    '<div class="wc-grid g2">'+fld('Annual leave (days)', '<input class="wc-input sv" type="number" data-k="leave_annual_days" value="'+esc(c.leave_annual_days||20)+'">')+fld('Pay day of month', '<input class="wc-input sv" type="number" data-k="payroll_pay_day" value="'+esc(c.payroll_pay_day||25)+'">')+'</div>'+fld('Opportunities to surface per week', '<input class="wc-input sv" type="number" data-k="opp_weekly_target" value="'+esc(c.opp_weekly_target||'')+'">')+'</div></div>';
+
+  h += '<div class="card" style="padding:18px 20px"><div class="card-h">Automations</div><div class="wc-muted" style="margin-bottom:10px">Time-based jobs: Friday content pool, Thursday leadership report, weekly grants scan, daily project and follow-up reminders, payroll reminders.</div>'+
+    ((st.triggers===null)?'<div class="wc-note warn">Could not read triggers — re-authorise the script (new permission needed).</div>':(missing.length?'<div class="wc-note warn" style="margin-bottom:10px">Missing: '+missing.map(esc).join(', ')+'</div>':'<div class="wc-note good" style="margin-bottom:10px">All '+(st.expected_triggers||[]).length+' automations are installed.</div>'))+
+    '<button class="btn btn-primary btn-sm" onclick="installTriggers()">'+(missing.length?'Install missing automations':'Re-check automations')+'</button> <span class="wc-muted">Safe to press repeatedly — it never creates duplicates.</span><div id="trOut" style="margin-top:8px"></div></div>';
+  return h;
+}
+function renderSettingsRefresh(){ render(); }
+function saveAllSettings(){
+  var values = {}; document.querySelectorAll('.sv').forEach(function(e){ values[e.getAttribute('data-k')] = e.value; });
+  api('saveSettings', {values:values, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not save', res); DB.config = res.config || DB.config; wcToast(res.saved+' settings saved.'); });
+}
+function testChannel(key){
+  var inpEl = document.querySelector('.sv[data-k="slack_channel_'+key+'"]'), out = document.getElementById('tc_'+key);
+  out.textContent = 'Sending…';
+  api('testSlackChannel', {category:key, channel_id:inpEl.value.trim(), actor:CURRENT_USER}).then(function(res){ out.innerHTML = res.ok ? '<span style="color:var(--green)">✓ Test message posted — check the channel.</span>' : '<span style="color:var(--red)">'+esc(res.error||'Failed')+'</span>'; });
+}
+function testClaudeClick(){
+  var o = document.getElementById('sTestOut'); o.innerHTML = '<span class="wc-muted">Calling Claude…</span>';
+  api('testClaude', {}).then(function(res){ o.innerHTML = res.ok ? '<div class="wc-note good">Claude is connected — '+esc(res.provider||'Anthropic Claude')+', model '+esc(res.model||'')+' (fast: '+esc(res.fast_model||'')+').</div>' : '<div class="wc-note bad">'+esc(res.error||'Failed')+'</div>'; });
+}
+function testSlackDmClick(){
+  var o = document.getElementById('sTestOut'); o.innerHTML = '<span class="wc-muted">Sending…</span>';
+  api('testSlackDM', {}).then(function(res){ o.innerHTML = res.ok ? '<div class="wc-note good">Test DM sent to you on Slack.</div>' : '<div class="wc-note bad">'+esc(res.error||'Failed')+'</div>'; });
+}
+function installTriggers(){
+  var o = document.getElementById('trOut'); o.innerHTML = '<span class="wc-muted">Installing…</span>';
+  api('setupTriggersFromApp', {}).then(function(res){
+    if(!res.ok){ o.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Failed — you may need to re-authorise the script from the Apps Script editor once.')+'</div>'; return; }
+    o.innerHTML = '<div class="wc-note good">Installed '+esc(res.created)+' automations'+(res.replaced?' (replaced '+esc(res.replaced)+' old ones)':'')+': '+(res.triggers||[]).map(function(t){ return esc(t.fn)+' — '+esc(t.when); }).join('; ')+'</div>'; setTimeout(render, 900);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  OFFLINE PREVIEW BACKEND (used only when the page is opened outside Apps
+//  Script, e.g. from a local file). Mirrors the real actions closely so the
+//  whole UI can be walked through without touching your spreadsheet.
+// ═══════════════════════════════════════════════════════════════════════
+var MOCK_SOP = (function(){
+  function uid(){ return 'm'+Math.random().toString(36).slice(2,10); }
+  function nowIso(){ return new Date().toISOString(); }
+  var SOP_ROLES = ['Operations Lead','Field Operations Manager','Application Operations Manager','Temp Community Manager','Mobile App Developer','Web App Developer'];
+var R_OPS = 'Operations Lead';
+var R_FIELD = 'Field Operations Manager';
+var R_APP = 'Application Operations Manager';
+var R_CM = 'Temp Community Manager';
+var PHASE_ORDER = ['Kickoff', 'Pre-Fieldwork', 'Fieldwork', 'Close'];
+
+// [title, role, co-role, auto_key, time]   (auto_key = ticked automatically
+// from the Agent Tracker table; time = HH:MM on the day)
+var SOP_KICKOFF = [
+  ['Scope of work drafted and signed off by the Operations Lead', R_OPS, '', '', ''],
+  ['Briefing call scheduled with full internal team', R_OPS, '', '', ''],
+  ['Questionnaire drafting assigned to Project Operations', R_APP, '', '', ''],
+  ['Risk assessment completed and approved', R_OPS, '', '', ''],
+  ['Recruitment plan agreed (headcount, locations, waitlist target)', R_FIELD, '', '', '']
+];
+var SOP_PRE = [
+  ['Project Tracker Workbook created and shared with the Field Operations Manager', R_APP, '', '', ''],
+  ['Agent recruitment completed - target headcount confirmed', R_FIELD, '', 'headcount', ''],
+  ['Waitlist of 20-30% additional agents maintained', R_FIELD, R_CM, 'waitlist', ''],
+  ['All agents individually briefed, understanding confirmed and consent recorded', R_FIELD, R_CM, 'briefed', ''],
+  ['All consented agents added to the project group', R_FIELD, '', 'grouped', ''],
+  ['Questionnaire fully tested and client-approved', R_APP, '', '', ''],
+  ['Operations Lead written go-ahead received for form publication', R_OPS, R_APP, '', ''],
+  ['Form published and assigned to confirmed agents only', R_APP, '', '', ''],
+  ['Virtual general briefing completed - attendance log saved', R_FIELD, R_APP, '', ''],
+  ['Project assigned to all agents - acceptance confirmed and logged', R_APP, R_FIELD, 'accepted', ''],
+  ['Sample submissions received from all agents', R_FIELD, '', 'samples', ''],
+  ['Sample submissions reviewed and deleted immediately', R_APP, '', '', ''],
+  ['Confirmation roll call done - all agents cleared for deployment', R_FIELD, '', 'cleared', ''],
+  ['Device and connectivity checks completed', R_CM, '', '', ''],
+  ['Offline mode tested by all agents', R_CM, '', '', ''],
+  ['All steps completed within 1 working day (or Operations Lead informed)', R_FIELD, R_APP, '', '']
+];
+var SOP_DAILY = [
+  ['Morning activation message sent in project group', R_FIELD, '', '', '07:00'],
+  ['Morning roll call conducted by 07:15 - all agents confirmed active', R_CM, '', '', '07:15'],
+  ['07:30 - all agents confirmed deployed', R_CM, '', '', '07:30'],
+  ['10:30 - 3-hour roll call completed; submission counts logged', R_CM, '', '', '10:30'],
+  ['10:30 - QA review of first-wave data commenced', R_APP, '', '', '10:30'],
+  ['Any inactivity incidents flagged to the Field Operations Manager immediately', R_CM, R_FIELD, '', '10:30'],
+  ['13:30 - second roll call completed; mid-day status sent', R_CM, R_FIELD, '', '13:30'],
+  ['14:00 - mid-day report posted to Slack', R_FIELD, '', '', '14:00'],
+  ['16:30 - third roll call; final push alert sent to lagging agents', R_CM, '', '', '16:30'],
+  ['17:30 - field close confirmed; all agents syncing data', R_FIELD, '', '', '17:30'],
+  ['18:00 - QA final review in progress', R_APP, '', '', '18:00'],
+  ['Spot checks documented (min. 2 per zone)', R_APP, '', '', '18:00'],
+  ['All inactivity and incident logs updated', R_CM, '', '', '18:00'],
+  ['18:30 - daily report posted to the project Slack channel', R_FIELD, '', '', '18:30'],
+  ['Next day briefing notes prepared', R_FIELD, '', '', '18:30']
+];
+var SOP_QA = [
+  ['GPS coordinates verified for each batch of submissions', R_APP, '', '', '18:00'],
+  ['Photo/audio evidence reviewed and consistent with stated context', R_APP, '', '', '18:00'],
+  ['Duplicate detection run - suspected duplicates resolved', R_APP, '', '', '18:00'],
+  ['Response pattern analysis completed (suspicious uniformity checked)', R_APP, '', '', '18:00'],
+  ['Duration check completed (minimum interview time validated)', R_APP, '', '', '18:00'],
+  ['Contradictory response logic check applied', R_APP, '', '', '18:00'],
+  ['Agent-level acceptance rates tracked and anomalies flagged (>15% declined = on watch, >25% = suspend)', R_APP, R_FIELD, '', '18:00'],
+  ['All declines logged with agent name, time, and reason', R_APP, '', '', '18:00'],
+  ['Sample/test data confirmed deleted - nothing in archive', R_APP, '', '', '18:00'],
+  ['Approval/decline actions completed before noon deadline (next day)', R_APP, '', '', '12:00+1'],
+  ['Zero pending records confirmed at deadline', R_APP, '', '', '12:00+1'],
+  ['QA summary prepared for inclusion in daily report', R_APP, '', '', '18:30']
+];
+var SOP_CLOSE = [
+  ['All submissions reviewed - zero pending on platform', R_APP, '', '', '', 1],
+  ['QA Review Checklist fully completed and saved in tracker', R_APP, '', '', '', 1],
+  ['Payment summary prepared by the Application Operations Manager', R_APP, '', 'payment_summary', '', 1],
+  ['Payment request sent to the Operations Lead', R_APP, R_OPS, 'payment_request', '', 1],
+  ['Payment confirmed and logged in tracker', R_OPS, R_APP, 'paid', '', 2],
+  ['Approved dataset exported from platform', R_APP, '', '', '', 2],
+  ['Dataset reviewed - no test or sample data included', R_APP, '', '', '', 2],
+  ['CSV delivered to client', R_APP, '', '', '', 2],
+  ['Client delivery confirmed in Slack', R_APP, '', '', '', 2],
+  ['Project Tracker Workbook finalised and saved to project folder', R_FIELD, R_APP, '', '', 3],
+  ['Internal debrief completed (what worked, what to change)', R_OPS, '', '', '', 3],
+  ['Top-performing agents noted for future projects', R_FIELD, '', '', '', 3],
+  ['Project declared closed in Slack project channel', R_FIELD, R_APP, '', '', 3]
+];
+
+// ── date helpers (plain yyyy-mm-dd strings, weekends skipped for field days)
+function ymdParse_(s) {
+  var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0));
+}
+function ymdFmt_(d) { return d.toISOString().slice(0, 10); }
+function ymdToday_() { return new Date().toISOString().slice(0, 10); }
+function isWorkday_(d) { var w = d.getUTCDay(); return w !== 0 && w !== 6; }
+function addWorkdays_(d, n) {
+  var x = new Date(d.getTime());
+  var step = n >= 0 ? 1 : -1;
+  var left = Math.abs(n);
+  while (left > 0) { x.setUTCDate(x.getUTCDate() + step); if (isWorkday_(x)) left--; }
+  return x;
+}
+function nextWorkdayOnOrAfter_(d) { var x = new Date(d.getTime()); while (!isWorkday_(x)) x.setUTCDate(x.getUTCDate() + 1); return x; }
+
+function rolesMap_(payloadRoles, team) {
+  var map = {};
+  SOP_ROLES.forEach(function(role) {
+    var chosen = payloadRoles && payloadRoles[role];
+    if (Array.isArray(chosen)) chosen = chosen.filter(Boolean).join(', ');
+    if (!chosen) {
+      var match = team.filter(function(p) { return String(p.sop_role || '').split(',').map(function(x) { return x.trim(); }).indexOf(role) > -1; })[0];
+      chosen = match ? match.name : '';
+    }
+    map[role] = chosen || '';
+  });
+  return map;
+}
+function firstName_(csv) { return String(csv || '').split(',')[0].trim(); }
+
+function buildSopTasks_(project, roles) {
+  var tasks = [];
+  var seq = 0;
+  function add(phase, group, day, row, due, time) {
+    seq++;
+    tasks.push({
+      task_id: uid(), project_id: project.project_id, phase: phase, group: group, day: day || '',
+      seq: seq, title: row[0], role: row[1], co_role: row[2] || '',
+      assignee: firstName_(roles[row[1]]), co_assignee: row[2] ? firstName_(roles[row[2]]) : '',
+      status: 'Todo', due_date: due, due_time: time || '', done_at: '', done_by: '', notes: '',
+      auto_key: row[3] || '', reminded_at: '', overdue_notified_at: ''
+    });
+  }
+  var start = ymdParse_(project.start_date) || ymdParse_(ymdToday_());
+  var fwStart = nextWorkdayOnOrAfter_(ymdParse_(project.fieldwork_start) || start);
+  var preDue = addWorkdays_(fwStart, -1);
+  if (preDue < start) preDue = start;
+  var days = Math.max(1, Number(project.field_days) || 2);
+
+  SOP_KICKOFF.forEach(function(r) { add('Kickoff', 'Kickoff Checklist', '', r, ymdFmt_(start), ''); });
+  SOP_PRE.forEach(function(r) { add('Pre-Fieldwork', 'Pre-Fieldwork Checklist', '', r, ymdFmt_(preDue), ''); });
+
+  var d = new Date(fwStart.getTime());
+  var lastDay = d;
+  for (var i = 1; i <= days; i++) {
+    lastDay = new Date(d.getTime());
+    var dayStr = ymdFmt_(d);
+    SOP_DAILY.forEach(function(r) { add('Fieldwork', 'Daily Check-in', i, r, dayStr, r[4]); });
+    SOP_QA.forEach(function(r) {
+      var t = r[4], due = dayStr;
+      if (t.indexOf('+1') > -1) { due = ymdFmt_(addWorkdays_(d, 1)); t = t.replace('+1', ''); }
+      add('Fieldwork', 'QA Review', i, r, due, t);
+    });
+    d = addWorkdays_(d, 1);
+  }
+  SOP_CLOSE.forEach(function(r) { add('Close', 'Project Close', '', r, ymdFmt_(addWorkdays_(lastDay, r[5])), ''); });
+  return tasks;
+}
+
+
+  return {build: buildSopTasks_, rolesMap: rolesMap_, roles: SOP_ROLES, firstName: firstName_, phases: PHASE_ORDER};
+})();
+
+(function(){
+  var seq = 1;
+  function mid(p){ return p + (Date.now().toString(36)) + (seq++); }
+  function nowIso(){ return new Date().toISOString(); }
+  function team(n){ return DB.team.filter(function(p){ return p.name===n; })[0]; }
+  function ok(o){ return Object.assign({ok:true}, o||{}); }
+  function err(m){ return {ok:false, error:m}; }
+  function slackLog(msg){ (DB._slack = DB._slack || []).push(msg); }
+  function createBug(item, who){
+    var owner = (DB.team.filter(function(p){ return String(p.systems||'').indexOf(item.module)>-1; })[0]||{}).name || '';
+    var r = __mockOld('createTicket', {title:'[UAT] '+(item.test_case||item.flow), description:'Failed during UAT run.\n\nSteps:\n'+(item.steps||'')+'\n\nExpected: '+(item.expected_result||'')+'\n\nActual: '+(item.actual_notes||''), type:'Bug', department:'Engineering', system:item.module, priority:item.priority==='High'?'High':'Medium', owner:owner, reporter:who, source:'UAT', status:owner?'Assigned':'New'});
+    return {ticket:r.ticket, owner:owner};
+  }
+  function recomputeAgent(a, p, u){
+    var m = Object.assign({}, a, u), ap = Number(m.approved)||0, dc = Number(m.declined)||0, rate = Number(p && p.rate_per_record)||0, out = Object.assign({}, u);
+    out.amount_due = (m.status==='Removed'||m.status==='Waitlist') ? 0 : ap*rate;
+    var tot = ap+dc, dr = tot ? dc/tot : 0;
+    if(['Removed','Waitlist'].indexOf(m.status)===-1 && tot>=4){
+      if(dr>0.25 && m.status!=='Suspended') out.status = 'Suspended';
+      else if(dr>0.15 && dr<=0.25 && m.status==='Active') out.status = 'On watch';
+      else if(dr<=0.15 && m.status==='On watch') out.status = 'Active';
+    }
+    return out;
+  }
+  function syncPhase(pid){
+    var p = DB.projects.filter(function(x){ return x.project_id===pid; })[0], ts = DB.projectTasks.filter(function(t){ return t.project_id===pid; });
+    var ph = MOCK_SOP.phases.filter(function(x){ return ts.some(function(t){ return t.phase===x && t.status!=='Done'; }); })[0];
+    var changed = false;
+    if(!ph){ ph = 'Close'; if(p.status!=='Completed'){ p.status = 'Completed'; changed = true; } }
+    if(p.phase!==ph){ p.phase = ph; changed = true; }
+    return {phase:ph, changed:changed};
+  }
+  function autoCheck(pid){
+    var p = DB.projects.filter(function(x){ return x.project_id===pid; })[0]; if(!p || p.kind!=='Client') return 0;
+    var ag = DB.projectAgents.filter(function(a){ return a.project_id===pid; });
+    var act = ag.filter(function(a){ return ['Active','On watch'].indexOf(a.status)>-1; }), wl = ag.filter(function(a){ return a.status==='Waitlist'; });
+    var hc = Number(p.headcount)||0, all = function(f){ return act.length>0 && act.every(function(a){ return String(a[f]).toLowerCase()==='yes'; }); };
+    var pay = ag.filter(function(a){ return Number(a.amount_due)>0; });
+    var cond = {headcount: hc ? act.length>=hc : act.length>0, waitlist: hc ? wl.length>=Math.ceil(hc*0.2) : wl.length>0, briefed: act.length>0 && act.every(function(a){ return a.briefed==='yes' && a.consent==='yes'; }), grouped: all('in_group'), accepted: all('accepted'), samples: all('sample_done'), cleared: all('cleared'), paid: pay.length>0 && pay.every(function(a){ return a.paid==='yes'; })};
+    var n = 0;
+    DB.projectTasks.filter(function(t){ return t.project_id===pid && t.auto_key && t.status!=='Done'; }).forEach(function(t){ if(cond[t.auto_key]){ t.status = 'Done'; t.done_at = nowIso(); t.done_by = 'Agent Tracker (auto)'; n++; } });
+    if(n) syncPhase(pid);
+    return n;
+  }
+  function addFinance(e){
+    var row = Object.assign({entry_id:mid('f'), project_id:'', type:'Expense', category:'', amount:0, currency:'NGN', description:'', invoice_url:'', entry_date:new Date().toISOString().slice(0,10), created_by:CURRENT_USER, created_at:nowIso(), status:'', counterparty:''}, e);
+    if(!row.status) row.status = row.type==='Income' ? 'Received' : 'Paid';
+    DB.financeEntries.push(row); return row;
+  }
+  var UAT_EXTRA = [
+    {module:'Mobile App',flow:'Login',test_case:'Wrong password shows an error',type:'Functional',priority:'High',steps:'1. Open the app\n2. Enter a valid email and a wrong password\n3. Tap Log in',expected_result:'A clear “incorrect password” message appears and no session starts.'},
+    {module:'Mobile App',flow:'Survey',test_case:'Submit a completed survey',type:'Functional',priority:'High',steps:'1. Open an assigned survey\n2. Answer every question\n3. Tap Submit',expected_result:'The record shows as Submitted and appears in Super Admin.'},
+    {module:'Super Admin',flow:'Review',test_case:'Approve a submission',type:'Functional',priority:'High',steps:'1. Open Submissions\n2. Open a pending record\n3. Tap Approve',expected_result:'Status changes to Approved and the agent count updates.'},
+    {module:'OTG',flow:'Login',test_case:'Empty form is validated',type:'Functional',priority:'Medium',steps:'1. Open OTG login\n2. Tap Log in with empty fields',expected_result:'Inline validation messages appear.'}
+  ];
+
+  var API2 = {
+    // ── settings / infra ──
+    getSettings: function(){ return ok({backend_version:EXPECTED_BACKEND, config:DB.config, categories:DB.slackCategories, routes:{}, status:{anthropic_key:true, slack_token:true, paystack_key:false, youtube_key:true, calendar_service:true, ai_provider:'Claude (Anthropic)', ai_model:'claude-sonnet-5', ai_fast_model:'claude-haiku-4-5-20251001', time_zone:'Africa/Lagos', triggers:['dailyCheck'], expected_triggers:['dailyCheck','weeklyContentCalendar','weeklyLeadershipReport','weeklyOpportunities']}}); },
+    saveSettings: function(p){ var n = 0; Object.keys(p.values||{}).forEach(function(k){ DB.config[k] = p.values[k]; n++; }); return ok({saved:n, config:DB.config}); },
+    testSlackChannel: function(p){ return p.channel_id ? ok() : err('Enter a channel ID first.'); },
+    testClaude: function(){ return ok({provider:'Anthropic Claude', model:'claude-sonnet-5', fast_model:'claude-haiku-4-5-20251001'}); },
+    setupTriggersFromApp: function(){ return ok({created:4, replaced:0, triggers:[{fn:'dailyCheck',when:'hourly'},{fn:'weeklyContentCalendar',when:'Fridays 07:00'}]}); },
+    // ── team ──
+    createTeamMember: function(p){
+      var ex = DB.team.filter(function(x){ return x.email===p.email; })[0], isNew = !ex;
+      if(isNew){ ex = {role:'Staff'}; DB.team.push(ex); }
+      Object.keys(p).forEach(function(k){ if(['actor','quiet','kind'].indexOf(k)===-1) ex[k] = p[k]; });
+      return ok({member:ex, isNew:isNew, slack_status:{ok:true}, email_status:{ok:true}});
+    },
+    updateTeamMember: function(p){ return API2.createTeamMember(p); },
+    saveMyProfile: function(p){ var me = team(CURRENT_USER); if(!me) return err('Your Team row was not found.'); ['phone','birthday','hobbies','emergency_contact','bank_name','bank_code','account_number','account_name','slack_handle'].forEach(function(k){ if(p.hasOwnProperty(k)) me[k] = p[k]; }); return ok(); },
+    // ── projects ──
+    createProject: function(p){
+      if(!p.name) return err('Give the project a name.');
+      var kind = p.kind==='Client' ? 'Client' : 'Team';
+      if(kind==='Client' && !p.client_name) return err('Client projects need a client name.');
+      var today = new Date().toISOString().slice(0,10);
+      var roles = kind==='Client' ? MOCK_SOP.rolesMap(p.roles, DB.team) : {};
+      var pr = {project_id:mid('p'), name:p.name, department:p.department||p.departments||'', departments:p.departments||p.department||'', phase:kind==='Client'?'Kickoff':(p.phase||''), start_date:p.start_date||(kind==='Client'?today:''), target_date:p.target_date||'', status:p.status||'Active', kind:kind, client_name:p.client_name||'', contract_value:p.contract_value||'', currency:p.currency||'NGN', roles_json:JSON.stringify(kind==='Client'?roles:{lead:p.lead||'',members:p.members||[]}), scope:p.scope||'', locations:p.locations||'', headcount:p.headcount||'', daily_quota:p.daily_quota||'', field_days:p.field_days||(kind==='Client'?2:''), fieldwork_start:p.fieldwork_start||'', rate_per_record:p.rate_per_record||'', slack_channel_id:p.slack_channel_id||'', created_by:CURRENT_USER, created_at:nowIso(), closed_at:''};
+      var tasks = [];
+      if(kind==='Client'){ tasks = MOCK_SOP.build(pr, roles); if(!pr.target_date) pr.target_date = tasks.reduce(function(m,t){ return t.due_date>m?t.due_date:m; }, ''); }
+      DB.projects.push(pr); tasks.forEach(function(t){ DB.projectTasks.push(t); });
+      var fl = false;
+      if(kind==='Client' && Number(pr.contract_value)>0){ addFinance({project_id:pr.project_id, type:'Income', category:'Client contract', amount:Number(pr.contract_value), currency:pr.currency, description:'Contract value - '+pr.client_name+' ('+pr.name+')', entry_date:pr.start_date||today, status:'Expected', counterparty:pr.client_name}); fl = true; }
+      (p.link_ticket_ids||[]).forEach(function(id){ var t = DB.tickets.filter(function(x){ return x.ticket_id===id; })[0]; if(t) t.project_id = pr.project_id; });
+      var who = {}; tasks.forEach(function(t){ if(t.assignee) who[t.assignee] = 1; if(t.co_assignee) who[t.co_assignee] = 1; });
+      return ok({project:pr, tasks_created:tasks.length, finance_linked:fl, notified:Object.keys(who).length});
+    },
+    updateProject: function(p){
+      var pr = DB.projects.filter(function(x){ return x.project_id===p.project_id; })[0]; if(!pr) return err('Project not found.');
+      ['name','status','start_date','target_date','scope','locations','headcount','daily_quota','rate_per_record','slack_channel_id','client_name','contract_value','department','departments','phase','field_days','fieldwork_start'].forEach(function(k){ if(p.hasOwnProperty(k)) pr[k] = p[k]; });
+      var re = 0;
+      if(p.roles && pr.kind==='Client'){ var nr = MOCK_SOP.rolesMap(p.roles, DB.team); pr.roles_json = JSON.stringify(nr);
+        DB.projectTasks.filter(function(t){ return t.project_id===pr.project_id && t.status!=='Done'; }).forEach(function(t){ var a = MOCK_SOP.firstName(nr[t.role]); if(a!==t.assignee){ t.assignee = a; re++; } }); }
+      return ok({reassigned:re});
+    },
+    updateProjectTask: function(p){
+      var t = DB.projectTasks.filter(function(x){ return x.task_id===p.task_id; })[0]; if(!t) return err('Task not found.');
+      var ns = p.status || t.status;
+      if(ns==='Done' && t.status!=='Done'){
+        var my = MOCK_SOP.phases.indexOf(t.phase), open = DB.projectTasks.filter(function(x){ return x.project_id===t.project_id && MOCK_SOP.phases.indexOf(x.phase)<my && x.status!=='Done'; });
+        if(open.length && !(p.override && CURRENT_USER_ROLE==='Admin')) return {ok:false, gated:true, error:'Finish the '+open[0].phase+' checklist first ('+open.length+' item'+(open.length===1?'':'s')+' still open). The SOP does not allow a later phase to be ticked early.'};
+        t.done_at = nowIso(); t.done_by = CURRENT_USER;
+      }
+      if(ns==='Todo'){ t.done_at = ''; t.done_by = ''; }
+      t.status = ns; ['notes','assignee','due_date','due_time'].forEach(function(k){ if(p.hasOwnProperty(k)) t[k] = p[k]; });
+      var s = syncPhase(t.project_id); return ok({phase:s.phase, phase_changed:s.changed});
+    },
+    importProjectAgents: function(p){
+      if(!(p.rows||[]).length) return err('No rows to import.');
+      if(p.mode==='replace') DB.projectAgents = DB.projectAgents.filter(function(a){ return a.project_id!==p.project_id; });
+      var seen = {}; DB.projectAgents.filter(function(a){ return a.project_id===p.project_id; }).forEach(function(a){ seen[String(a.phone).replace(/\D/g,'')||a.name.toLowerCase()] = 1; });
+      var c = 0, s = 0;
+      p.rows.forEach(function(r){ var nm = String(r.name||'').trim(); if(!nm){ s++; return; } var k = String(r.phone||'').replace(/\D/g,'')||nm.toLowerCase(); if(seen[k]){ s++; return; } seen[k] = 1;
+        DB.projectAgents.push({agent_id:mid('a'), project_id:p.project_id, name:nm, phone:r.phone||'', location:r.location||'', consent:'no', briefed:'no', in_group:'no', accepted:'no', sample_done:'no', cleared:'no', status:r.status==='Waitlist'?'Waitlist':'Active', approved:0, declined:0, amount_due:0, paid:'no', notes:'', created_at:nowIso()}); c++; });
+      return ok({created:c, skipped:s, auto_ticked:autoCheck(p.project_id)});
+    },
+    updateProjectAgent: function(p){
+      var a = DB.projectAgents.filter(function(x){ return x.agent_id===p.agent_id; })[0]; if(!a) return err('Agent not found.');
+      var pr = DB.projects.filter(function(x){ return x.project_id===a.project_id; })[0], u = {};
+      ['name','phone','location','consent','briefed','in_group','accepted','sample_done','cleared','status','approved','declined','paid','notes'].forEach(function(k){ if(p.hasOwnProperty(k)) u[k] = p[k]; });
+      Object.assign(a, recomputeAgent(a, pr, u)); return ok({status:a.status, auto_ticked:autoCheck(a.project_id)});
+    },
+    bulkUpdateProjectAgents: function(p){ var n = 0; DB.projectAgents.filter(function(a){ return a.project_id===p.project_id && (!p.agent_ids || p.agent_ids.indexOf(a.agent_id)>-1); }).forEach(function(a){ Object.assign(a, p.fields||{}); n++; }); return ok({updated:n, auto_ticked:autoCheck(p.project_id)}); },
+    deleteProjectAgent: function(p){ var b = DB.projectAgents.length; DB.projectAgents = DB.projectAgents.filter(function(a){ return a.agent_id!==p.agent_id; }); return ok({deleted:b!==DB.projectAgents.length}); },
+    sendPaymentRequest: function(p){
+      var ag = DB.projectAgents.filter(function(a){ return a.project_id===p.project_id && Number(a.amount_due)>0; });
+      if(!ag.length) return err('No agent has an amount due yet. Enter approved submissions and the per-record rate first.');
+      var total = ag.reduce(function(s,a){ return s+Number(a.amount_due); },0), pr = DB.projects.filter(function(x){ return x.project_id===p.project_id; })[0];
+      DB.projectTasks.filter(function(t){ return t.project_id===p.project_id && t.auto_key==='payment_summary' || t.auto_key==='payment_request'; }).forEach(function(t){ if(t.project_id===p.project_id){ t.status = 'Done'; t.done_at = nowIso(); t.done_by = 'Payment request (auto)'; } });
+      slackLog('Payment request '+total); syncPhase(p.project_id);
+      return ok({total:total, sent_to:MOCK_SOP.firstName(JSON.parse(pr.roles_json||'{}')['Operations Lead'])||'(no Operations Lead on this project)', slack:{ok:true}});
+    },
+    confirmProjectPayment: function(p){
+      var ag = DB.projectAgents.filter(function(a){ return a.project_id===p.project_id && Number(a.amount_due)>0 && a.paid!=='yes'; });
+      if(!ag.length) return err('All agents are already marked paid.');
+      var total = ag.reduce(function(s,a){ return s+Number(a.amount_due); },0), pr = DB.projects.filter(function(x){ return x.project_id===p.project_id; })[0];
+      ag.forEach(function(a){ a.paid = 'yes'; });
+      addFinance({project_id:p.project_id, type:'Expense', category:'Agent payments', amount:total, currency:pr.currency, description:'Agent payments - '+ag.length+' agents', status:'Paid'});
+      autoCheck(p.project_id); return ok({total:total, agents:ag.length});
+    },
+    // ── finance ──
+    createFinanceEntry: function(p){ return ok({entry:addFinance({project_id:p.project_id||'', type:p.type==='Income'?'Income':'Expense', category:p.category||'', amount:Number(p.amount)||0, currency:p.currency||'NGN', description:p.description||'', entry_date:p.entry_date||undefined, status:p.status||'', counterparty:p.counterparty||''})}); },
+    updateFinanceEntry: function(p){ var e = DB.financeEntries.filter(function(x){ return x.entry_id===p.entry_id; })[0]; if(!e) return err('Entry not found.'); ['project_id','type','category','amount','currency','description','invoice_url','entry_date','status','counterparty'].forEach(function(k){ if(p.hasOwnProperty(k)) e[k] = p[k]; }); return ok(); },
+    uploadFinanceInvoice: function(p){ var e = DB.financeEntries.filter(function(x){ return x.entry_id===p.entry_id; })[0]; if(!e) return err('Entry not found.'); e.invoice_url = 'https://drive.google.com/mock/'+encodeURIComponent(p.file_name); return ok({url:e.invoice_url, name:p.file_name}); },
+    // ── payroll ──
+    generateMonthlyPayrollBatch: function(p){
+      var created = [], skipped = [];
+      DB.team.forEach(function(m){
+        if(!(Number(m.salary_amount)>0)){ skipped.push(m.name); return; }
+        if(DB.payroll.some(function(x){ return x.team_member_name===m.name && x.month===p.month; })) return;
+        var prior = DB.payroll.filter(function(x){ return x.team_member_name===m.name && x.account_verified==='yes' && x.account_number===m.account_number && x.bank_code===m.bank_code; })[0];
+        var e = {payroll_id:mid('pr'), team_member_name:m.name, email:m.email, month:p.month, bank_name:m.bank_name||'', bank_code:m.bank_code||'', account_number:m.account_number||'', account_name:m.account_name||'', account_verified:prior?'yes':'no', salary_amount:m.salary_amount, status:'Pending', created_at:nowIso()};
+        if(prior) e.account_name = prior.account_name; DB.payroll.push(e); created.push(e);
+      });
+      return ok({created:created.length, entries:created, skipped_no_salary:skipped});
+    },
+    syncPayrollFromTeam: function(p){
+      var n = 0;
+      DB.payroll.filter(function(x){ return (!p.month || x.month===p.month) && x.status!=='Paid'; }).forEach(function(x){ var m = team(x.team_member_name); if(!m) return; if(String(m.account_number)!==String(x.account_number)||String(m.bank_code)!==String(x.bank_code)) x.account_verified = 'no'; Object.assign(x, {salary_amount:m.salary_amount||x.salary_amount, bank_name:m.bank_name||'', bank_code:m.bank_code||'', account_number:m.account_number||''}); n++; });
+      return ok({updated:n});
+    },
+    // ── leave ──
+    requestLeave: function(p){
+      var unit = p.unit==='hours' ? 'hours' : 'days'; if(!p.start_date) return err('Choose a start date.');
+      var end = p.end_date||p.start_date; if(end<p.start_date) return err('The end date is before the start date.');
+      var hours = '';
+      if(unit==='hours'){ if(!p.start_time||!p.end_time) return err('Enter the start and end time for hour-based time off.'); var a = p.start_time.split(':'), b = p.end_time.split(':'); hours = Math.round(((b[0]*60+ +b[1])-(a[0]*60+ +a[1]))/6)/10; if(hours<=0) return err('The end time must be after the start time.'); end = p.start_date; }
+      var l = {leave_id:mid('lv'), team_member_name:CURRENT_USER, type:p.type||'Annual leave', start_date:p.start_date, end_date:end, reason:p.reason||'', status:'Pending', approved_by:'', created_at:nowIso(), unit:unit, start_time:unit==='hours'?p.start_time:'', end_time:unit==='hours'?p.end_time:'', hours:hours, decision_note:'', decided_at:''};
+      DB.leave.push(l); slackLog('leave request'); return ok({leave:l});
+    },
+    decideLeave: function(p){
+      var l = DB.leave.filter(function(x){ return x.leave_id===p.leave_id; })[0]; if(!l) return err('Leave request not found.');
+      if(l.team_member_name===CURRENT_USER && CURRENT_USER_ROLE!=='Admin') return err('You cannot decide your own request.');
+      l.status = p.status; l.approved_by = CURRENT_USER; l.decision_note = p.decision_note||''; l.decided_at = nowIso();
+      if(p.status==='Approved'){ DB.timeOff.push({team_member_name:l.team_member_name, start_date:l.start_date, end_date:l.end_date, start_time:l.start_time, end_time:l.end_time}); }
+      (DB.notifications_log = DB.notifications_log||[]).push({log_id:mid('n'), timestamp:nowIso(), trigger_type:'leave_decision', recipient:l.team_member_name, message:'Your '+l.type+' request was '+p.status, status:'sent'});
+      return ok();
+    },
+    cancelLeave: function(p){ var l = DB.leave.filter(function(x){ return x.leave_id===p.leave_id; })[0]; if(!l) return err('Leave request not found.'); if(l.team_member_name!==CURRENT_USER) return err('Only the requester can cancel this.'); l.status = 'Cancelled'; DB.timeOff = DB.timeOff.filter(function(t){ return !(t.team_member_name===l.team_member_name && t.start_date===l.start_date && t.end_date===l.end_date); }); return ok(); },
+    // ── UAT ──
+    seedUatLibrary: function(){ var added = 0; UAT_EXTRA.forEach(function(c){ if(!DB.testCases.some(function(t){ return t.test_case===c.test_case; })){ DB.testCases.push(Object.assign({test_id:mid('tc'), result:'', actual_notes:'', tester:'', tested_at:'', linked_ticket_id:''}, c)); added++; } }); return ok({added:added, total:DB.testCases.length}); },
+    startUatRun: function(p){
+      var cs = DB.testCases.slice();
+      if(p.module && p.module!=='All') cs = cs.filter(function(c){ return c.module===p.module; });
+      if(p.only==='failed') cs = cs.filter(function(c){ return c.result==='Fail'; }); if(p.only==='untested') cs = cs.filter(function(c){ return !c.result; });
+      if(!cs.length) return err('No checks match. Load the UAT library first, or pick a different module.');
+      var run = {run_id:mid('run'), title:p.title||('UAT run '+new Date().toISOString().slice(0,10)+(p.module&&p.module!=='All'?' - '+p.module:'')), module:p.module||'All', tester:CURRENT_USER, status:'In progress', started_at:nowIso(), finished_at:'', total:cs.length, passed:0, failed:0, blocked:0, skipped:0};
+      DB.uatRuns.unshift(run);
+      var items = cs.map(function(c, i){ var it = {item_id:mid('it'), run_id:run.run_id, seq:i+1, test_id:c.test_id, module:c.module, flow:c.flow, test_case:c.test_case, steps:c.steps, expected_result:c.expected_result, priority:c.priority, result:'', actual_notes:'', ticket_id:'', evidence_url:'', tested_at:''}; DB.uatRunItems.push(it); return it; });
+      return ok({run:run, items:items});
+    },
+    recordUatRunItem: function(p){
+      var it = DB.uatRunItems.filter(function(x){ return x.item_id===p.item_id; })[0]; if(!it) return err('Run item not found.');
+      if(['Pass','Fail','Blocked','Skipped'].indexOf(p.result)===-1) return err('Result must be Pass, Fail, Blocked or Skipped.');
+      if((p.result==='Fail'||p.result==='Blocked') && !String(p.actual_notes||'').trim()) return err(p.result==='Fail'?'Describe what actually happened so the bug can be fixed.':'Say what is blocking this check.');
+      var tc = DB.testCases.filter(function(c){ return c.test_id===it.test_id; })[0], bug = false, owner = '', tid = it.ticket_id;
+      if(p.result==='Fail' && !tid){ var b = createBug(Object.assign({}, it, {actual_notes:p.actual_notes}), CURRENT_USER); tid = b.ticket.ticket_id; owner = b.owner; bug = true; }
+      if(tc){ tc.result = p.result==='Skipped'?'':p.result; tc.actual_notes = p.actual_notes||''; if(tid) tc.linked_ticket_id = tid; }
+      Object.assign(it, {result:p.result, actual_notes:p.actual_notes||'', ticket_id:tid, evidence_url:p.evidence_url||'', tested_at:nowIso()});
+      var run = DB.uatRuns.filter(function(r){ return r.run_id===it.run_id; })[0], its = DB.uatRunItems.filter(function(x){ return x.run_id===it.run_id; });
+      run.passed = its.filter(function(x){ return x.result==='Pass'; }).length; run.failed = its.filter(function(x){ return x.result==='Fail'; }).length; run.blocked = its.filter(function(x){ return x.result==='Blocked'; }).length; run.skipped = its.filter(function(x){ return x.result==='Skipped'; }).length;
+      return ok({ticket_id:tid, bug_created:bug, assigned_to:owner, counts:{passed:run.passed, failed:run.failed, blocked:run.blocked}});
+    },
+    finishUatRun: function(p){
+      var run = DB.uatRuns.filter(function(r){ return r.run_id===p.run_id; })[0]; if(!run) return err('Run not found.');
+      var its = DB.uatRunItems.filter(function(x){ return x.run_id===p.run_id; }), un = its.filter(function(x){ return !x.result; });
+      if(un.length && !p.force) return {ok:false, unfinished:un.length, error:un.length+' check(s) have no result yet.'};
+      un.forEach(function(x){ x.result = 'Skipped'; }); run.skipped = its.filter(function(x){ return x.result==='Skipped'; }).length; run.status = 'Completed'; run.finished_at = nowIso();
+      return ok({counts:{passed:run.passed, failed:run.failed, blocked:run.blocked, skipped:run.skipped}});
+    },
+    // ── CRM ──
+    submitProspectIntake: function(p){
+      var nm = String(p.name||'').trim(); if(!nm) return err('Prospect name is required.');
+      if(['Entry','Requested Brochure','Agreed to a Meeting','Declined'].indexOf(p.outcome)===-1) return err('Choose an interaction outcome.');
+      if((p.outcome==='Requested Brochure'||p.outcome==='Agreed to a Meeting') && !p.email) return err('An email address is needed for this outcome.');
+      if(p.outcome==='Agreed to a Meeting' && (!p.meeting_date||!p.meeting_time)) return err('Pick the discovery call date and time.');
+      var stageFor = {'Entry':'Prospecting Pool','Requested Brochure':'Requested More Info','Agreed to a Meeting':'Agreed to Meeting','Declined':'Declined / Cold Leads'};
+      var l = {lead_id:mid('l'), name:nm, organization:p.organization||'', position:p.position||'', email:p.email||'', phone:p.phone||'', linkedin_url:p.linkedin_url||'', offering:p.offering||'', stage:stageFor[p.outcome], owner:p.owner||CURRENT_USER, source:'Intake form', created_at:nowIso(), updated_at:nowIso(), stage_history_json:'[]', meeting_notes_json:p.comments?JSON.stringify([{at:nowIso(),by:CURRENT_USER,type:'note',text:p.comments}]):'[]', follow_up_count:0, next_follow_up_due:'', decline_category:p.outcome==='Declined'?(p.decline_category||''):'', competitor:p.competitor||'', outcome:p.outcome, health:'', nurture:''};
+      var acts = [{label:'Prospect logged in "'+l.stage+'"', ok:true}];
+      if(p.outcome==='Declined'){ l.nurture = 'Newsletter-Nurture'; l.health = 'Cold'; acts.push({label:'Added to the newsletter-nurture list (re-engage later)', ok:true}); }
+      if(p.outcome==='Requested Brochure'){ var url = (DB.config.crm_brochure_url_data||DB.config.crm_brochure_url||''); if(!url) acts.push({label:'Brochure email NOT sent - no brochure link is set (Settings → CRM)', ok:false}); else { l.health = 'Warm'; l.followup_due_at = new Date(Date.now()+48*3600*1000).toISOString(); acts.push({label:'Brochure emailed to '+l.email, ok:true}); acts.push({label:'One follow-up email scheduled for 48 hours from now', ok:true}); } }
+      if(p.outcome==='Agreed to a Meeting'){ l.health = 'Hot'; l.meeting_date = p.meeting_date+' '+p.meeting_time; l.meeting_booked = 'yes'; DB.meetings.push({meeting_id:mid('m'), title:'Discovery Call: '+nm, date:p.meeting_date, time:p.meeting_time, participants:CURRENT_USER, project_id:'', raw_notes:''}); acts.push({label:'1-hour Discovery Call invite sent to 3 people (prospect, you, team CC) - Meet link attached', ok:true}); }
+      if(['Prospecting Pool','Requested More Info','Agreed to Meeting','Intro Call','Follow Up','Demo Session','Follow up & Feedback'].indexOf(l.stage)>-1) l.next_follow_up_due = new Date(Date.now()+3*86400000).toISOString();
+      DB.leads.push(l); return ok({lead:l, actions:acts});
+    },
+    logLeadFollowUp: function(p){
+      var l = DB.leads.filter(function(x){ return x.lead_id===p.lead_id; })[0]; if(!l) return err('Lead not found.');
+      var notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
+      notes.push({at:nowIso(), by:CURRENT_USER, type:'follow_up', channel:p.channel||'Email', text:p.note||'', responded:!!p.responded}); l.meeting_notes_json = JSON.stringify(notes);
+      if(p.responded){ l.follow_up_count = 0; l.health = 'Hot'; l.next_follow_up_due = new Date(Date.now()+3*86400000).toISOString(); return ok({count:0, health:'Hot', message:'Reply logged - follow-up cycle reset.'}); }
+      var c = (Number(l.follow_up_count)||0)+1; l.follow_up_count = c; l.next_follow_up_due = new Date(Date.now()+3*86400000).toISOString(); if(c>=3) l.health = 'Warm';
+      return ok({count:c, health:l.health, message:'Follow-up '+c+' of 5 logged. Next reminder in 3 days.'});
+    },
+    // ── grants / news ──
+    runOpportunitiesScan: function(p){
+      var today = new Date().toISOString().slice(0,10), plus = function(d){ return new Date(Date.now()+d*86400000).toISOString().slice(0,10); };
+      var items = p.kind==='news'
+        ? [{title:'Nigeria approves national data-collection framework',category:'Industry',organization:'TechCabal',summary:'New framework affects how field survey firms store personal data.',url:'https://example.com/n1',start_date:today,end_date:''}]
+        : [{title:'Africa Data Futures Accelerator',category:'Accelerator',organization:'Example Foundation',summary:'12-week programme with $50k equity-free grant.',url:'https://example.com/g1',start_date:today,end_date:plus(30),amount:'$50,000',eligibility:'Africa-based, pre-Series A',region:'Africa',fit_score:82,fit_reason:'Strong match: field data company, Nigeria.',verified:'yes',verified_note:'Deadline re-read on the official page.'},
+           {title:'Old Innovation Challenge 2025',category:'Competition',organization:'Legacy Org',summary:'Closed.',url:'https://example.com/g0',end_date:plus(-20),amount:'$10,000',fit_score:60}];
+      var st = {found:items.length, added:0, duplicates:0, dropped_expired:0, dropped_closed:0, unverified:0};
+      items.forEach(function(i){
+        if(isYmd(i.end_date) && i.end_date<today){ st.dropped_expired++; return; }
+        if(DB.opportunities.some(function(o){ return o.title===i.title; })){ st.duplicates++; return; }
+        DB.opportunities.push(Object.assign({opp_id:mid('o'), kind:p.kind==='news'?'News':'Opportunity', status:'New', found_at:nowIso(), source_name:i.organization, notes:'', eligibility:'', region:'', amount:'', fit_score:'', fit_reason:'', verified:'', verified_note:''}, i)); st.added++;
+      });
+      return ok({kind:p.kind, stats:st});
+    },
+    createOpportunity: function(p){ if(!p.title) return err('Title is required.'); if(DB.opportunities.some(function(o){ return o.title===p.title; })) return ok({result:'duplicate'}); DB.opportunities.push({opp_id:mid('o'), kind:p.kind==='News'?'News':'Opportunity', category:p.type||'', title:p.title, organization:p.organization||'', summary:p.summary||'', url:p.url||'', start_date:p.start_date||'', end_date:p.end_date||'', amount:p.amount||'', eligibility:'', region:p.region||'', fit_score:'', fit_reason:'', status:'New', verified:'', found_at:nowIso(), notes:''}); return ok({result:'added'}); },
+    updateOpportunity: function(p){ var o = DB.opportunities.filter(function(x){ return x.opp_id===p.opp_id; })[0]; if(!o) return err('Item not found.'); ['status','notes','end_date','amount','fit_score','fit_reason','title','organization'].forEach(function(k){ if(p.hasOwnProperty(k)) o[k] = p[k]; }); return ok(); },
+    evaluateOpportunity: function(p){ var o = DB.opportunities.filter(function(x){ return x.opp_id===p.opp_id; })[0]; if(!o) return err('Item not found.'); o.fit_score = 74; o.fit_reason = 'Good thematic match; check the eligibility criteria on stage and legal entity.'; return ok({evaluation:{fit_score:74}}); },
+    getFileManagerData: function(){ return err('Not available in the offline preview.'); }, getTrainingDashboardData: function(){ return err('Not available in the offline preview.'); }, getAdminVideoList: function(){ return err('Not available in the offline preview.'); },
+    // ── AI ──
+    commandQuery: function(p){ var b = DB.tickets.filter(function(t){ return t.status==='Blocked' || t.priority==='High'; }).slice(0,3); return ok({explanation:'(preview) Claude would answer “'+p.query+'” from your workspace. These tickets look most relevant.', results:b, provider:'Claude'}); },
+    generateLeadershipReport: function(){ DB.config.last_leadership_report_url = 'https://docs.google.com/document/d/mock'; DB.config.last_leadership_report_at = nowIso(); DB.config.last_leadership_report_headline = 'Steady week: bugs down, one client project in fieldwork.'; return ok({url:DB.config.last_leadership_report_url, narrative:{headline:DB.config.last_leadership_report_headline}}); },
+    runContentPoolNow: function(){ for(var i=0;i<3;i++) DB.contentCalendar.push({content_id:mid('c'), title:'AI idea '+(i+1), type:'Post', platform:'LinkedIn', stage:'Idea', owner:'', notes:'', scheduled_date:'', source:'AI'}); return ok({created:3, items:[]}); }
+  };
+  mockApi = (function(old){
+    __mockOld = old;
+    return function(action, payload){ return API2[action] ? API2[action](payload||{}) : old(action, payload); };
+  })(mockApi);
+})();
+var __mockOld;
+
+// ── preview seed data + DB defaults ─────────────────────────────────────
+['projectTasks','projectAgents','uatRuns','uatRunItems','opportunities','timeOff','slackCategories'].forEach(function(k){ if(!DB[k]) DB[k] = []; });
+if(!DB.config) DB.config = {leave_annual_days:20, payroll_pay_day:25, company_name:'WeCollect'};
+DB.backend_version = EXPECTED_BACKEND;
+if(!WORKSPACE_MODE){
+  DB.slackCategories = [
+    {key:'general',label:'General updates',hint:'Welcome messages and anything uncategorised'},{key:'engineering',label:'Engineering',hint:'Ticket assigned / blocked / review'},
+    {key:'bugs',label:'Bugs & UAT',hint:'UAT failures and run summaries'},{key:'projects',label:'Projects (default)',hint:'Used when a project has no channel of its own'},
+    {key:'ops_daily',label:'Daily ops reminders',hint:'Roll-calls, daily report and QA reminders'},{key:'crm',label:'CRM & Growth',hint:'New prospects, follow-ups, demos'},
+    {key:'marketing',label:'Marketing & content',hint:'Weekly content pool'},{key:'finance',label:'Finance & payroll',hint:'Payroll reminders and agent payment requests'},
+    {key:'hr',label:'HR & leave',hint:'Leave requests and decisions'},{key:'leadership',label:'Leadership',hint:'Thursday leadership report'},{key:'opportunities',label:'Grants & industry news',hint:'Weekly grants, accelerators and news'}];
+  var T = {Oreoluwa:{salary_amount:450000,sop_role:'Operations Lead',systems:'',phone:'0801 000 0001',bank_name:'GTBank',bank_code:'058',account_number:'0123456789'},
+           Chidi:{salary_amount:380000,sop_role:'Application Operations Manager, Web App Developer',systems:'Super Admin, PMD',phone:'0801 000 0002',bank_name:'GTBank',bank_code:'058',account_number:'0123456780'},
+           Sarah:{salary_amount:300000,sop_role:'Field Operations Manager',systems:'',phone:'0801 000 0003',bank_name:'Access Bank',bank_code:'044',account_number:'0987654321'},
+           Tunde:{sop_role:'Temp Community Manager, Mobile App Developer',systems:'Mobile App, OTG',phone:'0801 000 0004'}};
+  DB.team.forEach(function(p){ Object.assign(p, T[p.name]||{}); });
+  var td = new Date(), ymd = function(d){ return d.toISOString().slice(0,10); }, plus = function(n){ return ymd(new Date(td.getTime()+n*86400000)); };
+  DB.opportunities = [
+    {opp_id:'o1',kind:'Opportunity',category:'Accelerator',title:'Google for Startups Africa Accelerator',organization:'Google',summary:'Equity-free support for Africa-based startups using AI.',url:'https://example.com/google',start_date:plus(-10),end_date:plus(12),amount:'Up to $100k credits',eligibility:'Seed stage, Africa-based',region:'Africa',fit_score:78,fit_reason:'Strong fit — AI-assisted field data.',status:'New',verified:'yes',verified_note:'Deadline confirmed on the official page.',found_at:new Date().toISOString(),notes:''},
+    {opp_id:'o2',kind:'Opportunity',category:'Grant',title:'Gates Foundation Data for Development Call',organization:'Gates Foundation',summary:'Funding for data systems that support public health decisions.',url:'https://example.com/gates',start_date:plus(-30),end_date:'Rolling',amount:'$250k',eligibility:'Registered NGO or company',region:'Global',fit_score:55,fit_reason:'Needs a public-health angle.',status:'Reviewing',verified:'yes',found_at:new Date().toISOString(),notes:''},
+    {opp_id:'o3',kind:'Opportunity',category:'Fellowship',title:'Tony Elumelu Entrepreneurship Programme',organization:'TEF',summary:'Seed capital and mentoring.',url:'https://example.com/tef',start_date:plus(-60),end_date:plus(-3),amount:'$5,000',fit_score:40,status:'New',found_at:new Date().toISOString(),notes:''},
+    {opp_id:'o4',kind:'Opportunity',category:'Competition',title:'Innovation Prize (no date on page)',organization:'Example Org',summary:'The page lists no deadline.',url:'https://example.com/x',start_date:'',end_date:'',amount:'',fit_score:'',status:'New',found_at:new Date().toISOString(),notes:''},
+    {opp_id:'n1',kind:'News',category:'Competitor',title:'Competitor X raises $4M to expand field data in West Africa',organization:'TechCabal',summary:'Seed round led by regional VCs; plans Ghana and Kenya expansion.',url:'https://example.com/news1',start_date:plus(-2),end_date:'',status:'New',found_at:new Date().toISOString(),notes:''},
+    {opp_id:'n2',kind:'News',category:'Industry',title:'Nigeria publishes new data protection guidance for survey firms',organization:'Techpoint',summary:'Consent and storage rules affect agent onboarding.',url:'https://example.com/news2',start_date:plus(-5),end_date:'',status:'New',found_at:new Date().toISOString(),notes:''}
+  ];
+  // one Team project + one Client project with its generated SOP tasks, agents and finance
+  var tp = {project_id:'p1',name:'Guinness Study',department:'Operations',departments:'Operations',phase:'QA',start_date:'2026-06-01',target_date:'2026-09-01',status:'Active',kind:'Team',roles_json:JSON.stringify({lead:'Chidi',members:['Tunde']})};
+  DB.projects.forEach(function(p){ if(!p.kind) p.kind = 'Team'; if(!p.roles_json) p.roles_json = JSON.stringify({lead:'Chidi',members:[]}); });
+  var made = mockApi('createProject', {kind:'Client', name:'Lagos Household Survey', client_name:'Sahel Analytics', contract_value:4500000, currency:'NGN', scope:'1,200 household interviews across Lagos', locations:'Lagos', headcount:6, daily_quota:20, start_date:ymd(td), fieldwork_start:plus(3), field_days:2, rate_per_record:800,
+    roles:{'Operations Lead':'Oreoluwa','Field Operations Manager':'Sarah','Application Operations Manager':'Chidi','Temp Community Manager':'Tunde'}});
+  var pid = made.project.project_id;
+  mockApi('importProjectAgents', {project_id:pid, rows:[{name:'Amina Yusuf',phone:'0803 111 0001',location:'Ikeja'},{name:'Chinedu Obi',phone:'0803 111 0002',location:'Yaba'},{name:'Funke Ade',phone:'0803 111 0003',location:'Lekki'},{name:'Ibrahim Musa',phone:'0803 111 0004',location:'Surulere'},{name:'Ngozi Eze',phone:'0803 111 0005',location:'Ajah',status:'Waitlist'}]});
+  DB.projectTasks.filter(function(t){ return t.project_id===pid && t.phase==='Kickoff'; }).slice(0,2).forEach(function(t){ t.status = 'Done'; t.done_by = 'Oreoluwa'; });
+  mockApi('createFinanceEntry', {project_id:pid, type:'Income', category:'Client payment', amount:1800000, description:'40% mobilisation payment', status:'Received', counterparty:'Sahel Analytics', entry_date:plus(-1)});
+  mockApi('createFinanceEntry', {project_id:pid, type:'Expense', category:'Data & airtime', amount:120000, description:'Agent data bundles', status:'Planned', entry_date:plus(2)});
+  DB.leave = [
+    {leave_id:'lv1',team_member_name:'Sarah',type:'Annual leave',start_date:plus(10),end_date:plus(14),reason:'Family trip',status:'Pending',approved_by:'',created_at:new Date().toISOString(),unit:'days'},
+    {leave_id:'lv2',team_member_name:'Tunde',type:'Sick leave',start_date:plus(-20),end_date:plus(-19),reason:'Flu',status:'Approved',approved_by:'Oreoluwa',created_at:new Date().toISOString(),unit:'days'},
+    {leave_id:'lv3',team_member_name:'Chidi',type:'Personal / permission',start_date:plus(1),end_date:plus(1),reason:'Bank appointment',status:'Pending',approved_by:'',created_at:new Date().toISOString(),unit:'hours',start_time:'10:00',end_time:'12:30',hours:2.5}
+  ];
+  DB.timeOff = [{team_member_name:'Tunde',start_date:plus(-20),end_date:plus(-19)}];
+  DB.leads.forEach(function(l){ if(l.owner===CURRENT_USER) l.next_follow_up_due = new Date(Date.now()-86400000).toISOString(); });
+}
+
+// ── wire-up: design install + boot hook ─────────────────────────────────
+var __boot0 = boot;
+boot = function(){ installDesign(); __boot0(); };
+installDesign();
+
 document.getElementById('globalSearch').addEventListener('input', function(e){
   runGlobalSearch(e.target.value);
 });
@@ -4238,20 +5709,7 @@ if (WORKSPACE_MODE) {
   document.getElementById('loginSub').textContent = 'Loading your workspace...';
   api('getAll', {}).then(function(res){
     if(res.ok){
-      DB.tickets = res.data.tickets || [];
-      DB.activities = res.data.activities || [];
-      DB.meetings = res.data.meetings || [];
-      DB.decisions = res.data.decisions || [];
-      DB.projects = res.data.projects || [];
-      DB.team = res.data.team || [];
-      DB.templates = res.data.templates || [];
-      DB.oneOnOnes = res.data.oneOnOnes || [];
-      DB.testCases = res.data.testCases || [];
-      DB.leads = res.data.leads || [];
-      DB.contentCalendar = res.data.contentCalendar || [];
-      DB.payroll = res.data.payroll || [];
-      DB.financeEntries = res.data.financeEntries || [];
-      DB.leave = res.data.leave || [];
+      applyAll(res.data);
       boot();
     } else {
       document.getElementById('loginSub').textContent = 'Could not load your data';
