@@ -3505,7 +3505,7 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.10.06-1';
+var EXPECTED_BACKEND = '2026.10.06-2';
 
 var DESIGN_CSS = `
 :root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
@@ -4958,6 +4958,7 @@ function openLeadDetail(id){
     '<div class="wc-grid g2" style="margin-bottom:10px"><div><div class="wc-muted">Organization</div>'+esc(l.organization||'—')+(l.position?' · '+esc(l.position):'')+'</div><div><div class="wc-muted">Owner</div>'+sel('ld_owner', teamNames(), l.owner, '', ' onchange="reassignLead(\''+id+'\',this.value)"')+'</div>'+
     '<div><div class="wc-muted">Email</div>'+(l.email?'<a href="mailto:'+esc(l.email)+'" style="color:var(--brand)">'+esc(l.email)+'</a>':'—')+'</div><div><div class="wc-muted">Phone / LinkedIn</div>'+esc(l.phone||'—')+(l.linkedin_url?' · <a href="'+esc(l.linkedin_url)+'" target="_blank" rel="noopener" style="color:var(--brand)">profile</a>':'')+'</div></div>';
   h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Move to stage</div>'+CRM_STAGES.map(function(s){ return '<span class="wc-chip'+(l.stage===s?' on':'')+'" onclick="setLeadStage(\''+id+'\',\''+s+'\')">'+s+'</span>'; }).join('')+'</div>';
+  if(l.drive_folder_id) h += '<div class="wc-note" style="margin-bottom:8px">📁 <a href="https://drive.google.com/drive/folders/'+encodeURIComponent(l.drive_folder_id)+'" target="_blank" rel="noopener" style="color:var(--brand)">Open the Drive folder</a>'+(l.channel?' · via '+esc(l.channel):'')+'</div>';
   if(l.meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">📅 Discovery call: '+esc(l.meeting_date)+'</div>';
   if(l.demo_meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">🖥 Demo: '+esc(l.demo_date)+'</div>';
   if(showDisc||showDemo){
@@ -4970,10 +4971,23 @@ function openLeadDetail(id){
       '<div style="display:flex;gap:8px;flex-wrap:wrap">'+sel('fu_ch',['Email','Call','WhatsApp','LinkedIn','In person'],'Email')+inp('fu_note','', 'text', 'What did you say / hear?')+'</div>'+
       '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="logFollowUp(\''+id+'\',false)">Log follow-up (no reply yet)</button><button class="btn btn-good btn-sm" onclick="logFollowUp(\''+id+'\',true)">They replied</button></div></div>';
   }
-  h += '<div class="card-h">Notes & history</div>'+(notes.length ? notes.slice().reverse().map(function(n){ return '<div class="wc-row" style="align-items:flex-start"><span class="wc-muted" style="width:92px;flex-shrink:0">'+esc(fmtDate(n.at))+'<br>'+esc(n.by||'')+'</span><span style="flex:1">'+(n.type==='follow_up'?pill((n.responded?'Reply':'Follow-up')+(n.channel?' · '+n.channel:''), n.responded?'good':'mute')+' ':'')+esc(n.text)+'</span></div>'; }).join('') : '<div class="wc-muted">No notes yet.</div>')+
+  h += '<div class="card-h">Notes & history</div>'+(notes.length ? notes.map(function(n,ni){ return {n:n,ni:ni}; }).reverse().map(function(x){ return leadNoteHtml(id, x.n, x.ni); }).join('') : '<div class="wc-muted">No notes yet.</div>')+
     '<div style="display:flex;gap:8px;margin-top:10px"><input class="wc-input" id="ld_note_text" placeholder="Add a note…"><button class="btn btn-ghost btn-sm" onclick="addLeadNote(\''+id+'\')">Save note</button></div>'+
     '<div class="card-h" style="margin-top:16px">AI lead health <button class="btn btn-ghost btn-sm" onclick="runAiLeadHealth(\''+id+'\')">Ask Claude</button></div><div id="ld_health" class="ai-box" style="display:none"></div>';
   wcModal('lead', esc(l.name), h, true);
+}
+function safeUrl(u){ u = String(u||''); return /^https?:\/\//i.test(u) ? u : ''; }
+function leadNoteHtml(id, n, ni){
+  var h = '<div class="wc-row" style="align-items:flex-start"><span class="wc-muted" style="width:92px;flex-shrink:0">'+esc(fmtDate(n.at))+'<br>'+esc(n.by||'')+'</span><span style="flex:1">'+(n.type==='follow_up'?pill((n.responded?'Reply':'Follow-up')+(n.channel?' · '+n.channel:''), n.responded?'good':'mute')+' ':'')+esc(n.text||'');
+  if(n.fileUrl && safeUrl(n.fileUrl)) h += '<div style="margin-top:4px">📎 <a href="'+esc(safeUrl(n.fileUrl))+'" target="_blank" rel="noopener" style="color:var(--brand)">'+esc(n.fileName||'Attachment')+'</a></div>';
+  (n.nextSteps||[]).forEach(function(st, si){ h += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center"><span class="wc-check'+(st.done?' on':'')+'" onclick="toggleLeadStep(\''+id+'\','+ni+','+si+')"></span><span'+(st.done?' style="text-decoration:line-through;opacity:.6"':'')+'>'+esc(st.text)+'</span></div>'; });
+  return h+'</span></div>';
+}
+function toggleLeadStep(id, ni, si){
+  var l = DB.leads.filter(function(x){ return x.lead_id===id; })[0]; if(!l) return;
+  var notes = parseJson(l.meeting_notes_json, []), st = notes[ni] && notes[ni].nextSteps && notes[ni].nextSteps[si]; if(!st) return;
+  st.done = !st.done; st.doneAt = st.done ? new Date().toISOString() : '';
+  api('updateLeadStage', {lead_id:id, stage:l.stage, meeting_notes_json:JSON.stringify(notes), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not save', res); refreshLead(id); });
 }
 function refreshLead(id){ refreshData().then(function(){ openLeadDetail(id); }); }
 function setLeadStage(id, stage){ api('updateLeadStage', {lead_id:id, stage:stage, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update stage', res); if(stage==='Onboarding') setTimeout(function(){ wcToast('Moved to Onboarding — added to the Client board and handed to Product & Operations.'); }, 400); refreshLead(id); }); }
@@ -5191,6 +5205,7 @@ function settingsHtml(s){
     fld('Webinar — week of month', '<select class="wc-sel sv" data-k="marketing_webinar_nth">'+optionsHtml([{value:'1',label:'1st'},{value:'2',label:'2nd'},{value:'3',label:'3rd'},{value:'4',label:'4th'}], c.marketing_webinar_nth||'3')+'</select>')+
     fld('Webinar — weekday', '<select class="wc-sel sv" data-k="marketing_webinar_weekday">'+optionsHtml([{value:'1',label:'Monday'},{value:'2',label:'Tuesday'},{value:'3',label:'Wednesday'},{value:'4',label:'Thursday'},{value:'5',label:'Friday'}], c.marketing_webinar_weekday||'4')+'</select>')+'</div></div>';
   h += accessCheckHtml();
+  h += legacyImportHtml();
   h += '<div class="card" style="padding:18px 20px"><div class="card-h">Automations</div><div class="wc-muted" style="margin-bottom:10px">Time-based jobs: Friday content pool, Thursday leadership report, weekly grants scan, daily project and follow-up reminders, payroll reminders.</div>'+
     ((st.triggers===null)?'<div class="wc-note warn">Could not read triggers — re-authorise the script (new permission needed).</div>':(missing.length?'<div class="wc-note warn" style="margin-bottom:10px">Missing: '+missing.map(esc).join(', ')+'</div>':'<div class="wc-note good" style="margin-bottom:10px">All '+(st.expected_triggers||[]).length+' automations are installed.</div>'))+
     '<button class="btn btn-primary btn-sm" onclick="installTriggers()">'+(missing.length?'Install missing automations':'Re-check automations')+'</button> <span class="wc-muted">Safe to press repeatedly — it never creates duplicates.</span><div id="trOut" style="margin-top:8px"></div></div>';
@@ -5938,6 +5953,40 @@ function runAccessCheck(){
     h += '<div class="wc-scroll"><table class="wc-table"><thead><tr><th>Person</th><th>Team</th><th>Level</th><th>Money &amp; payroll</th><th>Pages hidden from them</th></tr></thead><tbody>'+res.members.map(function(m){
       return '<tr><td><b>'+esc(m.name)+'</b><div class="wc-muted">'+esc(m.department||'no department')+(m.marketing?' · marketing contributor':'')+'</div></td><td>'+esc(m.team)+'</td><td>'+esc(m.level)+'</td><td>'+(m.sees_money?pill('Can see','warn'):pill('Hidden','good'))+'</td><td class="wc-muted">'+(m.hidden_pages.length?esc(m.hidden_pages.join(', ')):'none')+'</td></tr>'; }).join('')+'</tbody></table></div>';
     o.innerHTML = h;
+  });
+}
+
+
+// ═══ LEGACY CRM IMPORT (Settings) ══════════════════════════════════════
+var LEGACY_PREVIEW = null;
+function legacyImportHtml(){
+  return '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Import old CRM data <button class="btn btn-ghost btn-sm" onclick="previewLegacy()">Preview import</button></div>'+
+    '<div class="wc-muted">Paste your old CRM table (header row included) into a tab named <b>Legacy CRM</b> in this spreadsheet, then press Preview. Nothing is written until you press Import, and importing twice never duplicates a prospect.</div><div id="lgOut" style="margin-top:10px"></div></div>';
+}
+function previewLegacy(){
+  var o = document.getElementById('lgOut'); o.innerHTML = '<span class="wc-muted">Reading the Legacy CRM tab…</span>';
+  api('previewLegacyCrm', {}).then(function(res){
+    if(!res.ok){ o.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Failed')+'</div>'; return; }
+    LEGACY_PREVIEW = res;
+    var h = '<div class="wc-grid g2" style="margin-bottom:10px"><div><b>'+res.total+'</b> prospects found'+(res.already_imported?' · <b>'+res.already_imported+'</b> already imported (will be skipped)':'')+'</div><div class="wc-muted">'+res.with_notes+' with notes · '+res.with_files+' file links · '+res.open_next_steps+' open next steps'+(res.unreadable_dates?' · '+res.unreadable_dates+' unreadable dates (will use today)':'')+'</div></div>';
+    h += '<div class="wc-lbl">Old stage → new stage</div>'+Object.keys(res.stages).map(function(k){ var st = res.stages[k];
+      return '<div class="wc-row"><span style="flex:1">'+esc(k)+' <span class="wc-muted">('+st.count+')</span></span><select class="wc-sel lg-stage" data-k="'+esc(k)+'">'+optionsHtml(res.crm_stages, st.suggested, 'Choose…')+'</select></div>'; }).join('');
+    h += '<div class="wc-lbl" style="margin-top:12px">Owners</div>'+Object.keys(res.owners).map(function(k){ var ow = res.owners[k];
+      return '<div class="wc-row"><span style="flex:1">'+esc(k)+' <span class="wc-muted">('+ow.count+')</span></span>'+(ow.matched?pill('matches '+ow.matched,'good'):pill('no match → default owner','warn'))+'</div>'; }).join('');
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px"><span class="wc-muted">Default owner</span><select class="wc-sel" id="lg_owner">'+optionsHtml(res.team, '', 'Leave unassigned')+'</select>'+
+      '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lg_clients" checked> Create clients for Onboarding prospects</label>'+
+      '<button class="btn btn-primary btn-sm" onclick="runLegacyImport()">Import '+(res.total-res.already_imported)+' prospects</button></div>';
+    o.innerHTML = h;
+  });
+}
+function runLegacyImport(){
+  var map = {}; document.querySelectorAll('.lg-stage').forEach(function(s){ if(s.value) map[s.getAttribute('data-k')] = s.value; });
+  var o = document.getElementById('lgOut');
+  api('importLegacyCrm', {stage_map:map, default_owner:val('lg_owner'), create_clients:!!(document.getElementById('lg_clients')||{}).checked, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not import', res);
+    refreshData(false);
+    o.innerHTML = '<div class="wc-note good"><b>Imported '+res.imported+' prospects.</b>'+(res.skipped_already_imported?' '+res.skipped_already_imported+' were already there.':'')+(res.clients_created?' '+res.clients_created+' client(s) created.':'')+(res.without_owner?' '+res.without_owner+' have no owner — reassign them from the CRM board.':'')+'</div>';
+    wcToast('Imported '+res.imported+' prospects.');
   });
 }
 
