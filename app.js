@@ -5981,7 +5981,9 @@ function previewLegacy(){
 }
 function runLegacyImport(){
   var map = {}; document.querySelectorAll('.lg-stage').forEach(function(s){ if(s.value) map[s.getAttribute('data-k')] = s.value; });
-  var o = document.getElementById('lgOut');
+  var o = document.getElementById('lgOut'), blank = 0;
+  document.querySelectorAll('.lg-stage').forEach(function(x){ x.style.outline = x.value ? '' : '2px solid #e5484d'; if(!x.value) blank++; });
+  if(blank) return wcToast('Choose a new stage for the '+blank+' stage(s) outlined in red, then press Import.', true);
   api('importLegacyCrm', {stage_map:map, default_owner:val('lg_owner'), create_clients:!!(document.getElementById('lg_clients')||{}).checked, actor:CURRENT_USER}).then(function(res){
     if(!res.ok) return wcFail('Could not import', res);
     refreshData(false);
