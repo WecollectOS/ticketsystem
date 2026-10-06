@@ -4901,7 +4901,7 @@ function drawIntake(){
     '<div class="wc-grid g2">'+fld('Email'+(o==='Requested Brochure'||o==='Agreed to a Meeting'?' <span style="color:var(--red)">*</span>':''), inp('in_email', INTAKE.email, 'email'))+fld('Phone', inp('in_phone', INTAKE.phone))+'</div>'+
     '<div class="wc-grid g2">'+fld('LinkedIn', inp('in_li', INTAKE.li, 'url'))+fld('Owner', sel('in_owner', teamNames(), INTAKE.owner||me))+'</div>'+
     '<div class="wc-lbl" style="margin-top:4px">Interaction outcome</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+Object.keys(CRM_OUTCOME_INFO).map(function(k){ return '<div class="wc-kind'+(o===k?' on':'')+'" style="flex:1 1 180px;padding:12px 14px" onclick="setIntakeOutcome(\''+k+'\')"><b style="font-size:13.5px">'+k+'</b><span class="wc-muted">'+CRM_OUTCOME_INFO[k].t+'</span></div>'; }).join('')+'</div>';
-  if(o==='Agreed to a Meeting') h += '<div class="wc-grid g2">'+fld('Discovery call date <span style="color:var(--red)">*</span>', inp('in_mdate', INTAKE.mdate, 'date'))+fld('Time <span style="color:var(--red)">*</span>', inp('in_mtime', INTAKE.mtime||'10:00', 'time'))+'</div>'+fld('Also invite (CC) teammates', ccPickerHtml('intake', INTAKE.cc));
+  if(o==='Agreed to a Meeting') h += '<div class="wc-grid g2">'+fld('Discovery call date <span style="color:var(--red)">*</span>', inp('in_mdate', INTAKE.mdate, 'date'))+fld('Time <span style="color:var(--red)">*</span>', inp('in_mtime', INTAKE.mtime||'10:00', 'time'))+'</div>'+fld('Also invite (CC)', ccPickerHtml('intake', INTAKE.cc));
   if(o==='Declined') h += '<div class="wc-grid g2">'+fld('Reason', sel('in_dec', CRM_DECLINES, INTAKE.dec||'', 'Choose…'))+fld('Competitor (if any)', inp('in_comp', INTAKE.comp))+'</div>';
   h += fld('Comments', ta('in_comments', INTAKE.comments, 'Anything worth remembering from the conversation', 2));
   h += '<div class="wc-note good" style="margin-bottom:14px"><b>What will happen when you save</b><ul style="margin:6px 0 0 18px">'+info.acts.map(function(a){ return '<li>'+a+'</li>'; }).join('')+'</ul></div>';
@@ -4916,7 +4916,7 @@ function saveIntake(){
   if((o==='Requested Brochure'||o==='Agreed to a Meeting') && !INTAKE.email.trim()) return wcToast('An email address is needed for this outcome.', true);
   if(o==='Agreed to a Meeting' && (!INTAKE.mdate || !INTAKE.mtime)) return wcToast('Pick the discovery call date and time.', true);
   var b = document.getElementById('in_go'); b.disabled = true; b.textContent = 'Saving…';
-  api('submitProspectIntake', {name:INTAKE.name.trim(), organization:INTAKE.org, position:INTAKE.pos, offering:INTAKE.off, email:INTAKE.email.trim(), phone:INTAKE.phone, linkedin_url:INTAKE.li, owner:INTAKE.owner, outcome:o, meeting_date:INTAKE.mdate||'', meeting_time:INTAKE.mtime||'', decline_category:INTAKE.dec||'', competitor:INTAKE.comp||'', comments:INTAKE.comments, cc_names:(INTAKE.outcome==='Agreed to a Meeting'?(INTAKE.cc||[]):[]), actor:CURRENT_USER}).then(function(res){
+  api('submitProspectIntake', {name:INTAKE.name.trim(), organization:INTAKE.org, position:INTAKE.pos, offering:INTAKE.off, email:INTAKE.email.trim(), phone:INTAKE.phone, linkedin_url:INTAKE.li, owner:INTAKE.owner, outcome:o, meeting_date:INTAKE.mdate||'', meeting_time:INTAKE.mtime||'', decline_category:INTAKE.dec||'', competitor:INTAKE.comp||'', comments:INTAKE.comments, cc_names:(INTAKE.outcome==='Agreed to a Meeting'?(INTAKE.cc||[]):[]), cc_emails:(INTAKE.outcome==='Agreed to a Meeting'?ccEmailsVal('intake'):''), actor:CURRENT_USER}).then(function(res){
     if(!res.ok){ b.disabled = false; b.textContent = 'Save prospect'; return wcFail('Could not save', res); }
     refreshData().then(function(){
       var h = '<div class="wc-note good" style="margin-bottom:12px"><b>'+esc(res.lead.name)+'</b> saved. Here is what happened:</div>'+(res.actions||[]).map(function(a){ return '<div class="wc-row"><span>'+(a.ok?'✅':'⚠️')+'</span><span style="flex:1">'+esc(a.label)+'</span></div>'; }).join('')+
@@ -4963,7 +4963,7 @@ function openLeadDetail(id){
   if(l.demo_meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">🖥 Demo: '+esc(l.demo_date)+'</div>';
   if(showDisc||showDemo){
     var kind = showDemo && !showDisc ? 'demo' : 'discovery';
-    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Schedule a meeting</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div>'+sel('ld_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'}], kind)+'</div><div>'+inp('ld_date','','date')+'</div><div>'+inp('ld_time','10:00','time')+'</div><button class="btn btn-primary btn-sm" onclick="bookLeadMeeting(\''+id+'\')">Send invite</button></div><div class="wc-lbl" style="margin-top:10px">Also invite (CC) teammates</div>'+ccPickerHtml('ldcc')+'<div class="wc-help">Invite goes to the prospect, you, the default CC list from Settings and anyone you pick here, with a Meet link.</div></div>';
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Schedule a meeting</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div>'+sel('ld_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'}], kind)+'</div><div>'+inp('ld_date','','date')+'</div><div>'+inp('ld_time','10:00','time')+'</div><button class="btn btn-primary btn-sm" onclick="bookLeadMeeting(\''+id+'\')">Send invite</button></div><div class="wc-lbl" style="margin-top:10px">Also invite (CC)</div>'+ccPickerHtml('ldcc')+'<div class="wc-help">Invite goes to the prospect, you, the default CC list from Settings and anyone you pick here, with a Meet link.</div></div>';
   }
   if(l.stage==='Declined / Cold Leads') h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Why they declined</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+sel('ld_dec', CRM_DECLINES, l.decline_category, 'Choose…')+inp('ld_comp', l.competitor, 'text', 'Competitor (if any)')+'<button class="btn btn-ghost btn-sm" onclick="saveDeclineReason(\''+id+'\')">Save</button></div></div>';
   if(l.stage!=='Declined / Cold Leads' && l.stage!=='Onboarding'){
@@ -4995,7 +4995,7 @@ function reassignLead(id, newOwner){ api('reassignLead', {lead_id:id, new_owner:
 function bookLeadMeeting(id){
   var kind = val('ld_kind'), date = val('ld_date'), time = val('ld_time');
   if(!date) return wcToast('Pick a date.', true);
-  api('bookLeadDemo', {lead_id:id, kind:kind, date:date, time:time, invitees:[CURRENT_USER], cc_names:ccPicked('ldcc'), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not book', res); var sk = (res.calendar_status && res.calendar_status.skipped) || []; wcToast(sk.length ? 'Invite sent, but these emails were not valid and were skipped: '+sk.join(', ') : 'Invite sent.', !!sk.length); refreshLead(id); });
+  api('bookLeadDemo', {lead_id:id, kind:kind, date:date, time:time, invitees:[CURRENT_USER], cc_names:ccPicked('ldcc'), cc_emails:ccEmailsVal('ldcc'), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not book', res); var sk = (res.calendar_status && res.calendar_status.skipped) || []; wcToast(sk.length ? 'Invite sent, but these emails were not valid and were skipped: '+sk.join(', ') : 'Invite sent.', !!sk.length); refreshLead(id); });
 }
 function logFollowUp(id, responded){
   api('logLeadFollowUp', {lead_id:id, channel:val('fu_ch'), note:val('fu_note'), responded:!!responded, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not log', res); wcToast(res.message || 'Logged.'); refreshLead(id); });
@@ -5948,8 +5948,10 @@ function mkTick(id, i, done){ api('updateContentChecklist', {content_id:id, inde
 function ccPickerHtml(scope, selected){
   selected = selected || [];
   var names = teamNames().filter(function(n){ return n!==CURRENT_USER; });
-  return '<div id="cc_'+scope+'" style="max-height:110px;overflow:auto">'+names.map(function(n){ return '<span class="wc-chip cc-chip'+(selected.indexOf(n)>-1?' on':'')+'" data-n="'+esc(n)+'" onclick="ccToggle(this,\''+scope+'\')">'+esc(n)+'</span>'; }).join('')+'</div>';
+  return '<div id="cc_'+scope+'" style="max-height:110px;overflow:auto">'+names.map(function(n){ return '<span class="wc-chip cc-chip'+(selected.indexOf(n)>-1?' on':'')+'" data-n="'+esc(n)+'" onclick="ccToggle(this,\''+scope+'\')">'+esc(n)+'</span>'; }).join('')+'</div>'+ccEmailBox(scope, scope==='intake'?INTAKE.ccx:'');
 }
+function ccEmailBox(scope, val){ return '<input class="wc-input" id="ccx_'+scope+'" style="margin-top:6px" placeholder="Any other emails to CC (comma separated) — anyone, not only the team" value="'+esc(val||'')+'"'+(scope==='intake'?' oninput="INTAKE.ccx=this.value"':'')+'>'; }
+function ccEmailsVal(scope){ var e = document.getElementById('ccx_'+scope); return e ? e.value : ''; }
 function ccPicked(scope){ var box = document.getElementById('cc_'+scope); if(!box) return []; return Array.prototype.map.call(box.querySelectorAll('.cc-chip.on'), function(e){ return e.getAttribute('data-n'); }); }
 function ccToggle(el, scope){ el.classList.toggle('on'); if(scope==='intake') INTAKE.cc = ccPicked('intake'); }
 
