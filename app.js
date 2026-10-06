@@ -4445,7 +4445,7 @@ function renderPayroll(){
   var missingSalary = DB.team.filter(function(p){ return !(Number(p.salary_amount)>0); });
   var missingBank = DB.team.filter(function(p){ return Number(p.salary_amount)>0 && !(p.account_number && p.bank_code); });
   var inSync = items.filter(function(p){ var t = DB.team.filter(function(x){ return x.name===p.team_member_name; })[0]; return t && p.status!=='Paid' && (String(t.salary_amount)!==String(p.salary_amount) || String(t.account_number)!==String(p.account_number)); });
-  var h = wcHead('Payroll', 'This app <b>never moves money</b>. It prepares the run, verifies bank accounts with Paystack and gives you a bulk-transfer CSV to upload in your own Paystack dashboard.',
+  var h = wcHead('Payroll', 'This app <b>never moves money</b>. It prepares the run, verifies bank accounts with Paystack and gives you a bulk-payment file (Bank Code, Account Number, Amount, Narration) to upload on the platform you pay from.',
     '<button class="btn btn-ghost" onclick="goTo(\'employees\')">Edit salaries in Employee Directory</button>');
   h += '<div class="wc-note" style="margin-bottom:14px"><b>Where the data comes from:</b> each person’s salary and bank details are entered once in <a href="#" onclick="goTo(\'employees\');return false" style="color:var(--brand);font-weight:600">Employee Directory</a>. “Pull from directory” copies them into the month’s run; “Re-sync” refreshes unpaid rows after you edit the directory.</div>';
   if(missingSalary.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>No salary set yet for:</b> '+missingSalary.map(function(p){ return esc(p.name); }).join(', ')+' — they will be skipped until you add it in the Employee Directory.</div>';
@@ -4459,7 +4459,7 @@ function renderPayroll(){
     '<button class="btn btn-primary" onclick="pullPayroll()">Pull from directory</button>'+
     '<button class="btn btn-ghost" onclick="syncPayroll()">Re-sync'+(inSync.length?' ('+inSync.length+' changed)':'')+'</button>'+
     '<button class="btn btn-ghost" onclick="verifyAllPayroll()">Verify all accounts</button>'+
-    '<button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export Paystack CSV</button></div>';
+    '<button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export bulk payment file</button></div>';
   h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Team member</th><th>Bank</th><th>Account</th><th>Verified as</th><th style="text-align:right">Salary</th><th>Status</th><th></th></tr></thead><tbody>'+
     (items.map(function(p){ return '<tr><td><b>'+esc(p.team_member_name)+'</b></td><td>'+esc(p.bank_name||'—')+'</td><td>'+esc(p.account_number||'—')+'</td><td>'+(p.account_verified==='yes'?pill(p.account_name||'Verified','good'):pill('Not verified','warn'))+'</td>'+
       '<td style="text-align:right">'+(p.status==='Paid'?money(p.salary_amount):'<input class="wc-input" type="number" style="width:120px;text-align:right;padding:4px 8px" value="'+(Number(p.salary_amount)||0)+'" onchange="savePayrollField(\''+p.payroll_id+'\',\'salary_amount\',this.value)">')+'</td>'+
@@ -4503,15 +4503,20 @@ function savePayrollField(id, field, value){
   api('updatePayrollEntry', payload).then(function(res){ if(!res.ok) return wcFail('Could not save', res); var p = DB.payroll.filter(function(x){ return x.payroll_id===id; })[0]; if(p) p[field] = payload[field]; render(); });
 }
 function markPayrollPaidClick(id){
-  if(!confirm('Mark this as paid? Only do this after you have actually transferred the salary in your Paystack dashboard.')) return;
+  if(!confirm('Mark this as paid? Only do this after you have actually paid the salary on your payment platform.')) return;
   api('markPayrollPaid', {payroll_id:id, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData(); });
 }
 function exportPayrollCsvClick(){
   api('exportPayrollCsv', {month:STATE.payrollMonth}).then(function(res){
     if(!res.ok) return wcFail('Could not export', res);
-    var blob = new Blob([res.csv], {type:'text/csv'}), a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'wecollect-payroll-'+STATE.payrollMonth+'.csv'; document.body.appendChild(a); a.click(); a.remove();
-    wcToast('CSV for '+res.count+' people downloaded — upload it in Paystack → Transfers → Bulk.');
+    var blob, ext;
+    if(res.xlsx_base64){
+      var bin = atob(res.xlsx_base64), arr = new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+      blob = new Blob([arr], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); ext = 'xlsx';
+    } else { blob = new Blob([res.csv], {type:'text/csv'}); ext = 'csv'; }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = (res.filename||('bulk-transactions-'+STATE.payrollMonth))+'.'+ext; document.body.appendChild(a); a.click(); a.remove();
+    wcToast('Bulk file for '+res.count+' people downloaded ('+ext.toUpperCase()+') — upload it on your payment platform.'+(ext==='csv'?' (Excel copy unavailable, CSV used.)':''));
   });
 }
 
