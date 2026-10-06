@@ -811,7 +811,7 @@ var BP_CFGS = {
   crm: function(){
     return {
       title:'Outreach Pipeline', subtitle:'Prospects moving through the 9-stage funnel', accent:'#1F8A5B',
-      newLabel:'+ New prospect', onNew:'openNewLead()', emptyMsg:'No prospects match these filters.',
+      newLabel:(canEditMod('crm')?'+ New prospect':''), onNew:'openNewLead()', emptyMsg:'No prospects match these filters.',
       stages: CRM_STAGES.map(function(s){ return {id:s, color:CRM_STAGE_COLOR[s]}; }),
       items:function(){ return DB.leads; },
       stageOf:function(l){ return l.stage; },
@@ -894,7 +894,7 @@ var BP_CFGS = {
     var lanes = ['Not Run','Pass','Fail','Blocked'], colors = {'Not Run':'#8E90A3',Pass:'#2E9B5F',Fail:'#D64545',Blocked:'#946A0C'};
     return {
       title:'UAT / QA Tracker', subtitle:'A Fail automatically opens a Bug on the Engineering Board', accent:'#4C50E3',
-      newLabel:'+ New test case', onNew:'openNewTestCase()', emptyMsg:'No test cases match these filters.',
+      newLabel:(canEditMod('uat')?'+ New test case':''), onNew:'openNewTestCase()', emptyMsg:'No test cases match these filters.',
       stages: lanes.map(function(s){ return {id:s, color:colors[s]}; }),
       items:function(){ return DB.testCases; },
       stageOf:function(tc){ return resultLabel(tc.result); },
@@ -3505,7 +3505,7 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.10.06-2';
+var EXPECTED_BACKEND = '2026.10.06-3';
 
 var DESIGN_CSS = `
 :root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
@@ -3959,7 +3959,7 @@ function renderProjects(){
     return f.status==='All' || (f.status==='Active' ? !closed : closed);
   });
   var h = wcHead('Projects', 'Pick <b>Team project</b> for internal work, or <b>Client project</b> to run the full SOP checklist with every activity assigned to the right person.',
-    '<button class="btn btn-primary" onclick="openNewProject()">+ New Project</button>');
+    (canEditMod('projects')?'<button class="btn btn-primary" onclick="openNewProject()">+ New Project</button>':''));
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px"><div class="wc-seg">'+['All','Client','Team'].map(function(k){ return '<button class="'+(f.kind===k?'on':'')+'" onclick="setProjFilter(\'kind\',\''+k+'\')">'+k+'</button>'; }).join('')+'</div>'+
     '<div class="wc-seg">'+['Active','Completed','All'].map(function(k){ return '<button class="'+(f.status===k?'on':'')+'" onclick="setProjFilter(\'status\',\''+k+'\')">'+k+'</button>'; }).join('')+'</div></div>';
   h += '<div class="wc-grid g3">';
@@ -4901,7 +4901,7 @@ function drawIntake(){
     '<div class="wc-grid g2">'+fld('Email'+(o==='Requested Brochure'||o==='Agreed to a Meeting'?' <span style="color:var(--red)">*</span>':''), inp('in_email', INTAKE.email, 'email'))+fld('Phone', inp('in_phone', INTAKE.phone))+'</div>'+
     '<div class="wc-grid g2">'+fld('LinkedIn', inp('in_li', INTAKE.li, 'url'))+fld('Owner', sel('in_owner', teamNames(), INTAKE.owner||me))+'</div>'+
     '<div class="wc-lbl" style="margin-top:4px">Interaction outcome</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+Object.keys(CRM_OUTCOME_INFO).map(function(k){ return '<div class="wc-kind'+(o===k?' on':'')+'" style="flex:1 1 180px;padding:12px 14px" onclick="setIntakeOutcome(\''+k+'\')"><b style="font-size:13.5px">'+k+'</b><span class="wc-muted">'+CRM_OUTCOME_INFO[k].t+'</span></div>'; }).join('')+'</div>';
-  if(o==='Agreed to a Meeting') h += '<div class="wc-grid g2">'+fld('Discovery call date <span style="color:var(--red)">*</span>', inp('in_mdate', INTAKE.mdate, 'date'))+fld('Time <span style="color:var(--red)">*</span>', inp('in_mtime', INTAKE.mtime||'10:00', 'time'))+'</div>';
+  if(o==='Agreed to a Meeting') h += '<div class="wc-grid g2">'+fld('Discovery call date <span style="color:var(--red)">*</span>', inp('in_mdate', INTAKE.mdate, 'date'))+fld('Time <span style="color:var(--red)">*</span>', inp('in_mtime', INTAKE.mtime||'10:00', 'time'))+'</div>'+fld('Also invite (CC) teammates', ccPickerHtml('intake', INTAKE.cc));
   if(o==='Declined') h += '<div class="wc-grid g2">'+fld('Reason', sel('in_dec', CRM_DECLINES, INTAKE.dec||'', 'Choose…'))+fld('Competitor (if any)', inp('in_comp', INTAKE.comp))+'</div>';
   h += fld('Comments', ta('in_comments', INTAKE.comments, 'Anything worth remembering from the conversation', 2));
   h += '<div class="wc-note good" style="margin-bottom:14px"><b>What will happen when you save</b><ul style="margin:6px 0 0 18px">'+info.acts.map(function(a){ return '<li>'+a+'</li>'; }).join('')+'</ul></div>';
@@ -4916,7 +4916,7 @@ function saveIntake(){
   if((o==='Requested Brochure'||o==='Agreed to a Meeting') && !INTAKE.email.trim()) return wcToast('An email address is needed for this outcome.', true);
   if(o==='Agreed to a Meeting' && (!INTAKE.mdate || !INTAKE.mtime)) return wcToast('Pick the discovery call date and time.', true);
   var b = document.getElementById('in_go'); b.disabled = true; b.textContent = 'Saving…';
-  api('submitProspectIntake', {name:INTAKE.name.trim(), organization:INTAKE.org, position:INTAKE.pos, offering:INTAKE.off, email:INTAKE.email.trim(), phone:INTAKE.phone, linkedin_url:INTAKE.li, owner:INTAKE.owner, outcome:o, meeting_date:INTAKE.mdate||'', meeting_time:INTAKE.mtime||'', decline_category:INTAKE.dec||'', competitor:INTAKE.comp||'', comments:INTAKE.comments, actor:CURRENT_USER}).then(function(res){
+  api('submitProspectIntake', {name:INTAKE.name.trim(), organization:INTAKE.org, position:INTAKE.pos, offering:INTAKE.off, email:INTAKE.email.trim(), phone:INTAKE.phone, linkedin_url:INTAKE.li, owner:INTAKE.owner, outcome:o, meeting_date:INTAKE.mdate||'', meeting_time:INTAKE.mtime||'', decline_category:INTAKE.dec||'', competitor:INTAKE.comp||'', comments:INTAKE.comments, cc_names:(INTAKE.outcome==='Agreed to a Meeting'?(INTAKE.cc||[]):[]), actor:CURRENT_USER}).then(function(res){
     if(!res.ok){ b.disabled = false; b.textContent = 'Save prospect'; return wcFail('Could not save', res); }
     refreshData().then(function(){
       var h = '<div class="wc-note good" style="margin-bottom:12px"><b>'+esc(res.lead.name)+'</b> saved. Here is what happened:</div>'+(res.actions||[]).map(function(a){ return '<div class="wc-row"><span>'+(a.ok?'✅':'⚠️')+'</span><span style="flex:1">'+esc(a.label)+'</span></div>'; }).join('')+
@@ -4963,7 +4963,7 @@ function openLeadDetail(id){
   if(l.demo_meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">🖥 Demo: '+esc(l.demo_date)+'</div>';
   if(showDisc||showDemo){
     var kind = showDemo && !showDisc ? 'demo' : 'discovery';
-    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Schedule a meeting</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div>'+sel('ld_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'}], kind)+'</div><div>'+inp('ld_date','','date')+'</div><div>'+inp('ld_time','10:00','time')+'</div><button class="btn btn-primary btn-sm" onclick="bookLeadMeeting(\''+id+'\')">Send invite</button></div><div class="wc-help">Invite goes to the prospect, you and the team CC list, with a Meet link.</div></div>';
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Schedule a meeting</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div>'+sel('ld_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'}], kind)+'</div><div>'+inp('ld_date','','date')+'</div><div>'+inp('ld_time','10:00','time')+'</div><button class="btn btn-primary btn-sm" onclick="bookLeadMeeting(\''+id+'\')">Send invite</button></div><div class="wc-lbl" style="margin-top:10px">Also invite (CC) teammates</div>'+ccPickerHtml('ldcc')+'<div class="wc-help">Invite goes to the prospect, you, the default CC list from Settings and anyone you pick here, with a Meet link.</div></div>';
   }
   if(l.stage==='Declined / Cold Leads') h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Why they declined</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+sel('ld_dec', CRM_DECLINES, l.decline_category, 'Choose…')+inp('ld_comp', l.competitor, 'text', 'Competitor (if any)')+'<button class="btn btn-ghost btn-sm" onclick="saveDeclineReason(\''+id+'\')">Save</button></div></div>';
   if(l.stage!=='Declined / Cold Leads' && l.stage!=='Onboarding'){
@@ -4995,7 +4995,7 @@ function reassignLead(id, newOwner){ api('reassignLead', {lead_id:id, new_owner:
 function bookLeadMeeting(id){
   var kind = val('ld_kind'), date = val('ld_date'), time = val('ld_time');
   if(!date) return wcToast('Pick a date.', true);
-  api('bookLeadDemo', {lead_id:id, kind:kind, date:date, time:time, invitees:[CURRENT_USER], actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not book', res); wcToast('Invite sent.'); refreshLead(id); });
+  api('bookLeadDemo', {lead_id:id, kind:kind, date:date, time:time, invitees:[CURRENT_USER], cc_names:ccPicked('ldcc'), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not book', res); var sk = (res.calendar_status && res.calendar_status.skipped) || []; wcToast(sk.length ? 'Invite sent, but these emails were not valid and were skipped: '+sk.join(', ') : 'Invite sent.', !!sk.length); refreshLead(id); });
 }
 function logFollowUp(id, responded){
   api('logLeadFollowUp', {lead_id:id, channel:val('fu_ch'), note:val('fu_note'), responded:!!responded, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not log', res); wcToast(res.message || 'Logged.'); refreshLead(id); });
@@ -5204,7 +5204,9 @@ function settingsHtml(s){
     fld('Owner (gets the monthly cards)', '<select class="wc-sel sv" data-k="marketing_owner">'+optionsHtml(teamNames(), c.marketing_owner||'', 'Unassigned')+'</select>')+
     fld('Webinar — week of month', '<select class="wc-sel sv" data-k="marketing_webinar_nth">'+optionsHtml([{value:'1',label:'1st'},{value:'2',label:'2nd'},{value:'3',label:'3rd'},{value:'4',label:'4th'}], c.marketing_webinar_nth||'3')+'</select>')+
     fld('Webinar — weekday', '<select class="wc-sel sv" data-k="marketing_webinar_weekday">'+optionsHtml([{value:'1',label:'Monday'},{value:'2',label:'Tuesday'},{value:'3',label:'Wednesday'},{value:'4',label:'Thursday'},{value:'5',label:'Friday'}], c.marketing_webinar_weekday||'4')+'</select>')+'</div></div>';
+  h += accessMatrixHtml(s);
   h += accessCheckHtml();
+  h += speedHtml();
   h += legacyImportHtml();
   h += '<div class="card" style="padding:18px 20px"><div class="card-h">Automations</div><div class="wc-muted" style="margin-bottom:10px">Time-based jobs: Friday content pool, Thursday leadership report, weekly grants scan, daily project and follow-up reminders, payroll reminders.</div>'+
     ((st.triggers===null)?'<div class="wc-note warn">Could not read triggers — re-authorise the script (new permission needed).</div>':(missing.length?'<div class="wc-note warn" style="margin-bottom:10px">Missing: '+missing.map(esc).join(', ')+'</div>':'<div class="wc-note good" style="margin-bottom:10px">All '+(st.expected_triggers||[]).length+' automations are installed.</div>'))+
@@ -5720,9 +5722,10 @@ installDesign();
 // ── fe7: team access helpers, Clients board, Marketing (content + results + monthly), Access check ──
 ['clients','contentMetrics'].forEach(function(k){ if(!DB[k]) DB[k] = []; });
 
-function canManageClients(){ var a = DB.access; return !a || a.priv || a.team==='ops'; }
-function canAddClients(){ var a = DB.access; return !a || a.priv || a.team==='ops' || a.team==='growth'; }
-function canWriteMarketing(){ var a = DB.access; return !a || a.priv || a.marketing || a.team==='growth'; }
+function canEditMod(m){ var a = DB.access; return !a || a.priv || !a.levels || a.levels[m]==='edit'; }
+function canManageClients(){ return canEditMod('clients_manage'); }
+function canAddClients(){ return canEditMod('clients'); }
+function canWriteMarketing(){ return canEditMod('content'); }
 function noAccess(what){ return wcPage('<div class="empty">'+esc(what||'Your team does not have access to this page.')+' If you think that is a mistake, ask an Admin to check your team in the Employee Directory.</div>'); }
 
 // ═══ CLIENTS ═══════════════════════════════════════════════════════════
@@ -5939,6 +5942,57 @@ function mkMonthlyHtml(){
   return h;
 }
 function mkTick(id, i, done){ api('updateContentChecklist', {content_id:id, index:i, done:done, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData(); }); }
+
+
+// ═══ CC PICKER (discovery calls and demos) ═════════════════════════════
+function ccPickerHtml(scope, selected){
+  selected = selected || [];
+  var names = teamNames().filter(function(n){ return n!==CURRENT_USER; });
+  return '<div id="cc_'+scope+'" style="max-height:110px;overflow:auto">'+names.map(function(n){ return '<span class="wc-chip cc-chip'+(selected.indexOf(n)>-1?' on':'')+'" data-n="'+esc(n)+'" onclick="ccToggle(this,\''+scope+'\')">'+esc(n)+'</span>'; }).join('')+'</div>';
+}
+function ccPicked(scope){ var box = document.getElementById('cc_'+scope); if(!box) return []; return Array.prototype.map.call(box.querySelectorAll('.cc-chip.on'), function(e){ return e.getAttribute('data-n'); }); }
+function ccToggle(el, scope){ el.classList.toggle('on'); if(scope==='intake') INTAKE.cc = ccPicked('intake'); }
+
+// ═══ TEAM ACCESS (Settings, Admin only) ════════════════════════════════
+var AX_LEVELS = {none:'No access', view:'View only', edit:'View & edit'};
+function accessMatrixHtml(s){
+  var ax = s.access; if(!ax) return '';
+  var rows = Object.keys(ax.labels.modules), simple = {projects_all:['none','view'], clients_manage:['none','edit']};
+  var h = '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Team access <span><button class="btn btn-ghost btn-sm" onclick="resetAccessMatrix()">Reset to defaults</button> <button class="btn btn-primary btn-sm" onclick="saveAccessMatrix()">Save access</button></span></div>'+
+    '<div class="wc-muted" style="margin-bottom:10px">Choose what each team can open and change. Admin has everything; Leadership has everything except core settings. Payroll, finance, salaries and the Employee Directory always stay Admin and Leadership only. Changes apply the next time each person loads the app.</div>'+
+    '<div class="wc-scroll"><table class="wc-table"><thead><tr><th>Area</th>'+ax.teams.map(function(t){ return '<th>'+esc(ax.labels.teams[t])+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    rows.map(function(m){ var lv = simple[m] || ['none','view','edit'];
+      return '<tr><td><b>'+esc(ax.labels.modules[m])+'</b></td>'+ax.teams.map(function(t){
+        return '<td><select class="wc-sel ax" data-m="'+m+'" data-t="'+t+'">'+lv.map(function(l){ var lab = simple[m] ? (l==='none'?'No':(m==='clients_manage'?'Yes':'Yes')) : AX_LEVELS[l]; return '<option value="'+l+'"'+(ax.matrix[m][t]===l?' selected':'')+'>'+lab+'</option>'; }).join('')+'</select></td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div>'+
+    '<div class="wc-help" style="margin-top:8px">Marketing contributors (flagged in the Employee Directory) use the Marketing column. Press <b>Run access check</b> below afterwards to see the result per person.</div></div>';
+  return h;
+}
+function saveAccessMatrix(){
+  var m = {}; document.querySelectorAll('select.ax').forEach(function(e){ var k = e.getAttribute('data-m'); (m[k] = m[k] || {})[e.getAttribute('data-t')] = e.value; });
+  api('saveSettings', {values:{access_matrix:JSON.stringify(m)}, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not save access', res); wcToast('Access saved.'); refreshData(false); });
+}
+function resetAccessMatrix(){
+  if(!confirm('Reset every team to the default access?')) return;
+  api('saveSettings', {values:{access_matrix:''}, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not reset', res); wcToast('Defaults restored.'); renderSettingsRefresh(); });
+}
+
+// ═══ SPEED CHECK (Settings) ════════════════════════════════════════════
+var SPEED = null, SPEED_T0 = 0;
+(function(){
+  var _refresh = refreshData, _apply = applyAll;
+  refreshData = function(thenRender){ SPEED_T0 = Date.now(); return _refresh(thenRender); };
+  applyAll = function(d){ if(d && d.perf) SPEED = {client_ms: SPEED_T0 ? Date.now()-SPEED_T0 : 0, server_ms: d.perf.server_ms, tabs: d.perf.tabs}; return _apply(d); };
+})();
+function speedHtml(){
+  var h = '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Speed check <button class="btn btn-ghost btn-sm" onclick="refreshData(false).then(function(){ renderSettingsRefresh(); })">Measure a fresh load</button></div>';
+  if(!SPEED) return h+'<div class="wc-muted">Press “Measure a fresh load” to see how long loading the whole app takes and which sheet tabs are slowest.</div></div>';
+  var names = Object.keys(SPEED.tabs).sort(function(a,b){ return SPEED.tabs[b].ms-SPEED.tabs[a].ms; });
+  var tot = SPEED.client_ms, srv = SPEED.server_ms;
+  h += '<div class="wc-grid g2" style="margin-bottom:10px"><div><div class="wc-muted">Whole load, as you feel it</div><b style="font-size:20px">'+(tot/1000).toFixed(1)+' s</b></div><div><div class="wc-muted">Of which spent reading the spreadsheet</div><b style="font-size:20px">'+(srv/1000).toFixed(1)+' s</b>'+(tot?' <span class="wc-muted">('+Math.round(srv/tot*100)+'%)</span>':'')+'</div></div>'+
+    '<div class="wc-scroll"><table class="wc-table"><thead><tr><th>Tab</th><th>Rows</th><th>Read time</th></tr></thead><tbody>'+names.slice(0,8).map(function(n){ var t = SPEED.tabs[n]; return '<tr><td>'+esc(n)+'</td><td>'+t.rows+'</td><td>'+t.ms+' ms</td></tr>'; }).join('')+'</tbody></table></div>'+
+    '<div class="wc-help" style="margin-top:8px">If the spreadsheet share is small and the whole load is still slow, the delay is Google starting the script (a cold start) rather than your data.</div>';
+  return h+'</div>';
+}
 
 // ═══ ACCESS CHECK (Settings) ═══════════════════════════════════════════
 function accessCheckHtml(){
