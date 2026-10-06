@@ -237,7 +237,7 @@ var SHELL_MODALS = `<div class="modal-bg" id="newTestCaseModalBg">
     <div class="row2">
       <div class="field"><label>Type</label><input id="cf_type" placeholder="Post / Carousel / Video / Article" value="Post"></div>
       <div class="field"><label>Platform</label>
-        <select id="cf_platform"><option>LinkedIn</option><option>Instagram</option><option>Twitter/X</option><option>Blog</option><option>Newsletter</option></select>
+        <select id="cf_platform"><option>LinkedIn</option><option>Instagram</option><option>Facebook</option><option>Twitter/X</option><option>Newsletter</option><option>Webinar</option><option>Blog</option></select>
       </div>
     </div>
     <div class="field"><label>Owner</label><select id="cf_owner"><option value="">Unassigned</option></select></div>
@@ -932,12 +932,12 @@ var BP_CFGS = {
     return {
       title:'Content Calendar', subtitle:'Claude proposes a fresh pool every Friday morning', accent:'#4C50E3',
       newLabel:'+ New item', onNew:'openNewContent()', emptyMsg:'Nothing here yet.',
-      extraButtons: CURRENT_USER_ROLE==='Admin' ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run weekly pool now</button>' : '',
+      extraButtons: isAdminUser() ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run weekly pool now</button>' : '',
       stages: CONTENT_STAGES.map(function(s){ return {id:s, color:CONTENT_STAGE_COLOR[s]}; }),
       items:function(){ return DB.contentCalendar; },
       stageOf:function(c){ return c.stage; },
       filters:[
-        {key:'platform', all:'All platforms', opts:function(){ return ['LinkedIn','Instagram','Twitter/X','Blog','Newsletter']; }, get:function(c){ return c.platform; }},
+        {key:'platform', all:'All platforms', opts:function(){ return ['LinkedIn','Instagram','Facebook','Twitter/X','Newsletter','Webinar','Blog']; }, get:function(c){ return c.platform; }},
         {key:'owner', all:'All owners', opts:function(){ return bpTeamNames(); }, get:function(c){ return c.owner; }}
       ],
       search:function(c){ return [c.title,c.type,c.platform,c.owner,c.notes].join(' '); },
@@ -1067,7 +1067,6 @@ function renderBoardPage(key){
 }
 function renderBoard(){ return renderBoardPage('eng'); }
 function renderCrm(){ return renderBoardPage('crm'); }
-function renderContent(){ return renderBoardPage('content'); }
 
 var MODULES = [
   {group:'', items:[{id:'dashboard',label:'Dashboard'}]},
@@ -3506,7 +3505,7 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.10.05-1';
+var EXPECTED_BACKEND = '2026.10.06-1';
 
 var DESIGN_CSS = `
 :root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
@@ -3670,7 +3669,9 @@ function installDesign(){
 
 // ── generic helpers ─────────────────────────────────────────────────────
 function esc(s){ return bpEsc(s); }
-function isAdminUser(){ return CURRENT_USER_ROLE === 'Admin'; }
+function isAdminUser(){ var a = DB.access; return a ? !!a.priv : (CURRENT_USER_ROLE === 'Admin' || CURRENT_USER_ROLE === 'Leadership'); }
+function isCoreAdmin(){ var a = DB.access; return a ? !!a.core : CURRENT_USER_ROLE === 'Admin'; }
+function canSee(id){ var a = DB.access; return !(a && a.denied && a.denied.indexOf(id) > -1); }
 function today10(){ return new Date().toISOString().slice(0,10); }
 function money(n, cur){
   var v = Number(n); if(isNaN(v)) v = 0;
@@ -3714,9 +3715,10 @@ function wcFail(prefix, res){ wcToast(prefix + ': ' + ((res && res.error) || 'un
 // Re-read everything from the backend (after multi-table actions) and repaint.
 function applyAll(d){
   d = d || {};
-  var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories'];
+  var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','clients','contentMetrics','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories'];
   keys.forEach(function(k){ DB[k] = d[k] || []; });
   DB.config = d.config || {};
+  DB.access = d.access || null;
   DB.backend_version = d.backend_version || '';
   checkBackendVersion();
 }
@@ -3760,7 +3762,7 @@ MODULES = [
     {id:'teamspaces',label:'Team Directory'},{id:'meetings',label:'Meetings'},{id:'oneonones',label:'One-on-Ones',adminOnly:true},
     {id:'standup',label:'Stand-up Mode'},{id:'workload',label:'Workload'},{id:'feed',label:'Activity Feed'}]},
   {group:'Growth', items:[
-    {id:'crm',label:'CRM Pipeline'},{id:'grants',label:'Grants & Accelerators'},{id:'content',label:'Content Calendar'}]},
+    {id:'crm',label:'CRM Pipeline'},{id:'clients',label:'Clients'},{id:'grants',label:'Grants & Accelerators'},{id:'content',label:'Marketing'}]},
   {group:'Training & Quality', items:[
     {id:'training',label:'My Training'},{id:'trainingadmin',label:'Training Admin',adminOnly:true},{id:'uat',label:'UAT / QA Tracker'}]},
   {group:'Finance & HR', items:[
@@ -3768,11 +3770,11 @@ MODULES = [
     {id:'employees',label:'Employee Directory',adminOnly:true},{id:'leave',label:'Leave'}]},
   {group:'Intelligence', items:[
     {id:'command',label:'AI Command Center'},{id:'newsdigest',label:'Industry News',adminOnly:true},{id:'decisions',label:'Decision Register'},
-    {id:'adminlog',label:'Admin Activity Log',adminOnly:true},{id:'notifications',label:'Notifications'},{id:'settings',label:'Settings',adminOnly:true}]}
+    {id:'adminlog',label:'Admin Activity Log',adminOnly:true},{id:'notifications',label:'Notifications'},{id:'settings',label:'Settings',coreOnly:true}]}
 ];
 var PAGE_SUB = {
   dashboard: function(){ return 'Good '+(new Date().getHours()<12?'morning':new Date().getHours()<18?'afternoon':'evening')+', '+CURRENT_USER+' — here\'s what\'s moving today'; },
-  projects:'Team projects and client projects with the full SOP checklist', crm:'Prospects moving through the funnel', grants:'Open grants, accelerators and fellowships — verified, with closing dates',
+  projects:'Team projects and client projects with the full SOP checklist', clients:'Fed by the CRM — managed by Product & Operations', content:'Content, results and the monthly newsletter and webinar', crm:'Prospects moving through the funnel', grants:'Open grants, accelerators and fellowships — verified, with closing dates',
   newsdigest:'Industry, competitor and customer news', payroll:'Salaries come from the Employee Directory', finance:'Income and expenditure, per project and company-wide',
   employees:'Contact, role, bank and salary details — the source for Payroll', leave:'Requests, approvals and everyone\'s time off', uat:'Guided test runs — a failed check becomes an engineering bug',
   command:'Ask Claude about your tickets, projects, leads and money', settings:'Slack channels, CRM links, triggers and connections', teamspaces:'Everyone at WeCollect'
@@ -3781,6 +3783,7 @@ var PAGE_SUB = {
 function navBadge(id){
   var n = 0;
   if(id==='leave' && isAdminUser()) n = DB.leave.filter(function(l){ return l.status==='Pending' && l.team_member_name!==CURRENT_USER; }).length;
+  if(id==='clients') n = (DB.clients||[]).filter(function(c){ return !c.account_manager && c.status!=='Past'; }).length;
   if(id==='crm') n = DB.leads.filter(function(l){ return (l.owner===CURRENT_USER) && l.next_follow_up_due && l.next_follow_up_due.slice(0,10) <= today10() && l.stage!=='Declined / Cold Leads'; }).length;
   if(id==='projects') n = (DB.projectTasks||[]).filter(function(t){ return t.assignee===CURRENT_USER && t.status!=='Done' && t.due_date && t.due_date <= today10(); }).length;
   return n ? '<span class="nav-badge">'+n+'</span>' : '';
@@ -3788,7 +3791,7 @@ function navBadge(id){
 function renderNav(){
   var html = '';
   MODULES.forEach(function(g){
-    var items = g.items.filter(function(m){ return !(m.adminOnly && !isAdminUser()); });
+    var items = g.items.filter(function(m){ return !(m.adminOnly && !isAdminUser()) && !(m.coreOnly && !isCoreAdmin()) && canSee(m.id); });
     if(!items.length) return;
     if(g.group) html += '<div class="nav-label">'+g.group+'</div>';
     items.forEach(function(m){
@@ -3816,9 +3819,10 @@ function render(){
     command: renderCommand, decisions: renderDecisions, adminlog: renderAdminLog, notifications: renderNotifications,
     oneonones: renderOneOnOnes, newsdigest: renderNewsDigest, training: renderTraining, trainingadmin: renderTrainingAdmin,
     filemanager: renderFileManager, uat: renderUat, crm: renderCrm, content: renderContent, payroll: renderPayroll,
-    finance: renderFinance, leave: renderLeave, grants: renderGrants, employees: renderEmployees, settings: renderSettings
+    finance: renderFinance, leave: renderLeave, grants: renderGrants, employees: renderEmployees, settings: renderSettings, clients: renderClients
   };
   var fn = renderers[STATE.module] || renderDashboard;
+  if(!canSee(STATE.module)) fn = function(){ return noAccess(); };
   c.innerHTML = '';
   try { c.appendChild(fn()); }
   catch(e){ c.innerHTML = '<div class="card"><div class="card-h">Something went wrong on this page</div><div class="wc-note bad">'+esc(e && e.message || e)+'</div></div>'; if(window.console) console.error(e); }
@@ -3977,8 +3981,8 @@ function renderProjects(){
 function setProjFilter(k, v){ STATE.projFilter[k] = v; render(); }
 
 // ── create ──────────────────────────────────────────────────────────────
-function openNewProject(){
-  NEW_PROJ = {kind:'Team', depts:[], members:[]};
+function openNewProject(preClientId){
+  NEW_PROJ = {kind:preClientId?'Client':'Team', depts:[], members:[], client_id:preClientId||''};
   drawNewProject();
 }
 function setNewProjKind(k){
@@ -4000,7 +4004,7 @@ function drawNewProject(){
     var un = visibleTickets().filter(function(t){ return !t.project_id; });
     if(un.length) h += '<div class="wc-f"><label class="wc-lbl">Attach existing tickets (optional)</label><div style="max-height:130px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px">'+un.slice(0,40).map(function(t){ return '<label style="display:flex;gap:8px;font-size:12.5px;padding:3px 0"><input type="checkbox" class="np-tix" value="'+esc(t.ticket_id)+'">'+esc(t.title)+'</label>'; }).join('')+'</div></div>';
   } else {
-    h += '<div class="wc-grid g2">'+fld('Client', inp('np_client','', 'text', 'e.g. Sahel Analytics'))+fld('Contract value', '<div style="display:flex;gap:6px"><select class="wc-sel" id="np_cur" style="width:90px"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select>'+inp('np_value','', 'number', '0')+'</div>', 'Booked in Finance as expected income straight away.')+'</div>';
+    h += '<div class="wc-grid g2">'+fld('Client', '<select class="wc-sel" id="np_clientsel" onchange="npClientPick(this.value)">'+optionsHtml((DB.clients||[]).map(function(c){ return {value:c.client_id, label:c.name+(c.products?' · '+c.products.replace(/,/g,'/'):'')}; }), NEW_PROJ.client_id||'', '＋ New client (type the name)')+'</select><input class="wc-input" id="np_client" style="margin-top:6px'+(NEW_PROJ.client_id?';display:none':'')+'" placeholder="New client name">', 'Pick a client from the board, or type a new one — it is added to the Client board automatically.')+fld('Contract value', '<div style="display:flex;gap:6px"><select class="wc-sel" id="np_cur" style="width:90px"><option>NGN</option><option>USD</option><option>GBP</option><option>EUR</option></select>'+inp('np_value','', 'number', '0')+'</div>', 'Booked in Finance as expected income straight away.')+'</div>';
     h += fld('Scope', ta('np_scope','', 'What are we collecting, from whom, and what does the client get?', 2));
     h += '<div class="wc-grid g3">'+fld('Locations', inp('np_loc','', 'text', 'e.g. Lagos, Ibadan'))+fld('Agent headcount', inp('np_head','', 'number'))+fld('Daily quota / agent', inp('np_quota','', 'number'))+'</div>';
     h += '<div class="wc-grid g3">'+fld('Start date', inp('np_start', today10(), 'date'))+fld('Fieldwork starts', inp('np_fw','', 'date'), 'Pre-Fieldwork is due the workday before.')+fld('Field days', inp('np_days','2','number'))+'</div>';
@@ -4030,15 +4034,16 @@ function saveNewProject(){
     payload.start_date = val('np_start'); payload.target_date = val('np_target'); payload.status = val('np_status');
     payload.link_ticket_ids = Array.prototype.slice.call(document.querySelectorAll('.np-tix:checked')).map(function(c){ return c.value; });
   } else {
-    if(!val('np_client').trim()){ wcToast('Client projects need a client name.', true); return; }
-    payload.client_name = val('np_client').trim(); payload.contract_value = val('np_value'); payload.currency = val('np_cur');
+    var cid = val('np_clientsel');
+    if(!cid && !val('np_client').trim()){ wcToast('Pick a client or type the client name.', true); return; }
+    payload.client_id = cid; payload.client_name = cid ? '' : val('np_client').trim(); payload.contract_value = val('np_value'); payload.currency = val('np_cur');
     payload.scope = val('np_scope'); payload.locations = val('np_loc'); payload.headcount = val('np_head'); payload.daily_quota = val('np_quota');
     payload.start_date = val('np_start'); payload.fieldwork_start = val('np_fw'); payload.field_days = val('np_days') || 2;
     payload.rate_per_record = val('np_rate'); payload.slack_channel_id = val('np_chan');
     payload.roles = {}; SOP_ROLE_LIST.forEach(function(r, i){ var v = val('np_role_'+i); if(v) payload.roles[r] = v; });
   }
   var b = document.getElementById('np_go'); if(b){ b.disabled = true; b.textContent = 'Creating…'; }
-  api('createProject', payload).then(function(res){
+  var sendProject = function(){ api('createProject', payload).then(function(res){
     if(!res.ok){ if(b){ b.disabled = false; b.textContent = 'Create'; } wcFail('Could not create project', res); return; }
     wcClose('newproj');
     refreshData(false).then(function(){
@@ -4047,7 +4052,14 @@ function saveNewProject(){
       wcToast(msg);
       STATE.module = 'x'; openProject(res.project.project_id, k==='Client' ? 'tasks' : 'overview');
     });
-  });
+  }); };
+  if(k==='Client' && !payload.client_id){
+    api('createClient', {name:payload.client_name, actor:CURRENT_USER}).then(function(cr){
+      var cc = cr && (cr.client || null);
+      if(!cc){ if(b){ b.disabled = false; b.textContent = 'Create'; } return wcFail('Could not add the client', cr); }
+      payload.client_id = cc.client_id; sendProject();
+    });
+  } else sendProject();
 }
 
 // ── detail ──────────────────────────────────────────────────────────────
@@ -4544,7 +4556,8 @@ function openEmployee(email){
   EMP_DRAFT = p;
   var csv = function(v){ return String(v||'').split(',').map(function(x){ return x.trim(); }).filter(Boolean); };
   var h = '<div class="wc-grid g2">'+fld('Full name', inp('em_name', p.name))+fld('Work email (their Google account)', inp('em_email', p.email, 'email', '', email?' readonly':''))+'</div>'+
-    '<div class="wc-grid g3">'+fld('Department', sel('em_dept',['Engineering','Operations','Growth','Leadership','Marketing','Finance'], p.department))+fld('Access role', sel('em_role',['Staff','Team Lead','Admin'], p.role||'Staff'), 'Admin sees finance, payroll and settings.')+fld('Slack Member ID', inp('em_slack', p.slack_handle, 'text', 'U01ABCDEF'), 'Profile → ⋯ → Copy member ID.')+'</div>'+
+    '<div class="wc-grid g3">'+fld('Department', sel('em_dept',['Growth','Product & Operations','Engineering','Marketing','Leadership'], /^operations?$/i.test(p.department||'')?'Product & Operations':p.department))+fld('Access role', sel('em_role',['Staff','Leadership','Admin'], p.role||'Staff', undefined, isCoreAdmin()?'':' disabled'), 'Admin: everything. Leadership: everything except core settings. Only an Admin can change this.')+fld('Slack Member ID', inp('em_slack', p.slack_handle, 'text', 'U01ABCDEF'), 'Profile → ⋯ → Copy member ID.')+'</div>'+
+    '<div class="wc-grid g3">'+fld('Marketing contributor', sel('em_mkt',['No','Yes'], String(p.marketing_contributor||'').toLowerCase()==='yes'?'Yes':'No'), 'Lets an intern or colleague enter social numbers and work on content without joining the Marketing team.')+'</div>'+
     '<div class="wc-f"><label class="wc-lbl">SOP role(s) on client projects</label><div id="em_sop">'+chipList('em_sop', SOP_ROLE_LIST, csv(p.sop_role))+'</div><div class="wc-help">Pre-fills the role pickers when you create a client project.</div></div>'+
     '<div class="wc-f"><label class="wc-lbl">Systems they own (bugs from UAT route to them)</label><div id="em_sys">'+chipList('em_sys', SOP_SYSTEMS, csv(p.systems))+'</div></div>'+
     '<div class="wc-grid g3">'+fld('Phone', inp('em_phone', p.phone))+fld('Birthday', inp('em_bday', p.birthday, 'date'))+fld('Start date', inp('em_start', p.start_date, 'date'))+'</div>'+
@@ -4566,7 +4579,7 @@ function loadBanks(cur){
 }
 function pickBank(s){ var o = s.options[s.selectedIndex]; document.getElementById('em_bcode').value = o.value; }
 function saveEmployee(isEdit){
-  var payload = {name:val('em_name').trim(), email:val('em_email').trim(), department:val('em_dept'), role:val('em_role'), slack_handle:val('em_slack').trim(),
+  var payload = {name:val('em_name').trim(), email:val('em_email').trim(), department:val('em_dept'), role:val('em_role'), marketing_contributor:val('em_mkt')==='Yes'?'yes':'', slack_handle:val('em_slack').trim(),
     sop_role:chipVals('em_sop').join(', '), systems:chipVals('em_sys').join(', '), phone:val('em_phone'), birthday:val('em_bday'), start_date:val('em_start'),
     salary_amount:Number(val('em_sal'))||'', emergency_contact:val('em_emerg'), bank_code:val('em_bcode'), account_number:val('em_acct'), actor:CURRENT_USER};
   var bs = document.getElementById('em_bank'); var bname = bs ? (bs.selectedIndex>0 ? bs.options[bs.selectedIndex].getAttribute('data-n') : (EMP_DRAFT||{}).bank_name) : val('em_bname');
@@ -4963,7 +4976,7 @@ function openLeadDetail(id){
   wcModal('lead', esc(l.name), h, true);
 }
 function refreshLead(id){ refreshData().then(function(){ openLeadDetail(id); }); }
-function setLeadStage(id, stage){ api('updateLeadStage', {lead_id:id, stage:stage, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update stage', res); refreshLead(id); }); }
+function setLeadStage(id, stage){ api('updateLeadStage', {lead_id:id, stage:stage, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update stage', res); if(stage==='Onboarding') setTimeout(function(){ wcToast('Moved to Onboarding — added to the Client board and handed to Product & Operations.'); }, 400); refreshLead(id); }); }
 function reassignLead(id, newOwner){ api('reassignLead', {lead_id:id, new_owner:newOwner, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not reassign', res); refreshData(false); wcToast('Reassigned to '+newOwner+'.'); }); }
 function bookLeadMeeting(id){
   var kind = val('ld_kind'), date = val('ld_date'), time = val('ld_time');
@@ -5141,7 +5154,7 @@ function makePool(){
 // ═══════════════════════════════════════════════════════════════════════
 var SETTINGS = null;
 function renderSettings(){
-  if(!isAdminUser()) return wcPage('<div class="empty">Settings are restricted to Admins.</div>');
+  if(!isCoreAdmin()) return wcPage('<div class="empty">Settings are restricted to Admins (core settings).</div>');
   var w = wcPage('<div class="empty">Loading settings…</div>');
   api('getSettings', {}).then(function(res){
     if(!res.ok){ w.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Could not load settings')+'</div>'; return; }
@@ -5171,6 +5184,13 @@ function settingsHtml(s){
     fld('Company name', '<input class="wc-input sv" data-k="company_name" value="'+esc(c.company_name||'WeCollect')+'">')+fld('Company profile (used by Claude to judge grant fit)', '<textarea class="wc-ta sv" data-k="company_profile" style="min-height:110px" placeholder="Stage, country, what we do, team size, sectors, what funding we are looking for…">'+esc(c.company_profile||'')+'</textarea>')+
     '<div class="wc-grid g2">'+fld('Annual leave (days)', '<input class="wc-input sv" type="number" data-k="leave_annual_days" value="'+esc(c.leave_annual_days||20)+'">')+fld('Pay day of month', '<input class="wc-input sv" type="number" data-k="payroll_pay_day" value="'+esc(c.payroll_pay_day||25)+'">')+'</div>'+fld('Opportunities to surface per week', '<input class="wc-input sv" type="number" data-k="opp_weekly_target" value="'+esc(c.opp_weekly_target||'')+'">')+'</div></div>';
 
+  h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Marketing — monthly newsletter &amp; webinar</div><div class="wc-muted" style="margin-bottom:10px">A card with a checklist is created every month. Pick which weekday and which week.</div><div class="wc-grid g3">'+
+    fld('Newsletter — week of month', '<select class="wc-sel sv" data-k="marketing_newsletter_nth">'+optionsHtml([{value:'1',label:'1st'},{value:'2',label:'2nd'},{value:'3',label:'3rd'},{value:'4',label:'4th'}], c.marketing_newsletter_nth||'1')+'</select>')+
+    fld('Newsletter — weekday', '<select class="wc-sel sv" data-k="marketing_newsletter_weekday">'+optionsHtml([{value:'1',label:'Monday'},{value:'2',label:'Tuesday'},{value:'3',label:'Wednesday'},{value:'4',label:'Thursday'},{value:'5',label:'Friday'}], c.marketing_newsletter_weekday||'2')+'</select>')+
+    fld('Owner (gets the monthly cards)', '<select class="wc-sel sv" data-k="marketing_owner">'+optionsHtml(teamNames(), c.marketing_owner||'', 'Unassigned')+'</select>')+
+    fld('Webinar — week of month', '<select class="wc-sel sv" data-k="marketing_webinar_nth">'+optionsHtml([{value:'1',label:'1st'},{value:'2',label:'2nd'},{value:'3',label:'3rd'},{value:'4',label:'4th'}], c.marketing_webinar_nth||'3')+'</select>')+
+    fld('Webinar — weekday', '<select class="wc-sel sv" data-k="marketing_webinar_weekday">'+optionsHtml([{value:'1',label:'Monday'},{value:'2',label:'Tuesday'},{value:'3',label:'Wednesday'},{value:'4',label:'Thursday'},{value:'5',label:'Friday'}], c.marketing_webinar_weekday||'4')+'</select>')+'</div></div>';
+  h += accessCheckHtml();
   h += '<div class="card" style="padding:18px 20px"><div class="card-h">Automations</div><div class="wc-muted" style="margin-bottom:10px">Time-based jobs: Friday content pool, Thursday leadership report, weekly grants scan, daily project and follow-up reminders, payroll reminders.</div>'+
     ((st.triggers===null)?'<div class="wc-note warn">Could not read triggers — re-authorise the script (new permission needed).</div>':(missing.length?'<div class="wc-note warn" style="margin-bottom:10px">Missing: '+missing.map(esc).join(', ')+'</div>':'<div class="wc-note good" style="margin-bottom:10px">All '+(st.expected_triggers||[]).length+' automations are installed.</div>'))+
     '<button class="btn btn-primary btn-sm" onclick="installTriggers()">'+(missing.length?'Install missing automations':'Re-check automations')+'</button> <span class="wc-muted">Safe to press repeatedly — it never creates duplicates.</span><div id="trOut" style="margin-top:8px"></div></div>';
@@ -5681,6 +5701,297 @@ if(!WORKSPACE_MODE){
 var __boot0 = boot;
 boot = function(){ installDesign(); __boot0(); };
 installDesign();
+
+// ── fe7: team access helpers, Clients board, Marketing (content + results + monthly), Access check ──
+['clients','contentMetrics'].forEach(function(k){ if(!DB[k]) DB[k] = []; });
+
+function canManageClients(){ var a = DB.access; return !a || a.priv || a.team==='ops'; }
+function canAddClients(){ var a = DB.access; return !a || a.priv || a.team==='ops' || a.team==='growth'; }
+function canWriteMarketing(){ var a = DB.access; return !a || a.priv || a.marketing || a.team==='growth'; }
+function noAccess(what){ return wcPage('<div class="empty">'+esc(what||'Your team does not have access to this page.')+' If you think that is a mistake, ask an Admin to check your team in the Employee Directory.</div>'); }
+
+// ═══ CLIENTS ═══════════════════════════════════════════════════════════
+var CLIENT_STATUS_TONE = {Onboarding:'warn', Active:'good', Paused:'mute', Past:'mute'};
+function clientProjects(id){ return (DB.projects||[]).filter(function(p){ return p.client_id===id; }); }
+function clientMoney(id){
+  var ids = {}; clientProjects(id).forEach(function(p){ ids[p.project_id] = true; });
+  var rec = 0, exp = 0;
+  (DB.financeEntries||[]).forEach(function(e){ if(!ids[e.project_id] || (e.currency||'NGN')!=='NGN') return; var a = Number(e.amount)||0;
+    if(e.type==='Income' && e.status==='Received') rec += a; if(e.type==='Expense' && e.status==='Paid') exp += a; });
+  return {rec:rec, exp:exp};
+}
+function productPills(v){ return String(v||'').split(',').filter(Boolean).map(function(x){ return pill(x, x==='PMD'?'info':'good'); }).join(' ') || '<span class="wc-muted">—</span>'; }
+function renderClients(){
+  if(!canSee('clients')) return noAccess('The Client board is not available to your team.');
+  var f = STATE.cl || (STATE.cl = {status:'All', product:'All', source:'All', q:''});
+  var all = DB.clients||[];
+  var list = all.filter(function(c){
+    if(f.status!=='All' && c.status!==f.status) return false;
+    if(f.product!=='All' && String(c.products||'').split(',').indexOf(f.product)===-1) return false;
+    if(f.source!=='All' && c.source!==f.source) return false;
+    if(f.q && [c.name,c.contact_name,c.email,c.sector,c.account_manager,c.acquired_by].join(' ').toLowerCase().indexOf(f.q.toLowerCase())===-1) return false;
+    return true;
+  }).sort(function(a,b){ return String(b.created_at).localeCompare(String(a.created_at)); });
+  var haveLead = {}; all.forEach(function(c){ if(c.lead_id) haveLead[c.lead_id] = true; });
+  var pending = (DB.leads||[]).filter(function(l){ return l.stage==='Onboarding' && !haveLead[l.lead_id]; }).length;
+  var acts = (canAddClients() ? '<button class="btn btn-primary" onclick="openAddClient()">+ Add client</button>' : '')+(pending && canAddClients() ? '<button class="btn btn-ghost" onclick="syncClients()">Import '+pending+' from CRM</button>' : '');
+  var h = wcHead('Clients', 'Prospects that reach <b>Onboarding</b> in the CRM land here automatically. You can also add clients who never went through acquisition.', acts);
+  var cnt = function(s){ return all.filter(function(c){ return c.status===s; }).length; };
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+
+    '<div class="card stat-card"><div class="stat-lbl">Clients</div><div class="stat-num">'+all.length+'</div><div class="stat-sub">'+all.filter(function(c){ return c.source==='CRM'; }).length+' from CRM · '+all.filter(function(c){ return c.source==='Direct'; }).length+' direct</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Onboarding</div><div class="stat-num" style="color:var(--amber)">'+cnt('Onboarding')+'</div><div class="stat-sub">being set up</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Active</div><div class="stat-num" style="color:var(--green)">'+cnt('Active')+'</div><div class="stat-sub">PMD '+all.filter(function(c){ return /PMD/.test(c.products||'') && c.status==='Active'; }).length+' · OTG '+all.filter(function(c){ return /OTG/.test(c.products||'') && c.status==='Active'; }).length+'</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">No account manager</div><div class="stat-num" style="color:'+(all.filter(function(c){ return !c.account_manager && c.status!=='Past'; }).length?'var(--red)':'inherit')+'">'+all.filter(function(c){ return !c.account_manager && c.status!=='Past'; }).length+'</div><div class="stat-sub">need an owner in Product &amp; Ops</div></div></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="wc-input" style="max-width:240px" placeholder="Search clients…" value="'+esc(f.q)+'" oninput="setCl(\'q\',this.value)">'+
+    '<select class="wc-sel" style="width:auto" onchange="setCl(\'status\',this.value)">'+optionsHtml(['All','Onboarding','Active','Paused','Past'], f.status)+'</select>'+
+    '<select class="wc-sel" style="width:auto" onchange="setCl(\'product\',this.value)">'+optionsHtml([{value:'All',label:'All products'},'PMD','OTG'], f.product)+'</select>'+
+    '<select class="wc-sel" style="width:auto" onchange="setCl(\'source\',this.value)">'+optionsHtml([{value:'All',label:'CRM + direct'},{value:'CRM',label:'From CRM'},{value:'Direct',label:'Added directly'}], f.source)+'</select></div>';
+  var money_ = isAdminUser();
+  h += '<div class="card" style="padding:4px 0"><div class="wc-scroll"><table class="wc-table"><thead><tr><th>Client</th><th>Product</th><th>Source</th><th>Account manager</th><th>Status</th><th>Projects</th>'+(money_?'<th style="text-align:right">Received</th>':'')+'</tr></thead><tbody>'+
+    (list.length ? list.map(function(c){
+      var ps = clientProjects(c.client_id), m = money_ ? clientMoney(c.client_id) : null;
+      return '<tr style="cursor:pointer" onclick="openClient(\''+c.client_id+'\')"><td><b>'+esc(c.name)+'</b><div class="wc-muted">'+esc([c.contact_name,c.sector].filter(Boolean).join(' · '))+'</div></td><td>'+productPills(c.products)+'</td>'+
+        '<td>'+pill(c.source==='CRM'?'From CRM':'Direct', c.source==='CRM'?'info':'mute')+(c.acquired_by?'<div class="wc-muted">won by '+esc(c.acquired_by)+'</div>':'')+'</td>'+
+        '<td>'+(c.account_manager?esc(c.account_manager):pill('Unassigned','warn'))+'</td><td>'+pill(c.status, CLIENT_STATUS_TONE[c.status]||'mute')+'</td><td>'+(ps.length||'—')+'</td>'+(money_?'<td style="text-align:right">'+(m.rec?money(m.rec):'—')+'</td>':'')+'</tr>';
+    }).join('') : '<tr><td colspan="'+(money_?7:6)+'"><div class="empty">No clients here yet.</div></td></tr>')+'</tbody></table></div></div>';
+  return wcPage(h);
+}
+function setCl(k, v){ STATE.cl[k] = v; if(k==='q'){ var pos = document.activeElement && document.activeElement.selectionStart; render(); var i = document.querySelector('#content input.wc-input'); if(i){ i.focus(); try{ i.setSelectionRange(pos,pos); }catch(e){} } } else render(); }
+function syncClients(){ api('syncClientsFromCrm', {actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not import', res); refreshData().then(function(){ wcToast(res.created+' client'+(res.created===1?'':'s')+' added from the CRM.'); }); }); }
+function clientForm(c, ro){
+  var dis = ro ? ' disabled' : '';
+  return '<div class="wc-grid g2">'+fld('Client / organisation', inp('cl_name', c.name, 'text', '', dis))+fld('Sector', inp('cl_sector', c.sector, 'text', 'e.g. NGO, Fintech, FMCG', dis))+'</div>'+
+    '<div class="wc-grid g3">'+fld('Contact person', inp('cl_contact', c.contact_name, 'text', '', dis))+fld('Email', inp('cl_email', c.email, 'email', '', dis))+fld('Phone', inp('cl_phone', c.phone, 'text', '', dis))+'</div>'+
+    '<div class="wc-grid g3">'+fld('Country', inp('cl_country', c.country, 'text', '', dis))+fld('Account manager (Product & Ops)', sel('cl_mgr', teamNames(), c.account_manager||'', 'Unassigned', dis))+fld('Status', sel('cl_status', ['Onboarding','Active','Paused','Past'], c.status||'Onboarding', undefined, dis))+'</div>'+
+    '<div class="wc-f"><label class="wc-lbl">Product</label><div id="cl_prod">'+chipList('cl_prod', ['PMD','OTG'], String(c.products||'').split(','))+'</div></div>'+
+    fld('Client Slack channel ID (optional)', inp('cl_chan', c.slack_channel_id, 'text', 'C0123ABCD', dis))+fld('Notes', ta('cl_notes', c.notes, 'Contract context, preferences, key dates…', 3).replace('<textarea','<textarea'+dis));
+}
+function clientPayload(){ return {name:val('cl_name').trim(), sector:val('cl_sector'), contact_name:val('cl_contact'), email:val('cl_email'), phone:val('cl_phone'), country:val('cl_country'), account_manager:val('cl_mgr'), status:val('cl_status'), products:chipVals('cl_prod').join(','), slack_channel_id:val('cl_chan'), notes:val('cl_notes'), actor:CURRENT_USER}; }
+function openAddClient(){
+  wcModal('client', 'Add client', '<div class="wc-note" style="margin-bottom:12px">For clients that did not come through the CRM. Prospects that reach <b>Onboarding</b> are added automatically.</div>'+clientForm({status:'Onboarding'}, false)+
+    '<div style="display:flex;gap:8px"><button class="btn btn-primary" id="cl_go" onclick="saveNewClient()">Add client</button><button class="btn btn-ghost" onclick="wcClose(\'client\')">Cancel</button></div>', true);
+}
+function saveNewClient(){
+  var p = clientPayload(); if(!p.name) return wcToast('Give the client a name.', true);
+  var b = document.getElementById('cl_go'); b.disabled = true;
+  api('createClient', p).then(function(res){ b.disabled = false; if(!res.ok) return wcFail('Could not add client', res); wcClose('client'); refreshData().then(function(){ wcToast('Client added'+(p.account_manager?' · '+p.account_manager+' was told':'')+'.'); }); });
+}
+function openClient(id){
+  var c = (DB.clients||[]).filter(function(x){ return x.client_id===id; })[0]; if(!c) return;
+  var ro = !canManageClients(), ps = clientProjects(id), money_ = isAdminUser(), m = money_ ? clientMoney(id) : null;
+  var lead = c.lead_id ? (DB.leads||[]).filter(function(l){ return l.lead_id===c.lead_id; })[0] : null;
+  var h = '<div class="wc-muted" style="margin-bottom:12px">'+pill(c.source==='CRM'?'From CRM':'Added directly', c.source==='CRM'?'info':'mute')+' &nbsp;'+(c.acquired_by?'Won by <b>'+esc(c.acquired_by)+'</b> (Growth) · ':'')+'added '+esc(fmtDate(c.created_at))+
+    (lead?' &nbsp;<a href="#" onclick="wcClose(\'client\');openLeadDetail(\''+lead.lead_id+'\');return false">Open CRM lead</a>':'')+'</div>'+clientForm(c, ro);
+  h += '<div class="card-h" style="margin-top:6px">Projects'+(ps.length?' ('+ps.length+')':'')+'</div>'+
+    (ps.length ? ps.map(function(p){ return '<div class="wc-row"><div style="flex:1"><b>'+esc(p.name)+'</b><div class="wc-muted">'+esc(p.kind)+' · '+esc(p.phase||p.status||'')+'</div></div>'+pill(p.status||'Active', p.status==='Completed'?'mute':'good')+'<button class="btn btn-ghost btn-sm" onclick="wcClose(\'client\');openProject(\''+p.project_id+'\')">Open</button></div>'; }).join('') : '<div class="wc-muted" style="margin-bottom:8px">No projects yet.</div>')+
+    (canManageClients() ? '<div style="margin:8px 0 12px"><button class="btn btn-ghost btn-sm" onclick="wcClose(\'client\');openNewProject(\''+id+'\')">+ New project for this client</button></div>' : '');
+  if(money_) h += '<div class="wc-note" style="margin-bottom:12px">Income received across this client’s projects: <b>'+money(m.rec)+'</b> · expenses paid: <b>'+money(m.exp)+'</b> (NGN entries; per-project detail is in Finance).</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">'+(ro?'':'<button class="btn btn-primary" id="cl_go" onclick="saveClient(\''+id+'\')">Save</button>')+(isAdminUser() && !ps.length ? '<button class="btn btn-danger btn-sm" onclick="deleteClientClick(\''+id+'\')">Delete</button>' : '')+'<button class="btn btn-ghost" onclick="wcClose(\'client\')">Close</button></div>';
+  wcModal('client', esc(c.name), h, true);
+}
+function saveClient(id){
+  var p = clientPayload(); p.client_id = id; if(!p.name) return wcToast('A client needs a name.', true);
+  var b = document.getElementById('cl_go'); b.disabled = true;
+  api('updateClient', p).then(function(res){ b.disabled = false; if(!res.ok) return wcFail('Could not save', res); wcClose('client'); refreshData().then(function(){ wcToast('Client saved.'); }); });
+}
+function deleteClientClick(id){ if(!confirm('Delete this client? This cannot be undone.')) return; api('deleteClient', {client_id:id, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not delete', res); wcClose('client'); refreshData(); }); }
+function npClientPick(v){ var i = document.getElementById('np_client'); if(i) i.style.display = v ? 'none' : ''; }
+
+// ═══ MARKETING ═════════════════════════════════════════════════════════
+var MK_PLATFORMS = ['LinkedIn','Instagram','Facebook','Twitter/X'];
+function mkState(){ return STATE.mk || (STATE.mk = {tab:'overview', days:30}); }
+function mkItem(id){ return (DB.contentCalendar||[]).filter(function(c){ return c.content_id===id; })[0]; }
+function mkNum(v){ return Number(v)||0; }
+function fmtN(n){ return Number(n||0).toLocaleString('en-US'); }
+// Numbers typed for a post are totals-to-date: the latest entry per post replaces earlier ones.
+function mkSnapshots(from, to){
+  var by = {};
+  (DB.contentMetrics||[]).forEach(function(r){
+    var d = String(r.recorded_on).slice(0,10); if(from && d<from) return; if(to && d>to) return;
+    var k = r.content_id || ('acct:'+r.metric_id);
+    if(!by[k] || d > String(by[k].recorded_on).slice(0,10) || (d===String(by[k].recorded_on).slice(0,10) && String(r.entered_at)>String(by[k].entered_at))) by[k] = r;
+  });
+  return Object.keys(by).map(function(k){ return by[k]; });
+}
+function daysAgo(n){ return new Date(Date.now()-n*86400000).toISOString().slice(0,10); }
+function sumF(rows, f){ return rows.reduce(function(a,r){ return a + mkNum(r[f]); }, 0); }
+function eng(rows){ return sumF(rows,'likes')+sumF(rows,'comments')+sumF(rows,'shares'); }
+function deltaPill(cur, prev){ if(!prev) return ''; var d = Math.round((cur-prev)/prev*100); return '<span class="'+(d>=0?'good':'bad')+'" style="font-weight:600">'+(d>=0?'▲ ':'▼ ')+Math.abs(d)+'%</span> vs previous period'; }
+
+function renderContent(){
+  if(!canSee('content')) return noAccess('Marketing is not available to your team.');
+  var mk = mkState();
+  if(!STATE.mkEnsured && WORKSPACE_MODE && canWriteMarketing()){
+    STATE.mkEnsured = true;
+    api('ensureMarketingCycle', {actor:CURRENT_USER}).then(function(res){ if(res && res.ok && res.created) refreshData(); });
+  }
+  var acts = (canWriteMarketing() ? '<button class="btn btn-primary" onclick="openNewContent()">+ New content</button>' : '')+(isAdminUser() ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run weekly pool now</button>' : '');
+  var tabs = [['overview','Overview'],['board','Content board'],['results','Results'],['monthly','Monthly webinar & newsletter']];
+  var h = wcHead('Marketing', 'LinkedIn · Instagram · Facebook · Twitter/X, plus the monthly newsletter and webinar. Claude proposes a fresh content pool every Friday morning.', acts);
+  h += '<div class="wc-tabs">'+tabs.map(function(t){ return '<div class="wc-tab'+(mk.tab===t[0]?' on':'')+'" onclick="setMkTab(\''+t[0]+'\')">'+t[1]+'</div>'; }).join('')+'</div>';
+  var w = wcPage(h);
+  var body = document.createElement('div');
+  if(mk.tab==='board'){ body.appendChild(renderBoardPage('content')); }
+  else body.innerHTML = mk.tab==='results' ? mkResultsHtml() : mk.tab==='monthly' ? mkMonthlyHtml() : mkOverviewHtml();
+  w.appendChild(body);
+  return w;
+}
+function setMkTab(t){ mkState().tab = t; render(); }
+function setMkDays(n){ mkState().days = Number(n); render(); }
+function mkOverviewHtml(){
+  var days = mkState().days, from = daysAgo(days), prevFrom = daysAgo(days*2), prevTo = daysAgo(days+1);
+  var cur = mkSnapshots(from), prev = mkSnapshots(prevFrom, prevTo);
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px"><div class="wc-muted">Totals use the latest numbers entered for each post in the period.</div><select class="wc-sel" style="width:auto" onchange="setMkDays(this.value)">'+optionsHtml([{value:7,label:'Last 7 days'},{value:30,label:'Last 30 days'},{value:90,label:'Last 90 days'}], days)+'</select></div>';
+  var card = function(l, f, fn){ var c = fn?fn(cur):sumF(cur,f), p = fn?fn(prev):sumF(prev,f); return '<div class="card stat-card"><div class="stat-lbl">'+l+'</div><div class="stat-num">'+fmtN(c)+'</div><div class="stat-sub">'+(deltaPill(c,p)||'&nbsp;')+'</div></div>'; };
+  h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+card('Impressions','impressions')+card('Engagements','',eng)+card('Link clicks','clicks')+card('Followers gained','followers_gained')+'</div>';
+  // needs numbers
+  var have = {}; (DB.contentMetrics||[]).forEach(function(r){ if(r.content_id) have[r.content_id] = true; });
+  var need = (DB.contentCalendar||[]).filter(function(c){ return c.stage==='Published' && !have[c.content_id] && MK_PLATFORMS.concat(['Newsletter','Webinar']).indexOf(c.platform)>-1; });
+  if(need.length) h += '<div class="card" style="padding:14px 18px;margin-bottom:16px"><div class="card-h">Needs numbers <span class="wc-muted" style="font-weight:400">published, nothing entered yet</span></div>'+
+    need.slice(0,8).map(function(c){ return '<div class="wc-row"><div style="flex:1"><b>'+esc(c.title)+'</b><div class="wc-muted">'+esc(c.platform)+(c.scheduled_date?' · '+esc(fmtDate(c.scheduled_date)):'')+'</div></div>'+(canWriteMarketing()?'<button class="btn btn-primary btn-sm" onclick="mkEnter(\''+c.content_id+'\')">Enter numbers</button>':'')+'</div>'; }).join('')+(need.length>8?'<div class="wc-muted" style="margin-top:6px">+ '+(need.length-8)+' more</div>':'')+'</div>';
+  // per platform
+  var rows = MK_PLATFORMS.concat(['Newsletter','Webinar']).map(function(pl){
+    var s = cur.filter(function(r){ return r.platform===pl; }), posts = s.filter(function(r){ return r.content_id; }).length;
+    return {pl:pl, posts:posts, imp:sumF(s,'impressions'), eng:eng(s), clk:sumF(s,'clicks'), fol:sumF(s,'followers_gained'), reg:sumF(s,'registrations'), att:sumF(s,'attendees'), opn:sumF(s,'opens')};
+  });
+  h += '<div class="card" style="padding:4px 0;margin-bottom:16px"><div class="card-h" style="padding:14px 18px 4px">By platform</div><div class="wc-scroll"><table class="wc-table"><thead><tr><th>Platform</th><th style="text-align:right">Posts with numbers</th><th style="text-align:right">Impressions</th><th style="text-align:right">Engagements</th><th style="text-align:right">Clicks</th><th style="text-align:right">Followers +</th></tr></thead><tbody>'+
+    rows.slice(0,4).map(function(r){ return '<tr><td><b>'+esc(r.pl)+'</b></td><td style="text-align:right">'+r.posts+'</td><td style="text-align:right">'+fmtN(r.imp)+'</td><td style="text-align:right">'+fmtN(r.eng)+'</td><td style="text-align:right">'+fmtN(r.clk)+'</td><td style="text-align:right">'+fmtN(r.fol)+'</td></tr>'; }).join('')+
+    rows.slice(4).map(function(r){ return '<tr><td><b>'+esc(r.pl)+'</b></td><td style="text-align:right">'+r.posts+'</td><td colspan="4" class="wc-muted">'+(r.pl==='Newsletter'?fmtN(r.opn)+' opens · '+fmtN(r.clk)+' clicks':fmtN(r.reg)+' registrations · '+fmtN(r.att)+' attended')+'</td></tr>'; }).join('')+'</tbody></table></div></div>';
+  // weekly trend
+  var weeks = []; for(var i=7;i>=0;i--){ var a = daysAgo(i*7+6), b = daysAgo(i*7); weeks.push({a:a, b:b, v:sumF(mkSnapshots(a,b),'impressions')}); }
+  var mx = Math.max.apply(null,[1].concat(weeks.map(function(w){ return w.v; })));
+  h += '<div class="wc-grid g2" style="margin-bottom:16px"><div class="card" style="padding:16px 18px"><div class="card-h">Impressions by week</div><div style="display:flex;gap:8px;align-items:flex-end;height:120px">'+
+    weeks.map(function(w){ return '<div style="flex:1;text-align:center" title="'+fmtN(w.v)+' · week ending '+w.b+'"><div style="background:var(--brand);border-radius:5px 5px 0 0;height:'+Math.max(2,Math.round(w.v/mx*96))+'px"></div><div class="wc-muted" style="font-size:10px;margin-top:4px">'+w.b.slice(5)+'</div></div>'; }).join('')+'</div></div>';
+  var top = cur.filter(function(r){ return r.content_id; }).sort(function(a,b){ return mkNum(b.impressions)-mkNum(a.impressions); }).slice(0,5);
+  h += '<div class="card" style="padding:16px 18px"><div class="card-h">Top posts</div>'+(top.length ? top.map(function(r,i){ var it = mkItem(r.content_id); return '<div class="wc-row"><span class="wc-muted" style="width:18px">'+(i+1)+'</span><div style="flex:1"><b>'+esc(it?it.title:'(removed)')+'</b><div class="wc-muted">'+esc(r.platform)+'</div></div><b>'+fmtN(r.impressions)+'</b></div>'; }).join('') : '<div class="wc-muted">Numbers appear here once the intern has entered some.</div>')+'</div></div>';
+  return h;
+}
+function mkFieldSet(item){
+  var monthly = item && (item.type==='Webinar' || item.type==='Newsletter');
+  var f = [['impressions','Impressions'],['reach','Reach'],['likes','Likes / reactions'],['comments','Comments'],['shares','Shares / reposts'],['clicks','Link clicks'],['followers_gained','Followers gained']];
+  if(item && item.type==='Webinar') f = [['registrations','Registrations'],['attendees','Attendees'],['clicks','Link clicks'],['comments','Questions / comments'],['followers_gained','Followers gained']];
+  if(item && item.type==='Newsletter') f = [['opens','Opens'],['clicks','Link clicks'],['shares','Forwards / shares'],['followers_gained','New subscribers']];
+  return f;
+}
+function mkResultsHtml(){
+  var mk = mkState(), pre = mk.pre || '';
+  var items = (DB.contentCalendar||[]).filter(function(c){ return MK_PLATFORMS.concat(['Newsletter','Webinar']).indexOf(c.platform)>-1 && (c.stage==='Published'||c.stage==='Scheduled'||c.cycle_key); }).sort(function(a,b){ return String(b.scheduled_date||b.created_at).localeCompare(String(a.scheduled_date||a.created_at)); });
+  var h = '';
+  if(canWriteMarketing()){
+    var it = pre ? mkItem(pre) : null;
+    h += '<div class="card" style="padding:16px 18px;margin-bottom:16px"><div class="card-h">Enter numbers</div><div class="wc-muted" style="margin-bottom:10px">Copy the figures from the platform’s analytics. Enter the <b>totals to date</b> — a later entry for the same post replaces the earlier one in the dashboard, so you can update a post after a day and again after a week.</div>'+
+      '<div class="wc-grid g3">'+fld('Post', sel('mk_post', items.map(function(c){ return {value:c.content_id, label:c.title+' · '+c.platform}; }), pre, 'Account-level numbers (no post)', ' onchange="mkPostChanged()"'))+
+      '<div id="mk_platwrap" style="'+(pre?'display:none':'')+'">'+fld('Platform', sel('mk_plat', MK_PLATFORMS, 'LinkedIn'))+'</div>'+fld('Numbers as of', inp('mk_date', today10(), 'date'))+'</div>'+
+      '<div class="wc-grid g4 keep2" id="mk_fields">'+mkFieldSet(it).map(function(x){ return fld(x[1], inp('mk_'+x[0], '', 'text', '0', ' inputmode="numeric"')); }).join('')+'</div>'+
+      fld('Note (optional)', inp('mk_note', '', 'text', 'e.g. boosted for 3 days'))+
+      '<button class="btn btn-primary" id="mk_go" onclick="saveMetrics()">Save numbers</button></div>';
+  }
+  var log = (DB.contentMetrics||[]).slice().sort(function(a,b){ return String(b.recorded_on).localeCompare(String(a.recorded_on)) || String(b.entered_at).localeCompare(String(a.entered_at)); }).slice(0,60);
+  h += '<div class="card" style="padding:4px 0"><div class="card-h" style="padding:14px 18px 4px">Entries</div><div class="wc-scroll"><table class="wc-table"><thead><tr><th>Date</th><th>Post</th><th>Platform</th><th style="text-align:right">Impr.</th><th style="text-align:right">Eng.</th><th style="text-align:right">Clicks</th><th>Other</th><th>By</th><th></th></tr></thead><tbody>'+
+    (log.length ? log.map(function(r){ var it = r.content_id ? mkItem(r.content_id) : null;
+      var other = [r.reach?fmtN(r.reach)+' reach':'', r.followers_gained?'+'+fmtN(r.followers_gained)+' followers':'', r.registrations?fmtN(r.registrations)+' reg.':'', r.attendees?fmtN(r.attendees)+' attended':'', r.opens?fmtN(r.opens)+' opens':''].filter(Boolean).join(' · ');
+      return '<tr><td>'+esc(fmtDate(r.recorded_on))+'</td><td>'+(it?esc(it.title):'<i class="wc-muted">Account-level</i>')+'</td><td>'+esc(r.platform)+'</td><td style="text-align:right">'+(r.impressions!==''?fmtN(r.impressions):'—')+'</td><td style="text-align:right">'+((r.likes===''&&r.comments===''&&r.shares==='')?'—':fmtN(mkNum(r.likes)+mkNum(r.comments)+mkNum(r.shares)))+'</td><td style="text-align:right">'+(r.clicks!==''?fmtN(r.clicks):'—')+'</td><td class="wc-muted">'+esc(other)+'</td><td>'+esc(r.entered_by||'')+'</td><td>'+((r.entered_by===CURRENT_USER||isAdminUser())?'<button class="btn btn-ghost btn-sm" onclick="deleteMetric(\''+r.metric_id+'\')">Remove</button>':'')+'</td></tr>'; }).join('') : '<tr><td colspan="9"><div class="empty">No numbers entered yet.</div></td></tr>')+'</tbody></table></div></div>';
+  return h;
+}
+function mkEnter(id){ var mk = mkState(); mk.tab = 'results'; mk.pre = id || ''; render(); var e = document.getElementById('mk_impressions') || document.getElementById('mk_opens') || document.getElementById('mk_registrations'); if(e) e.focus(); }
+function mkPostChanged(){
+  var id = val('mk_post'), it = id ? mkItem(id) : null, w = document.getElementById('mk_platwrap');
+  if(w) w.style.display = id ? 'none' : '';
+  var box = document.getElementById('mk_fields');
+  if(box) box.innerHTML = mkFieldSet(it).map(function(x){ return fld(x[1], inp('mk_'+x[0], '', 'text', '0', ' inputmode="numeric"')); }).join('');
+}
+function saveMetrics(){
+  var id = val('mk_post'), p = {content_id:id, platform:id?'':val('mk_plat'), recorded_on:val('mk_date'), note:val('mk_note'), actor:CURRENT_USER}, any = false;
+  ['impressions','reach','likes','comments','shares','clicks','followers_gained','registrations','attendees','opens'].forEach(function(f){ var e = document.getElementById('mk_'+f); if(e && e.value!==''){ p[f] = e.value; any = true; } });
+  if(!any) return wcToast('Enter at least one number.', true);
+  var b = document.getElementById('mk_go'); b.disabled = true;
+  api('recordContentMetrics', p).then(function(res){ b.disabled = false; if(!res.ok) return wcFail('Could not save', res); mkState().pre = ''; refreshData().then(function(){ wcToast('Numbers saved.'); }); });
+}
+function deleteMetric(id){ if(!confirm('Remove this entry?')) return; api('deleteContentMetric', {metric_id:id, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not remove', res); refreshData(); }); }
+function mkMonthlyHtml(){
+  var items = (DB.contentCalendar||[]).filter(function(c){ return c.cycle_key; }).sort(function(a,b){ return String(b.scheduled_date).localeCompare(String(a.scheduled_date)); }).slice(0,8);
+  var h = '<div class="wc-note" style="margin-bottom:14px">A <b>newsletter</b> (default first Tuesday) and a <b>webinar</b> (default third Thursday) are created every month with their checklist. Dates, and the owner, are set in Settings → Marketing.</div>';
+  if(!items.length) return h+'<div class="empty">No monthly items yet. They are created automatically when this page is opened by the marketing team.</div>';
+  h += '<div class="wc-grid g2">'+items.map(function(c){
+    var list = parseJson(c.checklist_json, []), done = list.filter(function(x){ return x.done; }).length;
+    var dl = c.scheduled_date ? Math.round((new Date(c.scheduled_date+'T12:00:00')-new Date())/86400000) : null;
+    var rows = list.map(function(x,i){ return '<div class="wc-task'+(x.done?' done':'')+'"><span class="wc-check'+(x.done?' on':'')+(canWriteMarketing()?'':' lock')+'" onclick="'+(canWriteMarketing()?'mkTick(\''+c.content_id+'\','+i+','+(x.done?'false':'true')+')':'')+'">'+(x.done?'✓':'')+'</span><div style="flex:1">'+esc(x.text)+'</div></div>'; }).join('');
+    return '<div class="card" style="padding:16px 18px"><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><div style="flex:1"><b style="font-size:15px">'+esc(c.title)+'</b><div class="wc-muted">'+esc(c.type)+' · '+(c.scheduled_date?esc(fmtDate(c.scheduled_date)):'no date')+'</div></div>'+
+      pill(c.stage==='Published'?'Done':(dl!==null&&dl<0?'Overdue':(dl!==null?'in '+dl+' day'+(dl===1?'':'s'):'')), c.stage==='Published'?'good':(dl!==null&&dl<0?'bad':'info'))+'</div>'+
+      '<div class="wc-muted" style="margin-bottom:8px">'+done+' of '+list.length+' steps done · owner: '+(c.owner?esc(c.owner):'unassigned')+'</div>'+rows+
+      '<div style="margin-top:10px;display:flex;gap:8px">'+(canWriteMarketing()?'<button class="btn btn-ghost btn-sm" onclick="mkEnter(\''+c.content_id+'\')">Enter results</button>':'')+'</div></div>';
+  }).join('')+'</div>';
+  return h;
+}
+function mkTick(id, i, done){ api('updateContentChecklist', {content_id:id, index:i, done:done, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData(); }); }
+
+// ═══ ACCESS CHECK (Settings) ═══════════════════════════════════════════
+function accessCheckHtml(){
+  return '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Who can see what <button class="btn btn-ghost btn-sm" onclick="runAccessCheck()">Run access check</button></div>'+
+    '<div class="wc-muted">Admin: everything. Leadership: everything except these core settings. Growth: CRM and clients. Product &amp; Operations: projects, clients and UAT. Engineering: tickets, UAT and clients. Marketing contributors: the Marketing page only. Payroll, finance and salaries are visible to Admin and Leadership only — enforced on the server.</div><div id="acOut" style="margin-top:10px"></div></div>';
+}
+function runAccessCheck(){
+  var o = document.getElementById('acOut'); o.innerHTML = '<span class="wc-muted">Checking…</span>';
+  api('accessReport', {}).then(function(res){
+    if(!res.ok){ o.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Failed')+'</div>'; return; }
+    var h = res.warnings.length ? '<div class="wc-note warn" style="margin-bottom:10px"><b>Fix these:</b><br>'+res.warnings.map(esc).join('<br>')+'</div>' : '<div class="wc-note good" style="margin-bottom:10px">Every person’s department matches a team.</div>';
+    h += '<div class="wc-scroll"><table class="wc-table"><thead><tr><th>Person</th><th>Team</th><th>Level</th><th>Money &amp; payroll</th><th>Pages hidden from them</th></tr></thead><tbody>'+res.members.map(function(m){
+      return '<tr><td><b>'+esc(m.name)+'</b><div class="wc-muted">'+esc(m.department||'no department')+(m.marketing?' · marketing contributor':'')+'</div></td><td>'+esc(m.team)+'</td><td>'+esc(m.level)+'</td><td>'+(m.sees_money?pill('Can see','warn'):pill('Hidden','good'))+'</td><td class="wc-muted">'+(m.hidden_pages.length?esc(m.hidden_pages.join(', ')):'none')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+    o.innerHTML = h;
+  });
+}
+
+// ═══ OFFLINE PREVIEW SUPPORT ═══════════════════════════════════════════
+(function(){
+  if(WORKSPACE_MODE) return;
+  function ok(o){ return Object.assign({ok:true}, o||{}); }
+  function err(m){ return {ok:false, error:m}; }
+  function id(p){ return p+Math.random().toString(36).slice(2,9); }
+  function ymd(n){ return new Date(Date.now()+n*86400000).toISOString().slice(0,10); }
+  var cleanP = function(v){ var a = Array.isArray(v)?v:String(v||'').split(','), o = []; a.forEach(function(x){ x = String(x).trim().toUpperCase(); if((x==='PMD'||x==='OTG') && o.indexOf(x)===-1) o.push(x); }); return o.join(','); };
+  function mkClient(p){ var c = {client_id:id('cl'), name:p.name, sector:p.sector||'', contact_name:p.contact_name||'', email:p.email||'', phone:p.phone||'', country:p.country||'', products:cleanP(p.products), source:p.lead_id?'CRM':'Direct', lead_id:p.lead_id||'', acquired_by:p.acquired_by||CURRENT_USER, account_manager:p.account_manager||'', status:p.status||'Onboarding', notes:p.notes||'', slack_channel_id:'', created_at:new Date().toISOString(), created_by:CURRENT_USER, updated_at:new Date().toISOString()}; DB.clients.push(c); return c; }
+  function monthlyItems(){
+    var made = [], today = new Date(), steps = {Newsletter:['Choose topics and stories to feature','Draft the newsletter','Design and proofread','Review and approval','Send to subscribers and the newsletter-nurture list','Enter opens and clicks in Results'], Webinar:['Confirm topic and speaker','Create the registration page','Promote on LinkedIn, Instagram, Facebook and X','Dry run and tech check','Run the webinar and record it','Send the recording and a thank-you follow-up','Enter registrations and attendance in Results']};
+    [0,1].forEach(function(off){ var y = today.getFullYear(), m = today.getMonth()+off; ['Newsletter','Webinar'].forEach(function(k){
+      var key = k.toLowerCase()+'-'+new Date(Date.UTC(y,m,1)).toISOString().slice(0,7); if(DB.contentCalendar.some(function(c){ return c.cycle_key===key; })) return;
+      var wd = k==='Newsletter'?2:4, nth = k==='Newsletter'?1:3, d = new Date(Date.UTC(y,m,1)); d = new Date(Date.UTC(y,m,1+((wd-d.getUTCDay()+7)%7)+(nth-1)*7));
+      var it = {content_id:id('c'), title:d.toLocaleString('en-US',{month:'long',year:'numeric',timeZone:'UTC'})+' '+k, type:k, platform:k, stage:'Drafting', owner:'', notes:'', scheduled_date:d.toISOString().slice(0,10), created_at:new Date().toISOString(), source:'Monthly cycle', cycle_key:key, checklist_json:JSON.stringify(steps[k].map(function(t){ return {text:t, done:false}; }))};
+      DB.contentCalendar.push(it); made.push(it); }); });
+    return made;
+  }
+  var API3 = {
+    createClient: function(p){ if(!String(p.name||'').trim()) return err('Give the client a name.'); var d = DB.clients.filter(function(c){ return c.name.toLowerCase()===String(p.name).trim().toLowerCase() || (p.lead_id && c.lead_id===p.lead_id); })[0]; if(d) return p.lead_id ? ok({created:false, client:d}) : {ok:false, error:'A client called "'+d.name+'" already exists.', client:d}; return ok({created:true, client:mkClient(p)}); },
+    updateClient: function(p){ var c = DB.clients.filter(function(x){ return x.client_id===p.client_id; })[0]; if(!c) return err('Client not found.'); ['name','sector','contact_name','email','phone','country','status','notes','slack_channel_id','account_manager','acquired_by'].forEach(function(k){ if(p.hasOwnProperty(k)) c[k] = p[k]; }); if(p.hasOwnProperty('products')) c.products = cleanP(p.products); DB.projects.forEach(function(x){ if(x.client_id===c.client_id) x.client_name = c.name; }); return ok(); },
+    deleteClient: function(p){ if(DB.projects.some(function(x){ return x.client_id===p.client_id; })) return err('This client has projects. Set the client to Past instead of deleting it.'); DB.clients = DB.clients.filter(function(c){ return c.client_id!==p.client_id; }); return ok(); },
+    syncClientsFromCrm: function(){ var n = 0; DB.leads.filter(function(l){ return l.stage==='Onboarding' && !DB.clients.some(function(c){ return c.lead_id===l.lead_id; }); }).forEach(function(l){ mkClient({lead_id:l.lead_id, name:l.organization||l.name, contact_name:l.name, email:l.email, phone:l.phone, acquired_by:l.owner}); n++; }); return ok({created:n}); },
+    recordContentMetrics: function(p){ var it = p.content_id ? DB.contentCalendar.filter(function(c){ return c.content_id===p.content_id; })[0] : null; var plat = (it&&it.platform)||p.platform; if(!plat) return err('Choose the platform these numbers are from.'); var r = {metric_id:id('m'), content_id:p.content_id||'', platform:plat, recorded_on:p.recorded_on||ymd(0), note:p.note||'', entered_by:CURRENT_USER, entered_at:new Date().toISOString()}, any = false, bad = false;
+      ['impressions','reach','likes','comments','shares','clicks','followers_gained','registrations','attendees','opens'].forEach(function(f){ var v = p[f]; if(v===undefined||v===''||v===null){ r[f] = ''; return; } var n = Number(String(v).replace(/,/g,'')); if(isNaN(n)||n<0){ bad = f; return; } r[f] = n; any = true; });
+      if(bad) return err('Enter '+bad+' as a number (0 or more).'); if(!any) return err('Enter at least one number.'); DB.contentMetrics.push(r); return ok({metric:r}); },
+    deleteContentMetric: function(p){ DB.contentMetrics = DB.contentMetrics.filter(function(m){ return m.metric_id!==p.metric_id; }); return ok(); },
+    updateContentChecklist: function(p){ var c = DB.contentCalendar.filter(function(x){ return x.content_id===p.content_id; })[0]; if(!c) return err('Content item not found.'); var l = parseJson(c.checklist_json, []); if(!l[p.index]) return err('Checklist step not found.'); l[p.index].done = !!p.done; c.checklist_json = JSON.stringify(l); if(l.every(function(x){ return x.done; })) c.stage = 'Published'; else if(c.stage==='Published' && c.cycle_key) c.stage = 'Drafting'; return ok({checklist:l, stage:c.stage}); },
+    ensureMarketingCycle: function(){ var m = monthlyItems(); return ok({created:m.length}); },
+    accessReport: function(){ return ok({members:DB.team.map(function(p){ var admin = p.role==='Admin'; return {name:p.name, role:p.role||'Staff', department:p.department||'', team:p.department||'(no team)', marketing:false, level:admin?'Admin (everything)':(p.role==='Leadership'?'Leadership (everything except core settings)':'Team access'), hidden_pages:admin?[]:['payroll','finance','employees','settings'], sees_money:admin||p.role==='Leadership', warning:''}; }), warnings:[], rules:{}}); }
+  };
+  var prev = mockApi;
+  mockApi = function(action, payload){
+    if(API3[action]) return API3[action](payload||{});
+    if(action==='createProject' && payload && payload.client_id){ var c = DB.clients.filter(function(x){ return x.client_id===payload.client_id; })[0]; if(c){ payload = Object.assign({}, payload, {client_name:c.name}); } }
+    var res = prev(action, payload);
+    if(action==='createProject' && res && res.ok && payload && payload.client_id && res.project){ res.project.client_id = payload.client_id; }
+    if(action==='updateLeadStage' && res && res.ok && payload && payload.stage==='Onboarding'){ var l = DB.leads.filter(function(x){ return x.lead_id===payload.lead_id; })[0]; if(l && !DB.clients.some(function(c){ return c.lead_id===l.lead_id; })) mkClient({lead_id:l.lead_id, name:l.organization||l.name, contact_name:l.name, email:l.email, phone:l.phone, acquired_by:l.owner}); }
+    return res;
+  };
+  // preview data
+  mkClient({name:'Sahel Analytics', sector:'Research', contact_name:'Aisha Bello', email:'aisha@sahel.example', products:'PMD', account_manager:'Chidi', status:'Active', acquired_by:'Oreoluwa', lead_id:'seedlead1'});
+  mkClient({name:'Hope Foundation', sector:'NGO', contact_name:'Dr. Obi', email:'obi@hope.example', products:'OTG,PMD', status:'Onboarding', acquired_by:'Sarah', lead_id:'seedlead2'});
+  var d = mkClient({name:'Kola Agro (direct)', sector:'Agri', contact_name:'Kola A.', products:'OTG', account_manager:'Sarah', status:'Active'}); d.source = 'Direct'; d.lead_id = ''; d.acquired_by = '';
+  DB.projects.forEach(function(p){ if(p.kind==='Client' && p.client_name==='Sahel Analytics') p.client_id = DB.clients[0].client_id; });
+  monthlyItems();
+  var posts = [['LinkedIn','Why field data needs GPS proof',-12,5400,210,48,31],['Instagram','Meet our agents in Lagos',-9,3100,320,22,64],['Facebook','Hiring: field agents',-6,2200,95,60,12],['Twitter/X','World Statistics Day thread',-3,1800,70,9,8]];
+  posts.forEach(function(x){ var c = {content_id:id('c'), title:x[1], type:'Post', platform:x[0], stage:'Published', owner:'Sarah', notes:'', scheduled_date:ymd(x[2]), created_at:new Date().toISOString(), source:'Manual'}; DB.contentCalendar.push(c);
+    DB.contentMetrics.push({metric_id:id('m'), content_id:c.content_id, platform:x[0], recorded_on:ymd(x[2]+7>0?-1:x[2]+7), impressions:x[3], reach:Math.round(x[3]*0.7), likes:x[4], comments:Math.round(x[4]/8), shares:Math.round(x[4]/10), clicks:x[5], followers_gained:x[6], registrations:'', attendees:'', opens:'', note:'', entered_by:'Tunde', entered_at:new Date().toISOString()}); });
+  DB.contentCalendar.push({content_id:id('c'), title:'Case study: Lagos survey', type:'Post', platform:'LinkedIn', stage:'Published', owner:'Sarah', notes:'', scheduled_date:ymd(-1), created_at:new Date().toISOString(), source:'Manual'});
+})();
 
 document.getElementById('globalSearch').addEventListener('input', function(e){
   runGlobalSearch(e.target.value);
