@@ -708,8 +708,8 @@ function mockApi(action, payload) {
     }
 
     // ── Payroll ─────────────────────────────────────────────────────────
-    case 'listPaystackBanks': {
-      return {ok:true, banks:[{name:'Access Bank',code:'044'},{name:'GTBank',code:'058'},{name:'Zenith Bank',code:'057'},{name:'UBA',code:'033'},{name:'First Bank',code:'011'}]};
+    case 'listBanks': {
+      return {ok:true, banks:[{name:'ACCESS BANK',code:'000014'},{name:'GTBank',code:'000013'},{name:'Zenith Bank',code:'000015'},{name:'UBA',code:'000004'},{name:'First Bank',code:'000016'}]};
     }
     case 'generateMonthlyPayrollBatch': {
       var already = {}; DB.payroll.filter(function(p){return p.month===payload.month;}).forEach(function(p){already[p.team_member_name]=true;});
@@ -721,13 +721,6 @@ function mockApi(action, payload) {
         DB.payroll.push(entry); createdEntries.push(entry);
       });
       return {ok:true, created:createdEntries.length, entries:createdEntries};
-    }
-    case 'verifyPayrollAccount': {
-      var pe = DB.payroll.filter(function(x){return x.payroll_id===payload.payroll_id;})[0];
-      if(!pe) return {ok:false, error:'Payroll entry not found.'};
-      pe.account_number = payload.account_number||pe.account_number; pe.bank_code = payload.bank_code||pe.bank_code;
-      pe.account_name = pe.team_member_name; pe.account_verified = 'yes';
-      return {ok:true, account_name:pe.account_name};
     }
     case 'updatePayrollEntry': {
       var pe2 = DB.payroll.filter(function(x){return x.payroll_id===payload.payroll_id;})[0];
@@ -745,10 +738,10 @@ function mockApi(action, payload) {
     case 'exportPayrollCsv': {
       var entries = DB.payroll.filter(function(p){return p.month===payload.month && p.status!=='Paid';});
       if(!entries.length) return {ok:false, error:'No unpaid payroll entries found for '+payload.month+'.'};
-      var unverified = entries.filter(function(e){return e.account_verified!=='yes';});
-      if(unverified.length) return {ok:false, error:unverified.length+' entries not yet verified: '+unverified.map(function(e){return e.team_member_name;}).join(', ')};
-      var header = ['account_number','bank_code','account_name','amount','narration'];
-      var rows = entries.map(function(e){return [e.account_number,e.bank_code,e.account_name,e.salary_amount,'Salary - '+e.month].join(',');});
+      var bad = entries.filter(function(e){return !/^\d{10}$/.test(String(e.account_number||''));});
+      if(bad.length) return {ok:false, error:'Account number is missing or not 10 digits for: '+bad.map(function(e){return e.team_member_name;}).join(', ')};
+      var header = ['Bank Code','Account Number','Amount','Narration'];
+      var rows = entries.map(function(e){return ['"'+e.bank_code+'"','"'+e.account_number+'"','"'+e.salary_amount+'"','"Salary '+e.month+'"'].join(',');});
       return {ok:true, csv:[header.join(',')].concat(rows).join('\n'), count:entries.length};
     }
 
@@ -3505,7 +3498,7 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.10.08-1';
+var EXPECTED_BACKEND = '2026.10.08-2';
 
 var DESIGN_CSS = `
 :root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
@@ -4208,17 +4201,22 @@ function togglePv(k, v){ STATE.pv.openKeys[k] = v; render(); }
 function taskById(id){ return (DB.projectTasks||[]).filter(function(t){ return t.task_id===id; })[0]; }
 function toggleTask(id){
   var x = taskById(id); if(!x) return;
+  var prev = {status:x.status, done_at:x.done_at, done_by:x.done_by};
   var to = x.status==='Done' ? 'Todo' : 'Done';
   var p = {task_id:id, status:to, actor:CURRENT_USER};
+  // Show the tick straight away; the server confirms (or we put it back).
+  var revert = function(){ x.status = prev.status; x.done_at = prev.done_at; x.done_by = prev.done_by; render(); };
+  if(WORKSPACE_MODE){ x.status = to; x.done_at = to==='Done' ? new Date().toISOString() : ''; x.done_by = to==='Done' ? CURRENT_USER : ''; render(); }
   api('updateProjectTask', p).then(function(res){
     if(!res.ok){
+      revert();
       if(res.gated && isAdminUser() && confirm(res.error+'\n\nAs admin you can override the SOP order. Override?')){
-        p.override = true; return api('updateProjectTask', p).then(function(r2){ if(!r2.ok) return wcFail('Could not update', r2); refreshData(); });
+        p.override = true; if(WORKSPACE_MODE){ x.status = to; render(); }
+        return api('updateProjectTask', p).then(function(r2){ if(!r2.ok){ revert(); return wcFail('Could not update', r2); } refreshData(); });
       }
       return wcFail('Not yet', res);
     }
-    if(res.phase_changed) wcToast('Phase moved on to '+res.phase+'.');
-    refreshData();
+    if(res.phase_changed){ wcToast('Phase moved on to '+res.phase+'.'); refreshData(); }
   });
 }
 function openTaskMenu(id){
@@ -4458,25 +4456,24 @@ function renderPayroll(){
   var missingSalary = DB.team.filter(function(p){ return !(Number(p.salary_amount)>0); });
   var missingBank = DB.team.filter(function(p){ return Number(p.salary_amount)>0 && !(p.account_number && p.bank_code); });
   var inSync = items.filter(function(p){ var t = DB.team.filter(function(x){ return x.name===p.team_member_name; })[0]; return t && p.status!=='Paid' && (String(t.salary_amount)!==String(p.salary_amount) || String(t.account_number)!==String(p.account_number)); });
-  var h = wcHead('Payroll', 'This app <b>never moves money</b>. It prepares the run, verifies bank accounts with Paystack and gives you a bulk-payment file (Bank Code, Account Number, Amount, Narration) to upload on the platform you pay from.',
+  var h = wcHead('Payroll', 'This app <b>never moves money</b>. It prepares the run and gives you a bulk-payment file (Bank Code, Account Number, Amount, Narration) to upload on the platform you pay from.',
     '<button class="btn btn-ghost" onclick="goTo(\'employees\')">Edit salaries in Employee Directory</button>');
   h += '<div class="wc-note" style="margin-bottom:14px"><b>Where the data comes from:</b> each person’s salary and bank details are entered once in <a href="#" onclick="goTo(\'employees\');return false" style="color:var(--brand);font-weight:600">Employee Directory</a>. “Pull from directory” copies them into the month’s run; “Re-sync” refreshes unpaid rows after you edit the directory.</div>';
   if(missingSalary.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>No salary set yet for:</b> '+missingSalary.map(function(p){ return esc(p.name); }).join(', ')+' — they will be skipped until you add it in the Employee Directory.</div>';
   if(missingBank.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>Salary but no bank details:</b> '+missingBank.map(function(p){ return esc(p.name); }).join(', ')+'.</div>';
   h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+
     '<div class="card stat-card"><div class="stat-lbl">Month total</div><div class="stat-num">'+money(total)+'</div><div class="stat-sub">'+items.length+' people</div></div>'+
-    '<div class="card stat-card"><div class="stat-lbl">Accounts verified</div><div class="stat-num">'+items.filter(function(p){ return p.account_verified==='yes'; }).length+' / '+items.length+'</div><div class="stat-sub '+(items.some(function(p){return p.account_verified!=='yes';})?'warn':'good')+'">needed before export</div></div>'+
+    '<div class="card stat-card"><div class="stat-lbl">Ready to export</div><div class="stat-num">'+items.filter(function(p){ return !payrollIssue(p); }).length+' / '+items.length+'</div><div class="stat-sub '+(items.some(function(p){return payrollIssue(p);})?'warn':'good')+'">bank and 10-digit account set</div></div>'+
     '<div class="card stat-card"><div class="stat-lbl">Paid</div><div class="stat-num">'+items.filter(function(p){ return p.status==='Paid'; }).length+' / '+items.length+'</div><div class="stat-sub">marked after you transfer</div></div>'+
     '<div class="card stat-card"><div class="stat-lbl">Next pay day</div><div class="stat-num">'+nextPayrollInfo().days+'d</div><div class="stat-sub">'+esc(fmtDate(nextPayrollInfo().due))+'</div></div></div>';
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><select class="wc-sel" style="width:auto" onchange="setPayrollMonth(this.value)">'+optionsHtml(months, m)+'</select>'+
     '<button class="btn btn-primary" onclick="pullPayroll()">Pull from directory</button>'+
     '<button class="btn btn-ghost" onclick="syncPayroll()">Re-sync'+(inSync.length?' ('+inSync.length+' changed)':'')+'</button>'+
-    '<button class="btn btn-ghost" onclick="verifyAllPayroll()">Verify all accounts</button>'+
     '<button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export bulk payment file</button></div>';
-  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Team member</th><th>Bank</th><th>Account</th><th>Verified as</th><th style="text-align:right">Salary</th><th>Status</th><th></th></tr></thead><tbody>'+
-    (items.map(function(p){ return '<tr><td><b>'+esc(p.team_member_name)+'</b></td><td>'+esc(p.bank_name||'—')+'</td><td>'+esc(p.account_number||'—')+'</td><td>'+(p.account_verified==='yes'?pill(p.account_name||'Verified','good'):pill('Not verified','warn'))+'</td>'+
+  h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Team member</th><th>Bank</th><th>Account</th><th>Check</th><th style="text-align:right">Salary</th><th>Status</th><th></th></tr></thead><tbody>'+
+    (items.map(function(p){ return '<tr><td><b>'+esc(p.team_member_name)+'</b></td><td>'+esc(p.bank_name||'—')+'</td><td>'+esc(p.account_number||'—')+'</td><td>'+(payrollIssue(p)?pill(payrollIssue(p),'warn'):pill('Ready','good'))+'</td>'+
       '<td style="text-align:right">'+(p.status==='Paid'?money(p.salary_amount):'<input class="wc-input" type="number" style="width:120px;text-align:right;padding:4px 8px" value="'+(Number(p.salary_amount)||0)+'" onchange="savePayrollField(\''+p.payroll_id+'\',\'salary_amount\',this.value)">')+'</td>'+
-      '<td>'+pill(p.status, p.status==='Paid'?'good':'mute')+'</td><td style="white-space:nowrap">'+(p.status!=='Paid'?'<button class="btn btn-ghost btn-sm" onclick="verifyPayrollAcct(\''+p.payroll_id+'\')">Verify</button> <button class="btn btn-good btn-sm" onclick="markPayrollPaidClick(\''+p.payroll_id+'\')">Mark paid</button>':'')+'</td></tr>'; }).join('') ||
+      '<td>'+pill(p.status, p.status==='Paid'?'good':'mute')+'</td><td style="white-space:nowrap">'+(p.status!=='Paid'?'<button class="btn btn-good btn-sm" onclick="markPayrollPaidClick(\''+p.payroll_id+'\')">Mark paid</button>':'')+'</td></tr>'; }).join('') ||
       '<tr><td colspan="7" class="empty">No run for '+esc(m)+' yet. Press <b>Pull from directory</b> to create it from everyone’s salary details.</td></tr>')+'</tbody></table></div>';
   return wcPage(h);
 }
@@ -4494,22 +4491,11 @@ function pullPayroll(){
 function syncPayroll(){
   api('syncPayrollFromTeam', {month:STATE.payrollMonth, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not re-sync', res); refreshData().then(function(){ wcToast(res.updated+' unpaid rows refreshed from the directory.'); }); });
 }
-function verifyPayrollAcct(id){
-  var p = DB.payroll.filter(function(x){ return x.payroll_id===id; })[0];
-  if(!p.account_number || !p.bank_code) return wcToast('Add this person’s bank and account number in the Employee Directory first.', true);
-  api('verifyPayrollAccount', {payroll_id:id, account_number:p.account_number, bank_code:p.bank_code}).then(function(res){
-    if(!res.ok) return wcFail('Verification failed', res);
-    p.account_verified = 'yes'; p.account_name = res.account_name; render(); wcToast('Verified: '+res.account_name);
-  });
-}
-function verifyAllPayroll(){
-  var todo = DB.payroll.filter(function(p){ return p.month===STATE.payrollMonth && p.status!=='Paid' && p.account_verified!=='yes' && p.account_number && p.bank_code; });
-  if(!todo.length) return wcToast('Nothing left to verify.');
-  var n = 0, bad = [];
-  (function next(i){
-    if(i>=todo.length){ refreshData().then(function(){ wcToast(n+' verified'+(bad.length?' · failed: '+bad.join(', '):''), bad.length>0); }); return; }
-    api('verifyPayrollAccount', {payroll_id:todo[i].payroll_id, account_number:todo[i].account_number, bank_code:todo[i].bank_code}).then(function(r){ if(r.ok) n++; else bad.push(todo[i].team_member_name); next(i+1); });
-  })(0);
+function payrollIssue(p){
+  if(!(Number(p.salary_amount)>0)) return 'No salary';
+  if(!p.bank_code && !p.bank_name) return 'No bank';
+  if(!/^\d{10}$/.test(String(p.account_number||'').trim())) return 'Account not 10 digits';
+  return '';
 }
 function savePayrollField(id, field, value){
   var payload = {payroll_id:id}; payload[field] = field==='salary_amount' ? Number(value)||0 : value;
@@ -4563,19 +4549,25 @@ function openEmployee(email){
     '<div class="wc-f"><label class="wc-lbl">Systems they own (bugs from UAT route to them)</label><div id="em_sys">'+chipList('em_sys', SOP_SYSTEMS, csv(p.systems))+'</div></div>'+
     '<div class="wc-grid g3">'+fld('Phone', inp('em_phone', p.phone))+fld('Birthday', inp('em_bday', p.birthday, 'date'))+fld('Start date', inp('em_start', p.start_date, 'date'))+'</div>'+
     '<div class="card-h" style="margin-top:6px">Pay</div><div class="wc-grid g2">'+fld('Monthly salary (₦)', inp('em_sal', p.salary_amount, 'number', '0'))+fld('Emergency contact', inp('em_emerg', p.emergency_contact))+'</div>'+
-    '<div class="wc-grid g3">'+fld('Bank', '<select class="wc-sel" id="em_bank" onchange="pickBank(this)"><option value="">'+(p.bank_name?esc(p.bank_name):'Choose bank…')+'</option></select>')+fld('Bank code', inp('em_bcode', p.bank_code, 'text', '058'))+fld('Account number', inp('em_acct', p.account_number))+'</div>'+
+    '<div class="wc-grid g3">'+fld('Bank', '<select class="wc-sel" id="em_bank" onchange="pickBank(this)"><option value="">'+(p.bank_name?esc(p.bank_name):'Choose bank…')+'</option></select>')+fld('Bank code', inp('em_bcode', p.bank_code, 'text', '000013'))+fld('Account number', inp('em_acct', p.account_number))+'</div>'+
     '<div class="wc-help" id="em_bankhelp" style="margin:-6px 0 10px"></div>'+
     '<div style="display:flex;gap:8px"><button class="btn btn-primary" id="em_go" onclick="saveEmployee('+(email?'true':'false')+')">'+(email?'Save':'Add & send welcome')+'</button><button class="btn btn-ghost" onclick="wcClose(\'emp\')">Cancel</button></div>';
   wcModal('emp', email?esc(p.name):'Add team member', h, true);
-  loadBanks(p.bank_code);
+  loadBanks(p.bank_code, p.bank_name);
 }
-function loadBanks(cur){
+function loadBanks(cur, curName){
   var s = document.getElementById('em_bank'); if(!s) return;
-  var fill = function(){ s.innerHTML = '<option value="">Choose bank…</option>'+BANKS.map(function(b){ return '<option value="'+esc(b.code)+'" data-n="'+esc(b.name)+'"'+(String(b.code)===String(cur)?' selected':'')+'>'+esc(b.name)+'</option>'; }).join(''); };
+  var fill = function(){
+    var hit = BANKS.filter(function(b){ return String(b.code)===String(cur); })[0];
+    if(!hit && curName){ hit = BANKS.filter(function(b){ return b.name.toLowerCase()===String(curName).toLowerCase(); })[0]; }
+    s.innerHTML = '<option value="">Choose bank…</option>'+BANKS.map(function(b){ return '<option value="'+esc(b.code)+'" data-n="'+esc(b.name)+'"'+(hit&&hit.code===b.code&&hit.name===b.name?' selected':'')+'>'+esc(b.name)+' ('+esc(b.code)+')</option>'; }).join('');
+    var bc = document.getElementById('em_bcode')||document.getElementById('mp_bcode');
+    if(hit && bc && bc.value!==hit.code){ bc.value = hit.code; }
+  };
   if(BANKS) return fill();
-  api('listPaystackBanks', {}).then(function(res){
+  api('listBanks', {}).then(function(res){
     if(res.ok && res.banks){ BANKS = res.banks; fill(); }
-    else { var hp = document.getElementById('em_bankhelp'); if(hp) hp.textContent = 'Bank list unavailable ('+((res&&res.error)||'no Paystack key')+') — type the bank name and Paystack bank code by hand.'; var f = document.getElementById('em_bank'); if(f) f.outerHTML = inp('em_bname', (EMP_DRAFT||{}).bank_name, 'text', 'Bank name'); }
+    else { var hp = document.getElementById('em_bankhelp'); if(hp) hp.textContent = 'Bank list unavailable ('+((res&&res.error)||'try again')+') — type the bank name and its 6-digit bank code by hand.'; var f = document.getElementById('em_bank'); if(f) f.outerHTML = inp('em_bname', (EMP_DRAFT||{}).bank_name, 'text', 'Bank name'); }
   });
 }
 function pickBank(s){ var o = s.options[s.selectedIndex]; document.getElementById('em_bcode').value = o.value; }
@@ -4585,7 +4577,7 @@ function saveEmployee(isEdit){
     salary_amount:Number(val('em_sal'))||'', emergency_contact:val('em_emerg'), bank_code:val('em_bcode'), account_number:val('em_acct'), actor:CURRENT_USER};
   var bs = document.getElementById('em_bank'); var bname = bs ? (bs.selectedIndex>0 ? bs.options[bs.selectedIndex].getAttribute('data-n') : (EMP_DRAFT||{}).bank_name) : val('em_bname');
   payload.bank_name = bname || '';
-  var old = EMP_DRAFT||{}; if(String(old.account_number||'')!==String(payload.account_number) || String(old.bank_code||'')!==String(payload.bank_code)) payload.account_name = '';
+  if(payload.account_number && !/^\d{10}$/.test(String(payload.account_number).trim())) return wcToast('Account numbers have 10 digits.', true);
   if(!payload.name || !payload.email) return wcToast('Name and email are required.', true);
   if(isEdit) payload.quiet = true;
   var b = document.getElementById('em_go'); b.disabled = true;
@@ -4624,13 +4616,13 @@ function openMyProfile(){
     '<div class="card-h">Bank details (for payroll)</div><div class="wc-grid g3">'+fld('Bank', '<select class="wc-sel" id="em_bank" onchange="pickBankMine(this)"><option value="">'+(p.bank_name?esc(p.bank_name):'Choose bank…')+'</option></select>')+fld('Bank code', inp('mp_bcode', p.bank_code))+fld('Account number', inp('mp_acct', p.account_number))+'</div><div class="wc-help" id="em_bankhelp"></div>'+
     '<button class="btn btn-primary" onclick="saveMyProfileClick()">Save</button>';
   wcModal('myprof','My profile', h);
-  EMP_DRAFT = p; loadBanks(p.bank_code);
+  EMP_DRAFT = p; loadBanks(p.bank_code, p.bank_name);
 }
 function pickBankMine(s){ var o = s.options[s.selectedIndex]; document.getElementById('mp_bcode').value = o.value; STATE._myBank = o.getAttribute('data-n')||''; }
 function saveMyProfileClick(){
   var p = DB.team.filter(function(x){ return x.name===CURRENT_USER; })[0] || {};
   var payload = {phone:val('mp_phone'), birthday:val('mp_bday'), hobbies:val('mp_hob'), emergency_contact:val('mp_emerg'), slack_handle:val('mp_slack'), bank_code:val('mp_bcode'), account_number:val('mp_acct'), bank_name:STATE._myBank || p.bank_name || '', actor:CURRENT_USER};
-  if(String(p.account_number||'')!==String(payload.account_number) || String(p.bank_code||'')!==String(payload.bank_code)) payload.account_name = '';
+  if(payload.account_number && !/^\d{10}$/.test(String(payload.account_number).trim())) return wcToast('Account numbers have 10 digits.', true);
   api('saveMyProfile', payload).then(function(res){ if(!res.ok) return wcFail('Could not save', res); wcClose('myprof'); STATE._myBank = ''; refreshData().then(function(){ wcToast('Profile saved.'); }); });
 }
 
@@ -5194,7 +5186,7 @@ function settingsHtml(s){
   var missing = (st.expected_triggers||[]).filter(function(t){ return (st.triggers||[]).indexOf(t)===-1; });
   var h = wcHead('Settings', 'Everything that was previously hard-coded or in Script Properties-by-hand. API keys are never shown here — they stay in Script Properties.', '<button class="btn btn-primary" onclick="saveAllSettings()">Save all settings</button>');
   h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Connections <button class="btn btn-ghost btn-sm" onclick="renderSettingsRefresh()">Check setup</button></div>'+
-    [['Claude (Anthropic) API key', st.anthropic_key, 'ANTHROPIC_API_KEY'],['Slack bot token', st.slack_token, 'SLACK_BOT_TOKEN'],['Paystack secret key (account verification only)', st.paystack_key, 'PAYSTACK_SECRET_KEY'],['YouTube API key (training videos)', st.youtube_key, 'YOUTUBE_API_KEY'],['Calendar advanced service', st.calendar_service, 'Services → Google Calendar API']].map(function(r){ return '<div class="wc-row">'+sdot(r[1])+'<span style="flex:1">'+r[0]+'</span><span class="wc-muted">'+(r[1]?'connected':'missing — '+r[2])+'</span></div>'; }).join('')+
+    [['Claude (Anthropic) API key', st.anthropic_key, 'ANTHROPIC_API_KEY'],['Slack bot token', st.slack_token, 'SLACK_BOT_TOKEN'],['YouTube API key (training videos)', st.youtube_key, 'YOUTUBE_API_KEY'],['Calendar advanced service', st.calendar_service, 'Services → Google Calendar API']].map(function(r){ return '<div class="wc-row">'+sdot(r[1])+'<span style="flex:1">'+r[0]+'</span><span class="wc-muted">'+(r[1]?'connected':'missing — '+r[2])+'</span></div>'; }).join('')+
     '<div class="wc-row"><span style="flex:1">AI provider</span><b>'+esc(st.ai_provider||'Claude')+'</b><span class="wc-muted">'+esc(st.ai_model||'')+' · fast: '+esc(st.ai_fast_model||'')+'</span></div>'+
     '<div class="wc-row"><span style="flex:1">Backend version</span><b>'+esc(s.backend_version||'')+'</b>'+(s.backend_version===EXPECTED_BACKEND?pill('matches this page','good'):pill('page expects '+EXPECTED_BACKEND,'warn'))+'</div>'+
     '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="testClaudeClick()">Test Claude</button><button class="btn btn-ghost btn-sm" onclick="testSlackDmClick()">Send myself a test Slack DM</button></div><div id="sTestOut" style="margin-top:8px"></div></div>';
@@ -5477,7 +5469,7 @@ function buildSopTasks_(project, roles) {
 
   var API2 = {
     // ── settings / infra ──
-    getSettings: function(){ return ok({backend_version:EXPECTED_BACKEND, config:DB.config, categories:DB.slackCategories, routes:{}, status:{anthropic_key:true, slack_token:true, paystack_key:false, youtube_key:true, calendar_service:true, ai_provider:'Claude (Anthropic)', ai_model:'claude-sonnet-5', ai_fast_model:'claude-haiku-4-5-20251001', time_zone:'Africa/Lagos', triggers:['dailyCheck'], expected_triggers:['dailyCheck','weeklyContentCalendar','weeklyLeadershipReport','weeklyOpportunities']}}); },
+    getSettings: function(){ return ok({backend_version:EXPECTED_BACKEND, config:DB.config, categories:DB.slackCategories, routes:{}, status:{anthropic_key:true, slack_token:true, youtube_key:true, calendar_service:true, ai_provider:'Claude (Anthropic)', ai_model:'claude-sonnet-5', ai_fast_model:'claude-haiku-4-5-20251001', time_zone:'Africa/Lagos', triggers:['dailyCheck'], expected_triggers:['dailyCheck','weeklyContentCalendar','weeklyLeadershipReport','weeklyOpportunities']}}); },
     saveSettings: function(p){ var n = 0; Object.keys(p.values||{}).forEach(function(k){ DB.config[k] = p.values[k]; n++; }); return ok({saved:n, config:DB.config}); },
     testSlackChannel: function(p){ return p.channel_id ? ok() : err('Enter a channel ID first.'); },
     testClaude: function(){ return ok({provider:'Anthropic Claude', model:'claude-sonnet-5', fast_model:'claude-haiku-4-5-20251001'}); },
