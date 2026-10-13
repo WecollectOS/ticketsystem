@@ -683,6 +683,15 @@ function mockApi(action, payload) {
       lead4.owner = payload.new_owner||'';
       return {ok:true};
     }
+    case 'saveLeadCallNotes': {
+      var lead6 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
+      if(!lead6) return {ok:false, error:'Lead not found.'};
+      var st6 = (payload.steps||[]).slice(); if(!st6.length) st6.push('(Mock) Follow up with '+lead6.name);
+      var nl6 = []; try{ nl6 = JSON.parse(lead6.meeting_notes_json||'[]'); }catch(e){}
+      nl6.push({text:payload.text||'(file)', by:payload.actor, at:new Date().toISOString(), type:'call', kind:payload.kind, nextSteps:st6.map(function(t){return {text:t,done:false};}), fileName:payload.file_name||''});
+      lead6.meeting_notes_json = JSON.stringify(nl6);
+      return {ok:true, steps:st6, health:{health:'Warm'}};
+    }
     case 'aiLeadHealthSummary': {
       var lead5 = DB.leads.filter(function(x){return x.lead_id===payload.lead_id;})[0];
       if(!lead5) return {ok:false, error:'Lead not found.'};
@@ -816,8 +825,8 @@ var BP_CFGS = {
       desc:function(l){
         var idx = CRM_STAGES.indexOf(l.stage), notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
         var chips = [];
-        if(l.meeting_date) chips.push({t:'Discovery · '+fmtDate(l.meeting_date), c:'#3B6FD4'});
-        if(l.demo_date) chips.push({t:'Demo · '+fmtDate(l.demo_date), c:'#7C5CBF'});
+        if(l.meeting_date) chips.push({t:'Discovery · '+fmtDate(l.meeting_date), c:'#3B6FD4', strike:meetingPassed(l.meeting_date)});
+        if(l.demo_date) chips.push({t:'Demo · '+fmtDate(l.demo_date), c:'#7C5CBF', strike:meetingPassed(l.demo_date)});
         if(notes.length) chips.push({t:notes.length+' note'+(notes.length>1?'s':'')});
         if(l.stage==='Declined / Cold Leads' && l.decline_category) chips.push({t:l.decline_category, c:'#D64545'});
         return {
@@ -977,7 +986,7 @@ function bpCardHtml(cfg, it){
   }
   (d.chips||[]).forEach(function(c){
     if(!c || !c.t) return;
-    chips += '<span class="bp-chip"'+(c.c?' style="background:'+c.c+'1f;color:'+c.c+'"':'')+'>'+bpEsc(c.t)+'</span>';
+    chips += '<span class="bp-chip"'+((c.c||c.strike)?' style="'+(c.c?'background:'+c.c+'1f;color:'+c.c+';':'')+(c.strike?'text-decoration:line-through;opacity:.6':'')+'"':'')+'>'+bpEsc(c.t)+'</span>';
   });
   return '<div class="bp-card" onclick="'+d.open+'">'+
     '<div class="bp-card-top"><span class="bp-stage" style="background:'+d.color+'1f;color:'+d.color+'">'+bpEsc(d.stageLabel)+'</span>'+(d.id?'<span class="bp-id">'+bpEsc(d.id)+'</span>':'')+'</div>'+
@@ -1170,6 +1179,7 @@ function renderTickets(){
       </table>
     </div>`;
 
+  var __sp = (typeof slackSuggestPanel==='function') ? slackSuggestPanel() : ''; if(__sp) wrap.insertAdjacentHTML('afterbegin', __sp);
   wrap.querySelector('#ticketFilterQ').addEventListener('input', function(e){ STATE.ticketFilters.q = e.target.value; renderTicketRows(); });
   wrap.querySelector('#ticketFilterDept').addEventListener('change', function(e){ STATE.ticketFilters.dept = e.target.value; renderTicketRows(); });
   wrap.querySelector('#ticketFilterStatus').addEventListener('change', function(e){ STATE.ticketFilters.status = e.target.value; renderTicketRows(); });
@@ -1397,8 +1407,8 @@ function leadCardHtml(l){
 
 
 // ── Content Calendar ──────────────────────────────────────────────────
-var CONTENT_STAGES = ['Idea','Drafting','Design','Scheduled','Published'];
-var CONTENT_STAGE_COLOR = {'Idea':'#8E90A3','Drafting':'#3B6FD4','Design':'#D9A62E','Scheduled':'#7C5CBF','Published':'#2E9B5F'};
+var CONTENT_STAGES = ['Idea','Drafting','Design','Review','Scheduled','Published'];
+var CONTENT_STAGE_COLOR = {'Idea':'#8E90A3','Drafting':'#3B6FD4','Design':'#D9A62E','Review':'#E07B39','Scheduled':'#7C5CBF','Published':'#2E9B5F'};
 
 function contentFiltered(){
   if(!STATE.content) STATE.content = {platform:'All', view:'cards'};
@@ -1439,29 +1449,6 @@ function saveNewContent(){
   });
 }
 
-function openContentDetail(id){
-  var c = DB.contentCalendar.filter(function(x){return x.content_id===id;})[0];
-  if(!c) return;
-  var body = document.getElementById('contentDetailModalBody');
-  body.innerHTML = `
-    <div class="modal-h"><h2>${c.title}</h2><button class="close-x" onclick="closeModal('contentDetailModalBg')">X</button></div>
-    <div class="thin-tag" style="margin-bottom:10px;">${c.type||''} · ${c.platform||''}</div>
-    <div class="field"><label>Stage</label>
-      <div class="stage-btn-row">${CONTENT_STAGES.map(function(s){
-        return `<button class="stage-btn ${c.stage===s?'current':''}" onclick="setContentStage('${id}','${s}')">${s}</button>`;
-      }).join('')}</div>
-    </div>
-    ${c.stage==='Scheduled' || c.stage==='Design' ? `<div class="field"><label>Scheduled Date</label><input type="date" id="cd_date" value="${c.scheduled_date||''}" onchange="saveContentField('${id}','scheduled_date',this.value)"></div>` : ''}
-    <div class="field"><label>Owner</label>
-      <select id="cd_owner" onchange="saveContentField('${id}','owner',this.value)">
-        <option value="">Unassigned</option>
-        ${DB.team.map(function(p){return `<option ${p.name===c.owner?'selected':''}>${p.name}</option>`;}).join('')}
-      </select>
-    </div>
-    <div class="field"><label>Notes</label><textarea onchange="saveContentField('${id}','notes',this.value)">${c.notes||''}</textarea></div>
-  `;
-  openModal('contentDetailModalBg');
-}
 function setContentStage(id, stage){
   api('updateContentStage', {content_id:id, stage:stage}).then(function(res){
     if(!res.ok){ alert('Could not update stage: '+(res.error||'Unknown error')); return; }
@@ -1708,6 +1695,10 @@ function saveScheduledMeeting(force){
       lines.push('Event link: '+res.calendar_status.eventLink);
     } else if(res.calendar_status){
       lines.push('Calendar: FAILED - '+res.calendar_status.error);
+    }
+    if(res.meet_status && res.meet_status.attempted){
+      var ms = res.meet_status;
+      lines.push('Meet: '+(ms.record?'auto-record + transcript ON':'auto-record NOT set')+' · '+(ms.cohost?'you are co-host':'co-host NOT set')+(ms.notes&&ms.notes.length?' ('+ms.notes.join(' ')+')':''));
     }
     if(res.invitee_emails_used){
       lines.push('Emails looked up for invitees: '+(res.invitee_emails_used.join(', ')||'(none found - check Team tab emails)'));
@@ -2326,7 +2317,7 @@ function saveScheduledOneOnOne(force){
     render();
     if(res.calendar_status){
       if(res.calendar_status.ok){
-        alert('1:1 scheduled. Calendar event created on '+res.calendar_status.calendarUsed+'. '+person+' should also get a Slack DM and calendar invite email.');
+        alert('1:1 scheduled. Calendar event created on '+res.calendar_status.calendarUsed+'. '+person+' should also get a Slack DM and calendar invite email.'+(res.meet_status&&res.meet_status.attempted?'\n\nMeet: '+(res.meet_status.record?'auto-record + transcript ON':'auto-record NOT set')+' · '+(res.meet_status.cohost?'you are co-host':'co-host NOT set')+((res.meet_status.notes||[]).length?'\n'+res.meet_status.notes.join(' '):''):''));
       } else {
         alert('1:1 saved, but the calendar event could not be created: '+res.calendar_status.error);
       }
@@ -3498,7 +3489,8 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.10.08-2';
+var EXPECTED_BACKEND = '2026.10.14-2';
+var APP_BUILD = '20261013-165152';
 
 var DESIGN_CSS = `
 :root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
@@ -3708,9 +3700,10 @@ function wcFail(prefix, res){ wcToast(prefix + ': ' + ((res && res.error) || 'un
 // Re-read everything from the backend (after multi-table actions) and repaint.
 function applyAll(d){
   d = d || {};
-  var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','clients','documents','contentMetrics','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories'];
+  var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','clients','documents','contentMetrics','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories','slackSuggestions','notableDates'];
   keys.forEach(function(k){ DB[k] = d[k] || []; });
   DB.config = d.config || {};
+  DB.contentGuidelines = d.contentGuidelines || ''; DB.contentGuidelinesIsDefault = !!d.contentGuidelinesIsDefault;
   DB.access = d.access || null;
   DB.backend_version = d.backend_version || '';
   checkBackendVersion();
@@ -3915,6 +3908,30 @@ function renderDashboard(){
   h += '</div>';
   return wcPage(h);
 }
+
+
+// ── self-updating front end: shared links never need re-sending ────────────
+// Every few minutes (and when the tab regains focus) the page fetches app.js uncached and
+// compares its build stamp. If it changed: reload quietly when the person is idle/away,
+// otherwise show a one-click banner so nobody loses a half-typed form.
+var __lastTouch = Date.now();
+['click','keydown','input','touchstart'].forEach(function(ev){ document.addEventListener(ev, function(){ __lastTouch = Date.now(); }, true); });
+function checkForNewBuild(){
+  var tag = document.querySelector('script[src*="app.js"]'); if(!tag || !APP_BUILD || APP_BUILD.indexOf('__')===0) return;
+  var base = tag.src.split('?')[0];
+  fetch(base+'?chk='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(txt){
+    var m = txt.match(/var APP_BUILD = '([^']+)'/); if(!m || m[1]===APP_BUILD) return;
+    var busy = document.querySelector('.modal-bg.open, .modal-bg.show, #genOverlay') || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
+    if(document.hidden || (Date.now()-__lastTouch > 120000 && !busy)){ location.reload(); return; }
+    if(document.getElementById('wcUpdate')) return;
+    var d = document.createElement('div'); d.id = 'wcUpdate';
+    d.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;background:#14161F;color:#fff;padding:10px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.3);font-size:13px;display:flex;gap:12px;align-items:center';
+    d.innerHTML = '<span>A new version of WeCollect OS is ready.</span><button style="background:#4C50E3;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer" onclick="location.reload()">Refresh now</button>';
+    document.body.appendChild(d);
+  }).catch(function(){});
+}
+setInterval(checkForNewBuild, 5*60*1000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) checkForNewBuild(); });
 
 // ═══════════════════════════════════════════════════════════════════════
 //  PROJECTS — Team project vs Client project (SOP workflow, one task per
@@ -4451,6 +4468,13 @@ function renderPayroll(){
   var months = DB.payroll.map(function(p){ return p.month; }).filter(function(x,i,a){ return x && a.indexOf(x)===i; });
   if(months.indexOf(curMonth())===-1) months.push(curMonth()); if(months.indexOf(m)===-1) months.push(m);
   months.sort().reverse();
+  // Once per month per visit, quietly add anyone with a salary who is not in this month's run yet.
+  STATE._pulled = STATE._pulled || {};
+  var pullKey = m+':'+DB.team.filter(function(t){ return Number(t.salary_amount)>0; }).length;
+  if(!STATE._pulled[pullKey] && WORKSPACE_MODE && DB.team.some(function(t){ return Number(t.salary_amount)>0; })){
+    STATE._pulled[pullKey] = true;
+    api('generateMonthlyPayrollBatch', {month:m, actor:CURRENT_USER}).then(function(res){ if(res.ok && res.created>0) refreshData().then(function(){ wcToast(res.created+' people added to '+m+' from the directory.'); }); });
+  }
   var items = DB.payroll.filter(function(p){ return p.month===m; });
   var total = items.reduce(function(s,p){ return s+(Number(p.salary_amount)||0); },0);
   var missingSalary = DB.team.filter(function(p){ return !(Number(p.salary_amount)>0); });
@@ -4458,9 +4482,7 @@ function renderPayroll(){
   var inSync = items.filter(function(p){ var t = DB.team.filter(function(x){ return x.name===p.team_member_name; })[0]; return t && p.status!=='Paid' && (String(t.salary_amount)!==String(p.salary_amount) || String(t.account_number)!==String(p.account_number)); });
   var h = wcHead('Payroll', 'This app <b>never moves money</b>. It prepares the run and gives you a bulk-payment file (Bank Code, Account Number, Amount, Narration) to upload on the platform you pay from.',
     '<button class="btn btn-ghost" onclick="goTo(\'employees\')">Edit salaries in Employee Directory</button>');
-  h += '<div class="wc-note" style="margin-bottom:14px"><b>Where the data comes from:</b> each person’s salary and bank details are entered once in <a href="#" onclick="goTo(\'employees\');return false" style="color:var(--brand);font-weight:600">Employee Directory</a>. “Pull from directory” copies them into the month’s run; “Re-sync” refreshes unpaid rows after you edit the directory.</div>';
-  if(missingSalary.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>No salary set yet for:</b> '+missingSalary.map(function(p){ return esc(p.name); }).join(', ')+' — they will be skipped until you add it in the Employee Directory.</div>';
-  if(missingBank.length) h += '<div class="wc-note warn" style="margin-bottom:14px"><b>Salary but no bank details:</b> '+missingBank.map(function(p){ return esc(p.name); }).join(', ')+'.</div>';
+  h += payrollCycleCard();
   h += '<div class="wc-grid g4 keep2" style="margin-bottom:16px">'+
     '<div class="card stat-card"><div class="stat-lbl">Month total</div><div class="stat-num">'+money(total)+'</div><div class="stat-sub">'+items.length+' people</div></div>'+
     '<div class="card stat-card"><div class="stat-lbl">Ready to export</div><div class="stat-num">'+items.filter(function(p){ return !payrollIssue(p); }).length+' / '+items.length+'</div><div class="stat-sub '+(items.some(function(p){return payrollIssue(p);})?'warn':'good')+'">bank and 10-digit account set</div></div>'+
@@ -4476,6 +4498,29 @@ function renderPayroll(){
       '<td>'+pill(p.status, p.status==='Paid'?'good':'mute')+'</td><td style="white-space:nowrap">'+(p.status!=='Paid'?'<button class="btn btn-good btn-sm" onclick="markPayrollPaidClick(\''+p.payroll_id+'\')">Mark paid</button>':'')+'</td></tr>'; }).join('') ||
       '<tr><td colspan="7" class="empty">No run for '+esc(m)+' yet. Press <b>Pull from directory</b> to create it from everyone’s salary details.</td></tr>')+'</tbody></table></div>';
   return wcPage(h);
+}
+// Summary of the coming pay cycle: pay date, total, who is ready, who needs fixing.
+function payrollCycleCard(){
+  var info = nextPayrollInfo(), due = info.due;
+  var cm = due.getFullYear()+'-'+('0'+(due.getMonth()+1)).slice(-2);
+  var run = DB.payroll.filter(function(p){ return p.month===cm; });
+  var rows = run.length ? run.map(function(p){ return {name:p.team_member_name, amount:Number(p.salary_amount)||0, issue:payrollIssue(p), paid:p.status==='Paid'}; })
+    : DB.team.filter(function(t){ return Number(t.salary_amount)>0; }).map(function(t){ return {name:t.name, amount:Number(t.salary_amount)||0, issue:payrollIssue({salary_amount:t.salary_amount, bank_code:t.bank_code, bank_name:t.bank_name, account_number:t.account_number}), paid:false}; });
+  var total = rows.reduce(function(s,r){ return s+r.amount; },0);
+  var ready = rows.filter(function(r){ return !r.issue; }), bad = rows.filter(function(r){ return r.issue; });
+  var readyAmt = ready.reduce(function(s,r){ return s+r.amount; },0), paidN = rows.filter(function(r){ return r.paid; }).length;
+  var noSal = DB.team.filter(function(t){ return !(Number(t.salary_amount)>0); });
+  var when = info.days===0 ? 'today' : info.days===1 ? 'tomorrow' : 'in '+info.days+' days';
+  var h = '<div class="card" style="padding:16px 18px;margin-bottom:16px"><div class="card-h">Coming payroll cycle — '+esc(cm)+' <span class="wc-muted" style="font-weight:400">pay day '+esc(fmtDate(due))+' ('+when+')</span></div>'+
+    '<div class="wc-grid g4 keep2" style="margin:10px 0">'+
+    '<div><div class="stat-lbl">To pay</div><div class="stat-num">'+money(total)+'</div><div class="stat-sub">'+rows.length+' '+(rows.length===1?'person':'people')+(run.length?'':' (projected from the directory)')+'</div></div>'+
+    '<div><div class="stat-lbl">Ready</div><div class="stat-num" style="color:var(--green)">'+money(readyAmt)+'</div><div class="stat-sub">'+ready.length+' with complete bank details</div></div>'+
+    '<div><div class="stat-lbl">Needs attention</div><div class="stat-num" style="color:'+(bad.length?'var(--red)':'inherit')+'">'+bad.length+'</div><div class="stat-sub">'+money(total-readyAmt)+' blocked</div></div>'+
+    '<div><div class="stat-lbl">Already paid</div><div class="stat-num">'+paidN+' / '+rows.length+'</div><div class="stat-sub">this cycle</div></div></div>';
+  if(bad.length) h += '<div class="wc-note warn" style="margin-bottom:8px"><b>Fix before export:</b> '+bad.map(function(r){ return esc(r.name)+' ('+esc(r.issue)+')'; }).join(', ')+'. Update them in the <a href="#" onclick="goTo(\'employees\');return false" style="color:var(--brand);font-weight:600">Employee Directory</a>.</div>';
+  if(noSal.length) h += '<div class="wc-muted" style="font-size:12px">No salary set (not in this run): '+noSal.map(function(p){ return esc(p.name); }).join(', ')+'.</div>';
+  if(!rows.length) h += '<div class="wc-muted">Nobody has a salary set yet. Add salaries in the Employee Directory and the run builds itself.</div>';
+  return h+'</div>';
 }
 function setPayrollMonth(m){ STATE.payrollMonth = m; render(); }
 function pullPayroll(){
@@ -4942,6 +4987,17 @@ function crmDue(){
   };
 })();
 function healthTone(h){ return h==='Hot'?'good':(h==='Warm'?'warn':(h==='Cold'?'bad':'mute')); }
+// "2026-10-20 14:00" (or a date only) -> has it already started?
+function meetingPassed(str){
+  var m = String(str||'').match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/); if(!m) return false;
+  var d = new Date(+m[1], +m[2]-1, +m[3], m[4]?+m[4]:23, m[5]?+m[5]:59);
+  return d.getTime() < Date.now();
+}
+function meetingLine(icon, label, when, notes, kind){
+  var past = meetingPassed(when), has = notes.some(function(n){ return n.type==='call' && n.kind===kind; });
+  return '<div class="wc-note" style="margin-bottom:8px">'+icon+' '+label+': <span'+(past?' style="text-decoration:line-through;opacity:.65"':'')+'>'+esc(when)+'</span>'+
+    (past ? ' '+pill(has?'Held · notes added':'Held · add call notes', has?'good':'warn') : '')+'</div>';
+}
 function openLeadDetail(id){
   var l = DB.leads.filter(function(x){ return x.lead_id===id; })[0]; if(!l) return;
   var notes = parseJson(l.meeting_notes_json, []), fc = Number(l.follow_up_count)||0;
@@ -4952,8 +5008,14 @@ function openLeadDetail(id){
     '<div><div class="wc-muted">Email</div>'+(l.email?'<a href="mailto:'+esc(l.email)+'" style="color:var(--brand)">'+esc(l.email)+'</a>':'—')+'</div><div><div class="wc-muted">Phone / LinkedIn</div>'+esc(l.phone||'—')+(l.linkedin_url?' · <a href="'+esc(l.linkedin_url)+'" target="_blank" rel="noopener" style="color:var(--brand)">profile</a>':'')+'</div></div>';
   h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Move to stage</div>'+CRM_STAGES.map(function(s){ return '<span class="wc-chip'+(l.stage===s?' on':'')+'" onclick="setLeadStage(\''+id+'\',\''+s+'\')">'+s+'</span>'; }).join('')+'</div>';
   if(l.drive_folder_id) h += '<div class="wc-note" style="margin-bottom:8px">📁 <a href="https://drive.google.com/drive/folders/'+encodeURIComponent(l.drive_folder_id)+'" target="_blank" rel="noopener" style="color:var(--brand)">Open the Drive folder</a>'+(l.channel?' · via '+esc(l.channel):'')+'</div>';
-  if(l.meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">📅 Discovery call: '+esc(l.meeting_date)+'</div>';
-  if(l.demo_meeting_booked==='yes') h += '<div class="wc-note" style="margin-bottom:8px">🖥 Demo: '+esc(l.demo_date)+'</div>';
+  if(l.meeting_booked==='yes') h += meetingLine('📅','Discovery call',l.meeting_date,notes,'discovery');
+  if(l.demo_meeting_booked==='yes') h += meetingLine('🖥','Demo',l.demo_date,notes,'demo');
+  h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Call notes <span class="wc-muted" style="font-weight:400">— the file is kept on the record, next steps are created from the notes, and the prospect’s health is re-checked</span></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+sel('cn_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'},{value:'other',label:'Other call'}], (l.demo_meeting_booked==='yes' && meetingPassed(l.demo_date) && !(l.meeting_booked==='yes' && !meetingPassed(l.meeting_date))) ? 'demo' : 'discovery')+'</div>'+
+    '<textarea class="wc-ta" id="cn_text" style="min-height:110px" placeholder="Paste the notes here, or attach a file below. What was discussed, their needs, budget, objections, decision makers, timelines…"></textarea>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center"><input type="file" id="cn_file" accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.md,.vtt,.srt" class="wc-input" style="max-width:260px"><span class="wc-muted">or</span><input class="wc-input" id="cn_doc" style="flex:1;min-width:200px" placeholder="Link to a Google Doc with the notes (e.g. Gemini notes)"></div>'+
+    '<textarea class="wc-ta" id="cn_steps" style="min-height:54px;margin-top:8px" placeholder="Next steps you want to add yourself (one per line, optional) — Claude also pulls them out of the notes"></textarea>'+
+    '<div style="margin-top:8px"><button class="btn btn-primary btn-sm" id="cn_go" onclick="saveCallNotes(\''+id+'\')">Save call notes &amp; create next steps</button></div></div>';
   if(showDisc||showDemo){
     var kind = showDemo && !showDisc ? 'demo' : 'discovery';
     h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Schedule a meeting</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><div>'+sel('ld_kind',[{value:'discovery',label:'Discovery call'},{value:'demo',label:'Demo session'}], kind)+'</div><div>'+inp('ld_date','','date')+'</div><div>'+inp('ld_time','10:00','time')+'</div><button class="btn btn-primary btn-sm" onclick="bookLeadMeeting(\''+id+'\')">Send invite</button></div><div class="wc-lbl" style="margin-top:10px">Also invite (CC)</div>'+ccPickerHtml('ldcc')+'<div class="wc-help">Invite goes to the prospect, you, the default CC list from Settings and anyone you pick here, with a Meet link.</div></div>';
@@ -4971,7 +5033,7 @@ function openLeadDetail(id){
 }
 function safeUrl(u){ u = String(u||''); return /^https?:\/\//i.test(u) ? u : ''; }
 function leadNoteHtml(id, n, ni){
-  var h = '<div class="wc-row" style="align-items:flex-start"><span class="wc-muted" style="width:92px;flex-shrink:0">'+esc(fmtDate(n.at))+'<br>'+esc(n.by||'')+'</span><span style="flex:1">'+(n.type==='follow_up'?pill((n.responded?'Reply':'Follow-up')+(n.channel?' · '+n.channel:''), n.responded?'good':'mute')+' ':'')+esc(n.text||'');
+  var h = '<div class="wc-row" style="align-items:flex-start"><span class="wc-muted" style="width:92px;flex-shrink:0">'+esc(fmtDate(n.at))+'<br>'+esc(n.by||'')+'</span><span style="flex:1">'+(n.type==='call'?pill(({discovery:'Discovery call',demo:'Demo',other:'Call'})[n.kind]||'Call','info')+' ':'')+(n.type==='follow_up'?pill((n.responded?'Reply':'Follow-up')+(n.channel?' · '+n.channel:''), n.responded?'good':'mute')+' ':'')+esc(n.text||'');
   if(n.fileUrl && safeUrl(n.fileUrl)) h += '<div style="margin-top:4px">📎 <a href="'+esc(safeUrl(n.fileUrl))+'" target="_blank" rel="noopener" style="color:var(--brand)">'+esc(n.fileName||'Attachment')+'</a></div>';
   (n.nextSteps||[]).forEach(function(st, si){ h += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center"><span class="wc-check'+(st.done?' on':'')+'" onclick="toggleLeadStep(\''+id+'\','+ni+','+si+')"></span><span'+(st.done?' style="text-decoration:line-through;opacity:.6"':'')+'>'+esc(st.text)+'</span></div>'; });
   return h+'</span></div>';
@@ -4992,6 +5054,27 @@ function bookLeadMeeting(id){
 }
 function logFollowUp(id, responded){
   api('logLeadFollowUp', {lead_id:id, channel:val('fu_ch'), note:val('fu_note'), responded:!!responded, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not log', res); wcToast(res.message || 'Logged.'); refreshLead(id); });
+}
+function saveCallNotes(id){
+  var text = val('cn_text').trim(), docUrl = val('cn_doc').trim(), fileEl = document.getElementById('cn_file'), file = fileEl && fileEl.files && fileEl.files[0];
+  if(!text && !docUrl && !file) return wcToast('Type or paste the notes, or attach a file.', true);
+  if(file && file.size > 8*1024*1024) return wcToast('That file is over 8 MB. Paste the text instead.', true);
+  var steps = val('cn_steps').split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+  var base = {lead_id:id, kind:val('cn_kind')||'discovery', text:text, steps:steps, doc_url:docUrl, actor:CURRENT_USER};
+  var btn = document.getElementById('cn_go'); if(btn){ btn.disabled = true; btn.textContent = 'Reading the notes…'; }
+  var send = function(extra){
+    api('saveLeadCallNotes', Object.assign(base, extra||{})).then(function(res){
+      if(btn){ btn.disabled = false; btn.textContent = 'Save call notes & create next steps'; }
+      if(!res.ok) return wcFail('Could not save call notes', res);
+      wcToast('Saved · '+(res.steps||[]).length+' next step'+((res.steps||[]).length===1?'':'s')+(res.health&&res.health.health?' · health: '+res.health.health:'')+(res.warning?' · '+res.warning:''));
+      refreshLead(id);
+    });
+  };
+  if(!file) return send();
+  var rd = new FileReader();
+  rd.onload = function(){ send({file_name:file.name, mime_type:file.type||'application/octet-stream', data_base64:String(rd.result).split(',')[1]||''}); };
+  rd.onerror = function(){ if(btn){ btn.disabled = false; btn.textContent = 'Save call notes & create next steps'; } wcToast('Could not read that file.', true); };
+  rd.readAsDataURL(file);
 }
 function addLeadNote(id){
   var text = val('ld_note_text').trim(); if(!text) return wcToast('Write a note first.', true);
@@ -5191,9 +5274,16 @@ function settingsHtml(s){
     '<div class="wc-row"><span style="flex:1">Backend version</span><b>'+esc(s.backend_version||'')+'</b>'+(s.backend_version===EXPECTED_BACKEND?pill('matches this page','good'):pill('page expects '+EXPECTED_BACKEND,'warn'))+'</div>'+
     '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="testClaudeClick()">Test Claude</button><button class="btn btn-ghost btn-sm" onclick="testSlackDmClick()">Send myself a test Slack DM</button></div><div id="sTestOut" style="margin-top:8px"></div></div>';
 
+  h += slackWatchSettingsHtml(s);
+  h += contentSettingsHtml(s);
   h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Slack channels — one per kind of update</div><div class="wc-muted" style="margin-bottom:12px">Paste the channel ID (open the channel → ⋯ → Copy link → the part starting with C). Invite the bot to each channel. People still get their own DMs for things assigned to them. Leave blank to skip posting for that category (it falls back to General).</div>'+
     cats.map(function(k){ return '<div class="wc-row" style="align-items:flex-start;flex-wrap:wrap"><div style="width:230px"><b style="font-size:13px">'+esc(k.label)+'</b><div class="wc-muted">'+esc(k.hint)+'</div></div><input class="wc-input sv" data-k="slack_channel_'+esc(k.key)+'" style="flex:1;min-width:180px" placeholder="C0123ABCD" value="'+esc(c['slack_channel_'+k.key]||'')+'"><button class="btn btn-ghost btn-sm" onclick="testChannel(\''+esc(k.key)+'\')">Send test</button><span id="tc_'+esc(k.key)+'" class="wc-muted" style="width:100%;padding-left:230px"></span></div>'; }).join('')+
     '<div class="wc-help" style="margin-top:8px">Each client project can also have its own channel ID when you create it.</div></div>';
+
+  h += '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Meetings (Google Meet)</div><div class="wc-grid g2">'+
+    fld('Record and transcribe every booked meeting automatically', '<select class="wc-sel sv" data-k="meet_auto_record"><option value="yes"'+((c.meet_auto_record||'yes')!=='no'?' selected':'')+'>Yes</option><option value="no"'+(c.meet_auto_record==='no'?' selected':'')+'>No</option></select>')+
+    fld('Make the person who booked a co-host', '<select class="wc-sel sv" data-k="meet_cohost_booker"><option value="yes"'+((c.meet_cohost_booker||'yes')!=='no'?' selected':'')+'>Yes</option><option value="no"'+(c.meet_cohost_booker==='no'?' selected':'')+'>No</option></select>')+'</div>'+
+    '<div class="wc-help">The booker is always added to the invite. Recording, transcripts and co-host need the Google Meet API switched on and a Workspace plan that includes recording; if Google refuses, the invite still goes out and the booking message says why.</div></div>';
 
   h += '<div class="wc-grid g2" style="margin-bottom:16px"><div class="card" style="padding:18px 20px"><div class="card-h">CRM</div>'+
     fld('Brochure link — Data Collection / Research', '<input class="wc-input sv" data-k="crm_brochure_url_data" value="'+esc(c.crm_brochure_url_data||'')+'" placeholder="https://drive.google.com/…">')+fld('Brochure link — Field Operation', '<input class="wc-input sv" data-k="crm_brochure_url_field" value="'+esc(c.crm_brochure_url_field||'')+'" placeholder="https://…">')+fld('Fallback brochure link', '<input class="wc-input sv" data-k="crm_brochure_url" value="'+esc(c.crm_brochure_url||'')+'">')+
@@ -5825,7 +5915,7 @@ function npClientPick(v){ var i = document.getElementById('np_client'); if(i) i.
 
 // ═══ MARKETING ═════════════════════════════════════════════════════════
 var MK_PLATFORMS = ['LinkedIn','Instagram','Facebook','Twitter/X'];
-function mkState(){ return STATE.mk || (STATE.mk = {tab:'overview', days:30}); }
+function mkState(){ return STATE.mk || (STATE.mk = {tab:'calendar', days:30}); }
 function mkItem(id){ return (DB.contentCalendar||[]).filter(function(c){ return c.content_id===id; })[0]; }
 function mkNum(v){ return Number(v)||0; }
 function fmtN(n){ return Number(n||0).toLocaleString('en-US'); }
@@ -5852,13 +5942,13 @@ function renderContent(){
     api('ensureMarketingCycle', {actor:CURRENT_USER}).then(function(res){ if(res && res.ok && res.created) refreshData(); });
   }
   var acts = (canWriteMarketing() ? '<button class="btn btn-primary" onclick="openNewContent()">+ New content</button>' : '')+(isAdminUser() ? '<button class="btn btn-ghost" onclick="runContentPoolNowClick()">Run weekly pool now</button>' : '');
-  var tabs = [['overview','Overview'],['board','Content board'],['results','Results'],['monthly','Monthly webinar & newsletter']];
-  var h = wcHead('Marketing', 'LinkedIn · Instagram · Facebook · Twitter/X, plus the monthly newsletter and webinar. Claude proposes a fresh content pool every Friday morning.', acts);
+  var tabs = [['calendar','Calendar'],['overview','Overview'],['board','Content board'],['results','Results'],['monthly','Monthly webinar & newsletter']];
+  var h = wcHead('Marketing', 'Monday to Friday on LinkedIn, Instagram, Facebook and X, plus the monthly newsletter and webinar. Open any item to take it from idea to published.', acts);
   h += '<div class="wc-tabs">'+tabs.map(function(t){ return '<div class="wc-tab'+(mk.tab===t[0]?' on':'')+'" onclick="setMkTab(\''+t[0]+'\')">'+t[1]+'</div>'; }).join('')+'</div>';
   var w = wcPage(h);
   var body = document.createElement('div');
   if(mk.tab==='board'){ body.appendChild(renderBoardPage('content')); }
-  else body.innerHTML = mk.tab==='results' ? mkResultsHtml() : mk.tab==='monthly' ? mkMonthlyHtml() : mkOverviewHtml();
+  else body.innerHTML = mk.tab==='calendar' ? mkCalendarHtml() : mk.tab==='results' ? mkResultsHtml() : mk.tab==='monthly' ? mkMonthlyHtml() : mkOverviewHtml();
   w.appendChild(body);
   return w;
 }
@@ -6075,6 +6165,9 @@ function runLegacyImport(){
     return made;
   }
   var API3 = {
+    planContentWeeks: function(p){ var n = 0, mon = new Date(); mon.setUTCDate(mon.getUTCDate()-((mon.getUTCDay()+6)%7)); for(var w=0;w<(p.weeks||4);w++) for(var d=0;d<5;d++) ['LinkedIn','Instagram','Facebook','Twitter/X'].forEach(function(ch){ var dt = new Date(mon); dt.setUTCDate(dt.getUTCDate()+w*7+d); var ds = dt.toISOString().slice(0,10); var key='slot-'+ds+'-'+ch; if(DB.contentCalendar.some(function(c){ return c.slot_key===key; })) return; DB.contentCalendar.push({content_id:mid('c'), title:(p.ai?'Draft: ':'')+ch+' '+ds, type:'Post', format:'Post', platform:ch, stage:'Idea', owner:'', notes:'', scheduled_date:ds, source:'Plan', slot_key:key, style:['Research insight','Field story','Product in practice','Myth or pain point','Learning and community'][d]}); n++; }); return ok({created:n, drafted:p.ai?n:0, themes:[], notes:[]}); },
+    contentPrompts: function(p){ var c = DB.contentCalendar.filter(function(x){ return x.content_id===p.content_id; })[0]; if(!c) return err('Content item not found.'); return ok({caption_prompt:'(preview) caption prompt for '+c.title, visual_prompt:'(preview) poster prompt for '+c.title, size:'1080x1350 px', kind:'single poster', channel:c.platform, format:c.format||c.type}); },
+    generateContentCaption: function(p){ var c = DB.contentCalendar.filter(function(x){ return x.content_id===p.content_id; })[0]; if(!c) return err('Content item not found.'); c.caption = 'Preview caption for '+c.title; c.hashtags = '#FieldData'; c.cta = 'Book a demo'; c.headline = c.title; if(c.stage==='Idea') c.stage = 'Drafting'; return ok({copy:{}}); },
     createClient: function(p){ if(!String(p.name||'').trim()) return err('Give the client a name.'); var d = DB.clients.filter(function(c){ return c.name.toLowerCase()===String(p.name).trim().toLowerCase() || (p.lead_id && c.lead_id===p.lead_id); })[0]; if(d) return p.lead_id ? ok({created:false, client:d}) : {ok:false, error:'A client called "'+d.name+'" already exists.', client:d}; return ok({created:true, client:mkClient(p)}); },
     updateClient: function(p){ var c = DB.clients.filter(function(x){ return x.client_id===p.client_id; })[0]; if(!c) return err('Client not found.'); ['name','sector','contact_name','email','phone','country','status','notes','slack_channel_id','account_manager','acquired_by'].forEach(function(k){ if(p.hasOwnProperty(k)) c[k] = p[k]; }); if(p.hasOwnProperty('products')) c.products = cleanP(p.products); DB.projects.forEach(function(x){ if(x.client_id===c.client_id) x.client_name = c.name; }); return ok(); },
     deleteClient: function(p){ if(DB.projects.some(function(x){ return x.client_id===p.client_id; })) return err('This client has projects. Set the client to Past instead of deleting it.'); DB.clients = DB.clients.filter(function(c){ return c.client_id!==p.client_id; }); return ok(); },
@@ -6260,6 +6353,254 @@ function genOnMessage_(e){
     api(m.op, p).then(reply);
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Slack → suggested tickets
+// ═══════════════════════════════════════════════════════════════════════
+// ── Settings: channels to watch ──
+function swList(){ var a=[]; try{ a = JSON.parse((document.getElementById('sw_json')||{}).value || '[]'); }catch(e){} return Array.isArray(a)?a:[]; }
+function swSave(a){ var el = document.getElementById('sw_json'); if(el) el.value = JSON.stringify(a); swPaint(a); }
+function swPaint(a){
+  var box = document.getElementById('sw_list'); if(!box) return;
+  box.innerHTML = a.length ? a.map(function(c,i){ return '<div class="wc-row"><span style="flex:1"><b>#'+esc(c.name||c.id)+'</b> <span class="wc-muted">'+esc(c.id)+'</span></span><button class="btn btn-ghost btn-sm" onclick="swRemove('+i+')">Remove</button></div>'; }).join('') : '<div class="wc-muted">No channels yet. Add one below.</div>';
+}
+function swRemove(i){ var a = swList(); a.splice(i,1); swSave(a); }
+function swAdd(){
+  var inp = document.getElementById('sw_in'), out = document.getElementById('sw_msg'), q = inp.value.trim(); if(!q) return;
+  out.innerHTML = '<span class="wc-muted">Checking that Slack can read it…</span>';
+  api('slackWatchTest', {channel:q, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ out.innerHTML = '<span style="color:var(--red)">✗ '+esc(res.error||'Could not check')+'</span>'+(res.hint?'<div class="wc-help">'+esc(res.hint)+'</div>':''); return; }
+    var a = swList(); if(a.some(function(c){ return c.id===res.id; })){ out.innerHTML = '<span class="wc-muted">Already in the list.</span>'; return; }
+    a.push({id:res.id, name:res.name}); swSave(a); inp.value = '';
+    out.innerHTML = '<span style="color:var(--green)">✓ #'+esc(res.name)+' added — press “Save all settings” to keep it.</span>';
+  });
+}
+function swScanNow(){
+  var out = document.getElementById('sw_msg'); out.innerHTML = '<span class="wc-muted">Reading the channels…</span>';
+  api('scanSlackNow', {actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ out.innerHTML = '<span style="color:var(--red)">✗ '+esc(res.error||'Scan failed')+'</span>'; return; }
+    out.innerHTML = '<span style="color:var(--green)">✓ Read '+res.channels+' channel'+(res.channels===1?'':'s')+', '+res.units+' conversation'+(res.units===1?'':'s')+' → '+res.created+' new suggestion'+(res.created===1?'':'s')+'.</span>'+((res.notes||[]).length?'<div class="wc-help">'+res.notes.map(esc).join('<br>')+'</div>':'');
+    refreshData(false);
+  });
+}
+function slackWatchSettingsHtml(s){
+  var c = (s && s.config) || {}, list = []; try{ list = JSON.parse(c.slack_watch_channels||'[]'); }catch(e){}
+  setTimeout(function(){ swPaint(list); }, 0);
+  return '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Watch Slack channels for tickets</div>'+
+    '<div class="wc-muted" style="margin-bottom:10px">Every 10 minutes the system reads new messages in these channels. Claude picks out real action items and proposes tickets. <b>Nothing is created until the suggested owner (or an Admin) confirms it</b>, and the suggested owner gets a Slack DM.</div>'+
+    '<div id="sw_list"></div><input type="hidden" class="sv" id="sw_json" data-k="slack_watch_channels" value="'+esc(JSON.stringify(list))+'">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><input class="wc-input" id="sw_in" style="flex:1;min-width:220px" placeholder="Channel name (e.g. engineering) or ID (C0123ABCD)" onkeydown="if(event.key===\'Enter\')swAdd()"><button class="btn btn-primary btn-sm" onclick="swAdd()">Add &amp; check</button><button class="btn btn-ghost btn-sm" onclick="swScanNow()">Scan now</button></div>'+
+    '<div id="sw_msg" style="margin-top:8px"></div>'+
+    '<div class="wc-help" style="margin-top:8px">One-time Slack setup: your Slack app needs the scopes <code>channels:history</code>, <code>groups:history</code>, <code>channels:read</code>, <code>groups:read</code> and <code>users:read</code> (OAuth &amp; Permissions → reinstall), and the bot must be invited to each channel (type <code>/invite @your-app</code> in the channel). “Add &amp; check” tells you if either is missing. The first scan reads the last 24 hours. Then press <b>Check setup</b> / set up triggers so the 10-minute timer exists.</div></div>';
+}
+
+// ── Tickets page: suggestions waiting for a decision ──
+function slackSuggestPanel(){
+  var all = DB.slackSuggestions || [];
+  var mine = all.filter(function(x){ return x.status==='Pending' && (isAdminUser() || x.owner===CURRENT_USER); });
+  if(!mine.length) return '';
+  var teams = teamNames();
+  return '<div class="card" style="padding:14px 16px;margin-bottom:14px;border-left:4px solid var(--brand)"><div class="card-h">💡 Suggested from Slack <span class="wc-muted" style="font-weight:400">'+mine.length+' waiting — nothing becomes a ticket until you confirm</span></div>'+
+    mine.map(function(x){ var id = x.suggestion_id;
+      return '<div class="wc-row" style="align-items:flex-start;flex-wrap:wrap;gap:10px;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:1;min-width:260px"><b>'+esc(x.title)+'</b> '+pill(x.type,'info')+' <span class="wc-muted">#'+esc(x.channel_name||'')+'</span>'+
+        '<div style="margin:4px 0">'+esc(x.description||'')+'</div>'+(x.evidence?'<div class="wc-muted" style="font-style:italic">“'+esc(x.evidence)+'”</div>':'')+
+        (x.permalink && safeUrl(x.permalink) ? '<div><a href="'+esc(safeUrl(x.permalink))+'" target="_blank" rel="noopener" style="color:var(--brand)">Open the Slack conversation</a></div>':'')+
+        (x.owner_reason?'<div class="wc-muted">Owner suggested because: '+esc(x.owner_reason)+'</div>':'')+'</div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px;min-width:170px"><label class="wc-muted">Owner</label>'+sel('ss_o_'+id, teams, x.owner, 'Nobody yet')+
+        '<label class="wc-muted">Priority</label>'+sel('ss_p_'+id, ['Low','Medium','High','Urgent'], x.priority)+
+        '<div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="decideSuggestion(\''+id+'\',\'accept\')">Create ticket</button><button class="btn btn-ghost btn-sm" onclick="decideSuggestion(\''+id+'\',\'dismiss\')">Dismiss</button></div></div></div>';
+    }).join('')+'</div>';
+}
+function decideSuggestion(id, decision){
+  var edits = decision==='accept' ? {owner:val('ss_o_'+id), priority:val('ss_p_'+id)} : {};
+  api('decideSlackSuggestion', {suggestion_id:id, decision:decision, edits:edits, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not update', res);
+    wcToast(decision==='accept' ? 'Ticket created.'+(res.warning?' '+res.warning:'') : 'Dismissed.');
+    refreshData();
+  });
+}
+
+
+// ═══ CONTENT CALENDAR (month / week outline, item panel, prompts, notable dates) ═══
+var CAL_STAGES = ['Idea','Drafting','Design','Review','Scheduled','Published'];
+var CAL_STAGE_COLOR = {'Idea':'#8E90A3','Drafting':'#3B6FD4','Design':'#D9A62E','Review':'#E07B39','Scheduled':'#7C5CBF','Published':'#2E9B5F'};
+var CAL_CH_COLOR = {'LinkedIn':'#0A66C2','Instagram':'#C13584','Facebook':'#1877F2','Twitter/X':'#222','Newsletter':'#E07B39','Webinar':'#7C5CBF','Blog':'#2E9B5F'};
+var CAL_CHANNELS = ['LinkedIn','Instagram','Facebook','Twitter/X','Newsletter','Webinar'];
+var CAL_FORMATS = ['Post','Carousel','Motion Video','Video','Story','Thread','Poll','Article','Newsletter','Webinar'];
+var CAL_STYLES = ['Research insight','Field story','Product in practice','Myth or pain point','Learning and community'];
+function calState(){ var mk = mkState(); if(!mk.cal) mk.cal = {view:'month', anchor:today10(), ch:'', stage:''}; return mk.cal; }
+function calYmd(d){ return d.toISOString().slice(0,10); }
+function calDate(s){ return new Date(s+'T12:00:00Z'); }
+function calAdd(s, n){ var d = calDate(s); d.setUTCDate(d.getUTCDate()+n); return calYmd(d); }
+function calMonday(s){ var d = calDate(s), w = (d.getUTCDay()+6)%7; return calAdd(s, -w); }
+function calItemsOn(ymd){
+  var st = calState();
+  return (DB.contentCalendar||[]).filter(function(c){ return String(c.scheduled_date||'').slice(0,10)===ymd && (!st.ch || c.platform===st.ch) && (!st.stage || c.stage===st.stage); })
+    .sort(function(a,b){ return CAL_CHANNELS.indexOf(a.platform)-CAL_CHANNELS.indexOf(b.platform); });
+}
+function calNotable(ymd){ return (DB.notableDates||[]).filter(function(n){ return n.date===ymd; }); }
+function calNav(dir){
+  var st = calState();
+  if(dir===0) st.anchor = today10();
+  else if(st.view==='week') st.anchor = calAdd(st.anchor, 7*dir);
+  else { var d = calDate(st.anchor.slice(0,7)+'-01'); d.setUTCMonth(d.getUTCMonth()+dir); st.anchor = calYmd(d); }
+  render();
+}
+function calSet(k, v){ var st = calState(); st[k] = v; if(k==='view' && v==='week' && arguments[2]) st.anchor = arguments[2]; render(); }
+function calChip(c, compact){
+  var col = CAL_CH_COLOR[c.platform]||'#666', sc = CAL_STAGE_COLOR[c.stage]||'#999';
+  return '<div class="cal-chip" style="border-left:3px solid '+col+'" onclick="event.stopPropagation();openContentPanel(\''+c.content_id+'\')" title="'+esc(c.platform+' · '+(c.format||c.type)+' · '+c.stage+' — '+c.title)+'">'+
+    '<span class="cal-dot" style="background:'+sc+'"></span><span class="cal-t"><b>'+esc(c.platform==='Twitter/X'?'X':c.platform)+'</b>'+(compact?'':' · '+esc(c.format||c.type||''))+'<br>'+esc(c.title)+'</span></div>';
+}
+function calDayCell(ymd, inMonth, week){
+  var items = calItemsOn(ymd), nd = calNotable(ymd), today = ymd===today10();
+  var max = week ? 99 : 3;
+  var h = '<div class="cal-day'+(inMonth?'':' out')+(today?' today':'')+'"><div class="cal-dn" onclick="calSet(\'view\',\'week\',\''+ymd+'\')">'+Number(ymd.slice(8))+'</div>';
+  nd.forEach(function(n){ h += '<div class="cal-nd" onclick="event.stopPropagation();openNotableDate(\''+ymd+'\')" title="'+esc(n.name)+'">★ '+esc(n.name)+'</div>'; });
+  items.slice(0,max).forEach(function(c){ h += calChip(c, !week); });
+  if(items.length>max) h += '<div class="cal-more" onclick="calSet(\'view\',\'week\',\''+ymd+'\')">+'+(items.length-max)+' more</div>';
+  return h+'</div>';
+}
+function calendarHtml(){
+  var st = calState(), h = '';
+  var title, days = [];
+  if(st.view==='week'){
+    var mon = calMonday(st.anchor); title = 'Week of '+calDate(mon).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
+    for(var i=0;i<7;i++) days.push([calAdd(mon,i), true]);
+  } else {
+    var first = st.anchor.slice(0,7)+'-01'; title = calDate(first).toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'});
+    var start = calMonday(first), mm = st.anchor.slice(0,7);
+    for(var j=0;j<42;j++){ var dd = calAdd(start,j); if(j>=35 && dd.slice(0,7)!==mm) break; days.push([dd, dd.slice(0,7)===mm]); }
+  }
+  var writer = canWriteMarketing();
+  h += '<div class="cal-bar"><button class="btn btn-ghost btn-sm" onclick="calNav(-1)">‹</button><button class="btn btn-ghost btn-sm" onclick="calNav(0)">Today</button><button class="btn btn-ghost btn-sm" onclick="calNav(1)">›</button><b class="cal-title">'+esc(title)+'</b>'+
+    '<span style="flex:1"></span><div class="wc-tabs" style="margin:0"><div class="wc-tab'+(st.view==='month'?' on':'')+'" onclick="calSet(\'view\',\'month\')">Month</div><div class="wc-tab'+(st.view==='week'?' on':'')+'" onclick="calSet(\'view\',\'week\')">Week</div></div></div>';
+  h += '<div class="cal-bar" style="margin-top:8px">'+sel('cal_ch', CAL_CHANNELS, st.ch, 'All channels', ' onchange="calSet(\'ch\',this.value)"')+sel('cal_stage', CAL_STAGES, st.stage, 'All stages', ' onchange="calSet(\'stage\',this.value)"')+
+    '<span style="flex:1"></span>'+(writer ? '<button class="btn btn-ghost btn-sm" id="cal_plan" onclick="calPlan(false)">Plan next 4 weeks</button><button class="btn btn-primary btn-sm" id="cal_draft" onclick="calPlan(true)">Draft topics with Claude</button>' : '')+'</div>';
+  h += '<div class="cal-legend">'+CAL_STAGES.map(function(s){ return '<span><i class="cal-dot" style="background:'+CAL_STAGE_COLOR[s]+'"></i>'+s+'</span>'; }).join('')+'<span style="color:#D9A62E">★ notable date</span></div>';
+  h += '<div class="cal-scroll"><div class="cal-grid"><div class="cal-hd">Mon</div><div class="cal-hd">Tue</div><div class="cal-hd">Wed</div><div class="cal-hd">Thu</div><div class="cal-hd">Fri</div><div class="cal-hd">Sat</div><div class="cal-hd">Sun</div>'+
+    days.map(function(d){ return calDayCell(d[0], d[1], st.view==='week'); }).join('')+'</div></div>';
+  var all = (DB.contentCalendar||[]), noSlots = !all.some(function(c){ return c.slot_key; });
+  if(noSlots) h += '<div class="wc-note" style="margin-top:12px">No calendar slots yet. '+(writer ? 'Press <b>Plan next 4 weeks</b> to create Monday to Friday slots for every channel, plus the monthly newsletter and webinar.' : 'The marketing team will plan them.')+'</div>';
+  return h;
+}
+function calPlan(ai){
+  var b = document.getElementById(ai?'cal_draft':'cal_plan'); if(b){ b.disabled = true; b.textContent = ai?'Claude is drafting… (can take a minute)':'Planning…'; }
+  api('planContentWeeks', {weeks: ai?2:4, ai:ai, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ if(b) b.disabled = false; return wcFail('Could not plan', res); }
+    refreshData().then(function(){ wcToast(ai ? ('Claude drafted '+(res.drafted||0)+' topics'+((res.themes||[]).length?' · theme: '+res.themes[0]:'')+'.') : (res.created||0)+' new slots added.'); });
+  });
+}
+function mkCalendarHtml(){ return calendarHtml(); }
+
+// ── item panel ──
+function openContentPanel(id){
+  var c = mkItem(id); if(!c) return;
+  var w = canWriteMarketing(), dis = w ? '' : ' disabled';
+  var idx = CAL_STAGES.indexOf(c.stage);
+  var step = '<div class="cp-steps">'+CAL_STAGES.map(function(s,i){
+    return '<div class="cp-step'+(i<idx?' done':'')+(i===idx?' cur':'')+(w?'':' lock')+'" style="--c:'+CAL_STAGE_COLOR[s]+'" onclick="'+(w?'cpStage(\''+id+'\',\''+s+'\')':'')+'"><i>'+(i<idx?'✓':(i+1))+'</i><span>'+s+'</span></div>';
+  }).join('')+'</div>';
+  var head = '<div class="wc-muted" style="margin-bottom:6px"><span class="cal-dot" style="background:'+(CAL_CH_COLOR[c.platform]||'#666')+'"></span> <b>'+esc(c.platform)+'</b> · '+esc(c.format||c.type||'')+(c.style?' · '+esc(c.style):'')+(c.special_date?' · ★ '+esc(c.special_date):'')+(c.source?' · '+esc(c.source):'')+'</div>';
+  var h = head + step;
+  h += '<div class="wc-grid g2">'+fld('Title', inp('cp_title', c.title, 'text', '', dis))+fld('Goes out', inp('cp_date', String(c.scheduled_date||'').slice(0,10), 'date', '', dis))+
+    fld('Owner', sel('cp_owner', teamNames(), c.owner||'', 'Unassigned', dis))+fld('Format', sel('cp_format', CAL_FORMATS, c.format||c.type||'', '', dis))+'</div>';
+  h += fld('Style of the day', sel('cp_style', CAL_STYLES, c.style||'', 'None', dis));
+  h += fld('Brief / angle', '<textarea class="wc-ta" id="cp_notes" rows="3"'+dis+'>'+esc(c.notes||'')+'</textarea>');
+  h += '<div class="card-h" style="margin:14px 0 6px">Copy</div>'+
+    fld('Caption', '<textarea class="wc-ta" id="cp_caption" rows="7"'+dis+'>'+esc(c.caption||'')+'</textarea>')+
+    '<div class="wc-grid g2">'+fld('Hashtags', inp('cp_hashtags', c.hashtags, 'text', '', dis))+fld('CTA', inp('cp_cta', c.cta, 'text', '', dis))+fld('On-image headline', inp('cp_headline', c.headline, 'text', '', dis))+fld('Alt text', inp('cp_alt', c.alt_text, 'text', '', dis))+'</div>'+
+    fld('Finished asset link (Drive, Canva…)', inp('cp_asset', c.asset_url, 'text', 'https://…', dis));
+  if(w) h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn btn-primary" id="cp_save" onclick="cpSave(\''+id+'\')">Save</button><button class="btn btn-ghost" id="cp_ai" onclick="cpWrite(\''+id+'\')">Write caption with Claude</button></div>';
+  var list = parseJson(c.checklist_json, []);
+  if(list.length) h += '<div class="card-h" style="margin:14px 0 6px">Checklist</div>'+list.map(function(x,i){ return '<div class="wc-task'+(x.done?' done':'')+'"><span class="wc-check'+(x.done?' on':'')+(w?'':' lock')+'" onclick="'+(w?'cpTick(\''+id+'\','+i+','+(x.done?'false':'true')+')':'')+'">'+(x.done?'✓':'')+'</span><div style="flex:1">'+esc(x.text)+'</div></div>'; }).join('');
+  h += '<div class="card-h" style="margin:14px 0 6px">Prompts for caption and '+(/video/i.test(c.format||c.type||'')?'video':'poster')+'</div><div id="cp_prompts" class="wc-muted">Loading prompts…</div>';
+  var log = parseJson(c.stage_log_json, []);
+  if(log.length) h += '<div class="card-h" style="margin:14px 0 6px">History</div>'+log.slice().reverse().map(function(l){ return '<div class="wc-muted">'+esc(l.from||'')+' → <b>'+esc(l.stage)+'</b> · '+esc(l.by||'')+' · '+esc(String(l.at||'').slice(0,10))+'</div>'; }).join('');
+  wcModal('cpanel', esc(c.title), h, true);
+  api('contentPrompts', {content_id:id}).then(function(res){
+    var box = document.getElementById('cp_prompts'); if(!box) return;
+    if(!res.ok){ box.textContent = res.error||'Could not load prompts.'; return; }
+    STATE.cpPrompts = res;
+    box.innerHTML = '<div class="wc-note" style="margin-bottom:8px">'+esc(res.channel)+' · '+esc(res.format)+' · <b>'+esc(res.size)+'</b> ('+esc(res.kind)+'). Paste into Claude, ChatGPT, Canva or your video tool.</div>'+
+      '<div class="cp-pr"><div class="cp-prh"><b>Caption prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'caption_prompt\',this)">Copy</button></div><pre id="cp_p1">'+esc(res.caption_prompt)+'</pre></div>'+
+      '<div class="cp-pr"><div class="cp-prh"><b>'+(/video/i.test(res.format)?'Video':'Poster / design')+' prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'visual_prompt\',this)">Copy</button></div><pre id="cp_p2">'+esc(res.visual_prompt)+'</pre></div>';
+  });
+}
+function cpCopy(k, btn){
+  var t = (STATE.cpPrompts||{})[k]||'';
+  var done = function(){ if(btn){ btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1500); } };
+  try{ navigator.clipboard.writeText(t).then(done, function(){ cpCopyFallback(t); done(); }); }catch(e){ cpCopyFallback(t); done(); }
+}
+function cpCopyFallback(t){ var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(a); }
+function cpStage(id, stage){
+  api('updateContentStage', {content_id:id, stage:stage, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not move it', res); refreshData().then(function(){ openContentPanel(id); }); });
+}
+function cpSave(id){
+  var p = {content_id:id, actor:CURRENT_USER, title:val('cp_title').trim(), scheduled_date:val('cp_date'), owner:val('cp_owner'), format:val('cp_format'), style:val('cp_style'), notes:val('cp_notes'), caption:val('cp_caption'), hashtags:val('cp_hashtags'), cta:val('cp_cta'), headline:val('cp_headline'), alt_text:val('cp_alt'), asset_url:val('cp_asset').trim()};
+  if(!p.title) return wcToast('Give it a title.', true);
+  var b = document.getElementById('cp_save'); if(b) b.disabled = true;
+  api('updateContentStage', p).then(function(res){ if(b) b.disabled = false; if(!res.ok) return wcFail('Could not save', res); refreshData().then(function(){ wcToast('Saved.'); openContentPanel(id); }); });
+}
+function cpWrite(id){
+  var b = document.getElementById('cp_ai'); if(b){ b.disabled = true; b.textContent = 'Claude is writing…'; }
+  api('generateContentCaption', {content_id:id, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ if(b){ b.disabled = false; b.textContent = 'Write caption with Claude'; } return wcFail('Claude could not write it', res); }
+    refreshData().then(function(){ wcToast('Caption written. Review it, then move it to Design.'); openContentPanel(id); });
+  });
+}
+function cpTick(id, i, done){ api('updateContentChecklist', {content_id:id, index:i, done:done, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData().then(function(){ openContentPanel(id); }); }); }
+
+// ── notable dates ──
+function openNotableDate(ymd){
+  var nd = calNotable(ymd); if(!nd.length) return;
+  var w = canWriteMarketing();
+  var h = nd.map(function(n){ return '<div class="card" style="padding:12px 14px;margin-bottom:8px"><b>★ '+esc(n.name)+'</b><div class="wc-muted">'+esc(fmtDate(n.date))+'</div>'+(n.angle?'<div style="margin-top:6px">'+esc(n.angle)+'</div>':'')+'</div>'; }).join('');
+  var existing = calItemsOn(ymd);
+  if(w){
+    h += '<div class="card-h" style="margin:12px 0 6px">Create post ideas for this date</div><div>'+CAL_CHANNELS.slice(0,4).map(function(ch){ return '<span class="wc-chip nd-chip on" data-c="'+ch+'" onclick="this.classList.toggle(\'on\')">'+esc(ch)+'</span>'; }).join('')+'</div>'+
+      '<button class="btn btn-primary" style="margin-top:8px" onclick="ndCreate(\''+ymd+'\')">Create ideas</button>';
+  }
+  if(existing.length) h += '<div class="card-h" style="margin:12px 0 6px">Already planned that day</div>'+existing.map(function(c){ return calChip(c); }).join('');
+  wcModal('notable', 'Notable date', h);
+}
+function ndCreate(ymd){
+  var nd = calNotable(ymd)[0]; if(!nd) return;
+  var chans = [].slice.call(document.querySelectorAll('.nd-chip.on')).map(function(e){ return e.getAttribute('data-c'); });
+  if(!chans.length) return wcToast('Pick at least one channel.', true);
+  var n = 0, fails = 0;
+  var next = function(i){
+    if(i>=chans.length) return refreshData().then(function(){ wcClose('notable'); wcToast(n+' ideas created'+(fails?' ('+fails+' failed)':'')+'.'); });
+    return api('createContentItem', {title:nd.name, type:'Post', format:'Post', platform:chans[i], stage:'Idea', scheduled_date:ymd, special_date:nd.name, notes:nd.angle||'', source:'Notable date', actor:CURRENT_USER}).then(function(res){ if(res.ok) n++; else fails++; return next(i+1); });
+  };
+  next(0);
+}
+
+// ── settings ──
+function contentSettingsHtml(s){
+  var c = (s && s.config) || {};
+  var g = c.content_guidelines || DB.contentGuidelines || '';
+  return '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Marketing — content guidelines &amp; notable dates</div>'+
+    '<div class="wc-muted" style="margin-bottom:10px">Every caption and poster/video prompt is built from these guidelines. '+(DB.contentGuidelinesIsDefault && !c.content_guidelines ? 'Showing the built-in starter version. ' : '')+'Paste your content engine documents here (positioning, keywords, voice, banned phrases, visual brand) and save.</div>'+
+    fld('Brand and content guidelines', '<textarea class="wc-ta sv" data-k="content_guidelines" style="min-height:220px">'+esc(g)+'</textarea>')+
+    fld('Extra notable dates', '<textarea class="wc-ta sv" data-k="content_extra_dates" style="min-height:80px" placeholder="03-15 | World Consumer Rights Day | angle for the post">'+esc(c.content_extra_dates||'')+'</textarea>', 'One per line: MM-DD | name | angle. Added to the built-in list of field, research and development dates.')+'</div>';
+}
+function openContentDetail(id){ openContentPanel(id); }
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '.cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.cal-bar select{width:auto;min-width:130px}.cal-title{font-size:16px;margin-left:6px}'+
+  '.cal-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);margin:10px 0}.cal-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;flex:none}'+
+  '.cal-scroll{overflow-x:auto}.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(128px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:900px}'+
+  '.cal-hd{background:var(--surface2);padding:6px 8px;font-size:11.5px;font-weight:700;color:var(--text-dim)}.cal-day{background:#fff;min-height:104px;padding:4px;display:flex;flex-direction:column;gap:3px}'+
+  '.cal-day.out{background:#FAFAFC}.cal-day.out .cal-dn{opacity:.4}.cal-day.today .cal-dn{background:var(--brand);color:#fff}.cal-dn{font-size:11.5px;font-weight:700;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;cursor:pointer}'+
+  '.cal-chip{display:flex;gap:4px;align-items:flex-start;padding:3px 5px;background:var(--surface2);border-radius:5px;font-size:10.5px;line-height:1.25;cursor:pointer;overflow:hidden}.cal-chip:hover{background:var(--brand-bg)}.cal-chip .cal-dot{margin-top:3px}.cal-t{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}'+
+  '.cal-nd{font-size:10.5px;color:#9a6b00;background:#FFF6DD;border-radius:5px;padding:2px 5px;cursor:pointer}.cal-more{font-size:10.5px;color:var(--brand);cursor:pointer;padding:0 4px}'+
+  '.cp-steps{display:flex;gap:4px;margin:6px 0 14px;overflow-x:auto}.cp-step{flex:1;min-width:74px;text-align:center;cursor:pointer;font-size:11.5px;color:var(--text-dim)}.cp-step.lock{cursor:default}.cp-step i{display:block;margin:0 auto 3px;width:24px;height:24px;line-height:24px;border-radius:50%;background:var(--surface2);font-style:normal;font-weight:700}'+
+  '.cp-step.done i{background:var(--c);color:#fff}.cp-step.cur i{background:var(--c);color:#fff;box-shadow:0 0 0 3px rgba(75,68,217,.18)}.cp-step.cur span{color:var(--text);font-weight:700}'+
+  '.cp-pr{border:1px solid var(--line);border-radius:8px;margin-bottom:10px}.cp-prh{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface2);border-radius:8px 8px 0 0}.cp-pr pre{margin:0;padding:10px;white-space:pre-wrap;font-size:11.5px;max-height:220px;overflow:auto;font-family:inherit}';
+  document.head.appendChild(st);
+})();
 
 document.getElementById('globalSearch').addEventListener('input', function(e){
   runGlobalSearch(e.target.value);
