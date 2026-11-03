@@ -7097,3 +7097,97 @@ if (WORKSPACE_MODE) {
     api('applyBankDigits', {items:items, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not apply', res); wcToast(res.fixed+' fixed. They are now stored as text.'); refreshData().then(function(){ render(); }); });
   };
 })();
+
+// ── Weekly focus + research anchor (Marketing calendar) ──
+var FOCUS_PRESETS = [
+  {l:'Agencies + M&E, problem to solution aware', a:['A: Research agencies','B: M&E and development'], s:['2 Problem aware','3 Solution aware']},
+  {l:'AI data buyers, early awareness', a:['C: AI data buyers'], s:['1 Unaware','2 Problem aware']},
+  {l:'Researchers and students, free route', a:['D: Researchers and students'], s:['1 Unaware','2 Problem aware']},
+  {l:'Product push, product to most aware', a:['A: Research agencies','B: M&E and development','D: Researchers and students'], s:['4 Product aware','5 Most aware']}
+];
+(function(){
+  var prevCal = calendarHtml;
+  calendarHtml = function(){
+    var h = prevCal(), i = h.indexOf('<div class="cal-legend">');
+    if(i < 0 || !canWriteMarketing()) return h;
+    setTimeout(focusLoad, 0);
+    return h.slice(0,i)+'<div id="cal_focus" class="card" style="padding:12px 14px;margin:10px 0"><div class="wc-muted">Loading this week’s focus…</div></div>'+h.slice(i);
+  };
+  var prevPick = calWeekPick;
+  calWeekPick = function(v){ prevPick(v); if(document.getElementById('cal_focus')) focusLoad(); };
+})();
+function focusWeek(){ return (document.getElementById('cal_wk') && val('cal_wk')) || calDefaultWeek(); }
+function focusLoad(){
+  var box = document.getElementById('cal_focus'); if(!box) return;
+  var wk = focusWeek();
+  api('contentWeekStatus', {week:wk}).then(function(res){
+    box = document.getElementById('cal_focus'); if(!box || !res.ok) return;
+    STATE.focus = res; var f = res.focus || {audiences:[],stages:[]}, r = res.research;
+    var chk = function(cls, list, on){ return list.map(function(x){ return '<label style="display:inline-flex;gap:5px;align-items:center;margin:0 12px 6px 0;font-size:13px"><input type="checkbox" class="'+cls+'" value="'+esc(x)+'"'+(on.indexOf(x)>-1?' checked':'')+'> '+esc(x)+'</label>'; }).join(''); };
+    var rh;
+    if(!r) rh = '<div class="wc-help">No research piece yet. Claude finds one real, sourced piece when you draft the week.</div>';
+    else if(!r.found) rh = '<div class="wc-note warn">No verifiable research piece was found for this week. The content will use a labelled illustration and no statistics. You can type a topic below and draft again.</div>';
+    else rh = '<div class="wc-note"><b>Research anchor:</b> '+esc(r.title)+' · <a href="'+esc(safeUrl(r.source_url))+'" target="_blank" rel="noopener" style="color:var(--brand)">'+esc(r.source_name||'source')+'</a> ('+esc(r.published_date)+')<br>'+esc(r.key_finding)+(r.caveat?'<br><span class="wc-muted">Note: '+esc(r.caveat)+'</span>':'')+'</div>';
+    box.innerHTML = '<div class="card-h" style="margin-bottom:6px">Focus for the week of '+esc(fmtDate(wk))+(f.is_default?' <span class="wc-muted" style="font-weight:400">(default, not saved yet)</span>':'')+'</div>'+
+      '<div style="margin-bottom:6px">'+FOCUS_PRESETS.map(function(p,i){ return '<span class="wc-chip" onclick="focusPreset('+i+')">'+esc(p.l)+'</span>'; }).join('')+'</div>'+
+      '<div class="wc-lbl">Audiences</div><div>'+chk('fc-a', res.audiences, f.audiences)+'</div>'+
+      '<div class="wc-lbl">Awareness stages</div><div>'+chk('fc-s', res.stages, f.stages)+'</div>'+
+      '<div class="wc-grid g2"><div>'+fld('Research topic or angle (optional)', inp('fc_hint', f.research_hint||'', 'text', 'e.g. cost of fake interviews in household surveys'))+'</div><div>'+fld('Note for Claude (optional)', inp('fc_note', f.note||'', 'text', 'e.g. we have a webinar on Thursday'))+'</div></div>'+rh+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="focusSave(true)">Save focus</button><button class="btn btn-ghost btn-sm" onclick="focusNewResearch()">Find a different research piece</button></div>'+
+      '<div class="wc-help" style="margin-top:6px">Every week has an educational deep dive on the research, a story about the impact of missing or good data, and a pitch. Posts only use the audiences and stages ticked here.</div>';
+  });
+}
+function focusPreset(i){
+  var p = FOCUS_PRESETS[i]; if(!p) return;
+  document.querySelectorAll('.fc-a').forEach(function(e){ e.checked = p.a.indexOf(e.value)>-1; });
+  document.querySelectorAll('.fc-s').forEach(function(e){ e.checked = p.s.indexOf(e.value)>-1; });
+}
+function focusCollect(){
+  var pick = function(c){ return Array.prototype.slice.call(document.querySelectorAll(c+':checked')).map(function(e){ return e.value; }); };
+  return {week:focusWeek(), audiences:pick('.fc-a'), stages:pick('.fc-s'), research_hint:val('fc_hint').trim(), note:val('fc_note').trim(), actor:CURRENT_USER};
+}
+function focusSave(reload){
+  return api('saveContentFocus', focusCollect()).then(function(res){ if(!res.ok){ wcFail('Could not save the focus', res); return res; } if(reload){ wcToast('Focus saved.'); focusLoad(); } return res; });
+}
+function focusNewResearch(){
+  focusSave(false).then(function(r){ if(!r.ok) return;
+    wcToast('Searching for a research piece… about a minute.');
+    api('draftContentWeek', {week:focusWeek(), step:'research', force:true, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Research stopped', res); focusLoad(); if(res.note) wcToast(res.note, true); });
+  });
+}
+// Draft = save focus → find the research piece → plan topics → write each channel
+calDraftWeek = function(){
+  var wk = focusWeek(), b = document.getElementById('cal_draft'), chans = ['LinkedIn','Instagram','Facebook','Twitter/X'];
+  var box = document.getElementById('cal_focus');
+  if(b) b.disabled = true;
+  var say = function(t){ if(b) b.textContent = t; var e = document.getElementById('cal_wkstat'); if(e) e.textContent = t; };
+  var fail = function(res){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } refreshData(true).then(function(){}); wcFail('Drafting stopped', res); };
+  var step = (box && document.querySelector('.fc-a')) ? focusSave(false) : Promise.resolve({ok:true});
+  step.then(function(sv){
+    if(!sv.ok){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } return; }
+    say('Finding a real research piece for the week…');
+    api('draftContentWeek', {week:wk, step:'research', actor:CURRENT_USER}).then(function(rs){
+      if(!rs.ok) return fail(rs);
+      say('Planning the week’s topics…');
+      api('draftContentWeek', {week:wk, step:'plan', actor:CURRENT_USER}).then(function(res){
+        if(!res.ok) return fail(res);
+        var theme = res.theme || '', written = 0, i = 0;
+        var next = function(){
+          if(i >= chans.length) return refreshData().then(function(){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } wcToast('Week drafted: '+written+' captions and prompts saved'+(theme?' · theme: '+theme:'')+'.'); });
+          var ch = chans[i++]; say('Writing '+ch+' captions and prompts… ('+i+' of '+chans.length+')');
+          api('draftContentWeek', {week:wk, step:'copy', platform:ch, actor:CURRENT_USER}).then(function(r){ if(!r.ok) return fail(r); written += r.written||0; next(); });
+        };
+        next();
+      });
+    });
+  });
+};
+// Show each post's intent in its panel
+(function(){
+  var prevOpen = openContentPanel;
+  openContentPanel = function(id){
+    prevOpen(id);
+    var c = (DB.contentCalendar||[]).filter(function(x){ return x.content_id===id; })[0], el = document.querySelector('#wcm_cpanel .wc-muted');
+    if(c && c.intent && el) el.innerHTML += ' · <b>'+esc(c.intent)+'</b>';
+  };
+})();
