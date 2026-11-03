@@ -7066,3 +7066,34 @@ if (WORKSPACE_MODE) {
 } else {
   boot();
 }
+
+// ── Bank details: damaged values (lost leading zero) are suggested, never fixed silently ──
+(function(){
+  if(typeof renderEmployees !== 'function') return;
+  var prev = renderEmployees;
+  renderEmployees = function(){
+    var w = prev();
+    if(w && w.insertBefore && typeof WORKSPACE_MODE !== 'undefined' && WORKSPACE_MODE && isAdminUser()){
+      var box = document.createElement('div'); box.id = 'bankfix'; w.insertBefore(box, w.children[1] || null);
+      setTimeout(bankFixLoad, 0);
+    }
+    return w;
+  };
+  window.bankFixLoad = function(){
+    api('reviewBankDigits', {}).then(function(res){
+      var box = document.getElementById('bankfix'); if(!box || !res.ok) return;
+      STATE.bankFix = res.rows || [];
+      if(!STATE.bankFix.length){ box.innerHTML = ''; return; }
+      box.innerHTML = '<div class="card" style="padding:14px 16px;margin-bottom:14px;border-left:4px solid #D9822E"><div class="card-h">'+STATE.bankFix.length+' bank detail'+(STATE.bankFix.length===1?'':'s')+' lost a leading zero</div>'+
+        '<div class="wc-muted" style="margin-bottom:8px">Spreadsheets drop the first 0 of a number. Check each suggestion against the person’s real bank details, tick the ones that are right, and apply. Nothing changes until you do.</div>'+
+        '<table class="wc-table"><thead><tr><th></th><th>Who</th><th>Bank</th><th>Account stored → suggested</th><th>Bank code stored → suggested</th></tr></thead><tbody>'+
+        STATE.bankFix.map(function(r,i){ return '<tr><td><input type="checkbox" class="bf-ck" data-i="'+i+'"></td><td>'+esc(r.name)+'</td><td>'+esc(r.bank_name||'—')+'</td><td>'+esc(r.account_number||'—')+(r.suggest.account_number?' → <b>'+esc(r.suggest.account_number)+'</b>':'')+'</td><td>'+esc(r.bank_code||'—')+(r.suggest.bank_code?' → <b>'+esc(r.suggest.bank_code)+'</b>':'')+'</td></tr>'; }).join('')+
+        '</tbody></table><div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="bankFixApply()">Apply the ticked ones</button></div></div>';
+    });
+  };
+  window.bankFixApply = function(){
+    var items = Array.prototype.slice.call(document.querySelectorAll('.bf-ck:checked')).map(function(e){ var r = STATE.bankFix[+e.getAttribute('data-i')]; return {kind:r.kind, key:r.key}; });
+    if(!items.length) return wcToast('Tick the ones you have checked first.', true);
+    api('applyBankDigits', {items:items, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not apply', res); wcToast(res.fixed+' fixed. They are now stored as text.'); refreshData().then(function(){ render(); }); });
+  };
+})();
