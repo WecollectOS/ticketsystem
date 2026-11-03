@@ -154,6 +154,12 @@ var SHELL_CSS = `/* ── Collapsible sidebar (desktop) ───────�
 .bp-id{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-faint);}
 .bp-card-title{font-size:14.5px;font-weight:600;line-height:1.3;}
 .bp-card-sub{font-size:12px;color:var(--text-dim);margin-top:-4px;}
+.bp-quick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.bp-qlabel{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);margin-right:2px}
+.bp-qchip{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:20px;padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit;border-left:3px solid var(--qc,var(--line))}
+.bp-qchip b{font-weight:600;margin-left:3px;opacity:.75}
+.bp-qchip.on{background:var(--qc,var(--brand));color:#fff;border-color:var(--qc,var(--brand))}
+.bp-qchip.clear{border-style:dashed;border-left:1px dashed var(--line)}
 .bp-chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:5px;background:var(--surface2);color:var(--text-dim);}
 .bp-chip.tag{background:var(--brand-bg);color:var(--brand);font-weight:500;}
 .bp-chips{display:flex;gap:5px;flex-wrap:wrap;}
@@ -801,9 +807,29 @@ function simulateMeetingParse(notes){
 }
 
 function bpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function crmHealthOf(l){ return l.health || 'Not rated'; }
+function crmFuBucket(l){ var n = Number(l.follow_up_count)||0; return n===0 ? 'None yet' : n<=2 ? '1–2' : n<=4 ? '3–4' : '5+ (cold risk)'; }
+function crmDueBucket(l){
+  if(l.stage==='Onboarding' || l.stage==='Declined / Cold Leads') return 'Not scheduled';
+  var d = String(l.next_follow_up_due||'').slice(0,10); if(!d) return 'Not scheduled';
+  var t = new Date().toISOString().slice(0,10), w = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  return d<t ? 'Overdue' : d===t ? 'Due today' : d<=w ? 'Due this week' : 'Later';
+}
+function crmQuietBucket(l){
+  var last = Math.max(new Date(l.updated_at||l.created_at||0).getTime()||0, new Date(l.last_follow_up_at||0).getTime()||0), days = (Date.now()-last)/86400000;
+  return days<=3 ? 'Active (last 3 days)' : days<=7 ? 'Quiet 4–7 days' : days<=14 ? 'Quiet 8–14 days' : 'Quiet 15+ days';
+}
+function crmMeetBucket(l){
+  var notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
+  var hasCall = notes.some(function(n){ return n.type==='call' || n.type==='Call' || n.file_name || n.type==='meeting'; });
+  var ds = [l.meeting_date, l.demo_date].filter(Boolean);
+  if(!ds.length) return hasCall ? 'Notes added' : 'No meeting';
+  if(ds.some(function(d){ return !meetingPassed(d); })) return 'Meeting coming up';
+  return hasCall ? 'Notes added' : 'Held, needs notes';
+}
 function bpState(key){
   if(!STATE.boards) STATE.boards = {};
-  if(!STATE.boards[key]) STATE.boards[key] = {stage:'All', q:'', f:{}, view:'cards'};
+  if(!STATE.boards[key]){ var _c0 = BP_CFGS[key](); STATE.boards[key] = {stage:(_c0.stages && _c0.stages[0] ? _c0.stages[0].id : 'All'), q:'', f:{}, view:'cards'}; }
   return STATE.boards[key];
 }
 function bpUniq(list){ return list.filter(function(v,i,a){ return v && a.indexOf(v)===i; }).sort(); }
@@ -819,8 +845,15 @@ var BP_CFGS = {
       stageOf:function(l){ return l.stage; },
       filters:[
         {key:'owner', all:'All reps', opts:function(){ return bpTeamNames(); }, get:function(l){ return l.owner; }},
-        {key:'offering', all:'All offerings', opts:function(){ return bpUniq(DB.leads.map(function(l){return l.offering;})); }, get:function(l){ return l.offering; }}
+        {key:'offering', all:'All offerings', opts:function(){ return bpUniq(DB.leads.map(function(l){return l.offering;})); }, get:function(l){ return l.offering; }},
+        {key:'health', all:'Any health', opts:function(){ return ['Hot','Warm','Cold','Not rated']; }, get:function(l){ return crmHealthOf(l); }},
+        {key:'fu', all:'Any follow-up count', opts:function(){ return ['None yet','1–2','3–4','5+ (cold risk)']; }, get:function(l){ return crmFuBucket(l); }},
+        {key:'due', all:'Any follow-up due', opts:function(){ return ['Overdue','Due today','Due this week','Later','Not scheduled']; }, get:function(l){ return crmDueBucket(l); }},
+        {key:'quiet', all:'Any silence', opts:function(){ return ['Active (last 3 days)','Quiet 4–7 days','Quiet 8–14 days','Quiet 15+ days']; }, get:function(l){ return crmQuietBucket(l); }},
+        {key:'meet', all:'Any meeting status', opts:function(){ return ['Meeting coming up','Held, needs notes','Notes added','No meeting']; }, get:function(l){ return crmMeetBucket(l); }},
+        {key:'source', all:'Any source', opts:function(){ return bpUniq(DB.leads.map(function(l){return l.source;})); }, get:function(l){ return l.source; }}
       ],
+      quick:function(){ return [{l:'🔥 Hot', f:'health', v:'Hot', c:'#D64545'},{l:'Warm', f:'health', v:'Warm', c:'#D9822E'},{l:'Cold', f:'health', v:'Cold', c:'#3B6FD4'},{l:'Follow-up overdue', f:'due', v:'Overdue', c:'#D64545'},{l:'Due today', f:'due', v:'Due today', c:'#D9822E'},{l:'5+ follow-ups', f:'fu', v:'5+ (cold risk)', c:'#3B6FD4'},{l:'Held, needs notes', f:'meet', v:'Held, needs notes', c:'#7C5CBF'},{l:'Quiet 15+ days', f:'quiet', v:'Quiet 15+ days', c:'#8E90A3'}]; },
       search:function(l){ return [l.name,l.organization,l.position,l.email,l.offering,l.owner].join(' '); },
       desc:function(l){
         var idx = CRM_STAGES.indexOf(l.stage), notes = []; try{ notes = JSON.parse(l.meeting_notes_json||'[]'); }catch(e){}
@@ -1011,6 +1044,14 @@ function bpRefresh(key){
     tabs += '<button class="bp-tab'+(st.stage===s.id?' active':'')+'" onclick="bpTab(\''+key+'\','+i+')">'+bpEsc(s.id)+'<span class="n">'+n+'</span></button>';
   });
   tabsEl.innerHTML = tabs;
+  var qEl = document.getElementById('bp_quick');
+  if(qEl && cfg.quick){
+    var base = bpFiltered(key, false);
+    qEl.innerHTML = '<span class="bp-qlabel">Quick filters</span>'+cfg.quick().map(function(q){
+      var on = st.f[q.f]===q.v, n = cfg.items().filter(function(it){ if(cfg.stageOf && st.stage!=='All' && cfg.stageOf(it)!==st.stage) return false; for(var i=0;i<cfg.filters.length;i++){ var ff = cfg.filters[i]; if(ff.key===q.f) continue; var vv = st.f[ff.key]; if(vv && String(ff.get(it)||'')!==vv) return false; } return String(cfg.filters.filter(function(ff){ return ff.key===q.f; })[0].get(it)||'')===q.v; }).length;
+      return '<button class="bp-qchip'+(on?' on':'')+'" style="'+(q.c?'--qc:'+q.c:'')+'" onclick="bpFilter(\''+key+'\',\''+q.f+'\','+(on?"''":"'"+q.v.replace(/'/g,"\\'")+"'")+')">'+bpEsc(q.l)+' <b>'+n+'</b></button>';
+    }).join('')+(Object.keys(st.f).some(function(k){ return st.f[k]; }) ? '<button class="bp-qchip clear" onclick="bpClear(\''+key+'\')">Clear filters</button>' : '');
+  }
 
   viewEl.innerHTML = ['cards','list','summary'].map(function(v){
     return '<button class="view-toggle-btn'+(st.view===v?' active':'')+'" onclick="bpView(\''+key+'\',\''+v+'\')">'+v.charAt(0).toUpperCase()+v.slice(1)+'</button>';
@@ -1047,6 +1088,7 @@ function bpRefresh(key){
 
 function bpTab(key, idx){ var cfg = BP_CFGS[key](); bpState(key).stage = idx<0 ? 'All' : cfg.stages[idx].id; bpRefresh(key); }
 function bpView(key, v){ bpState(key).view = v; bpRefresh(key); }
+function bpClear(key){ bpState(key).f = {}; bpState(key).q = ''; bpRefresh(key); }
 function bpSearch(key, v){ bpState(key).q = v; bpRefresh(key); }
 function bpFilter(key, f, v){ bpState(key).f[f] = v; bpRefresh(key); }
 
@@ -1063,6 +1105,7 @@ function renderBoardPage(key){
     '<div class="bp-tabs" id="bp_tabs"></div>'+
     '<div class="bp-bar"><div class="bp-search">'+svgIco('search',15)+'<input placeholder="Search…" value="'+bpEsc(st.q)+'" oninput="bpSearch(\''+key+'\',this.value)"></div>'+selects+
       '<div class="view-toggle" id="bp_view"></div></div>'+
+    (cfg.quick ? '<div class="bp-quick" id="bp_quick"></div>' : '')+
     '<div id="bp_body"></div>';
   setTimeout(function(){ bpRefresh(key); }, 0);
   return wrap;
@@ -1484,103 +1527,8 @@ function runContentPoolNowClick(){
 
 var CAL_EVENTS_BY_DATE = {};
 
-function renderCalendar(){
-  if(!STATE.calendarMonth) STATE.calendarMonth = new Date();
-  var wrap = el('<div></div>');
-  wrap.innerHTML = `
-    <div class="section-title" style="display:flex;align-items:center;gap:10px;">
-      <span id="calMonthLabel" style="font-size:15px;color:var(--text);text-transform:none;letter-spacing:0;"></span>
-      <span style="margin-left:auto;display:flex;gap:6px;">
-        <button class="cal-nav-btn" onclick="shiftCalMonth(-1)">Prev</button>
-        <button class="btn btn-ghost" onclick="shiftCalMonth(0)">Today</button>
-        <button class="cal-nav-btn" onclick="shiftCalMonth(1)">Next</button>
-      </span>
-    </div>
-    <div id="calSyncNote" class="thin-tag" style="margin-bottom:10px;">Checking calendar sync...</div>
-    <div class="card" style="padding:14px;" id="calGridCard"><div class="empty">Loading calendar...</div></div>
-    <div class="section-title">Selected Day</div>
-    <div class="card" id="calAgenda"><div class="empty">Pick a day above.</div></div>
-  `;
 
-  function addEv(map, dateStr, label, type, link){
-    if(!dateStr) return;
-    (map[dateStr] = map[dateStr] || []).push({label:label, type:type, link:link||''});
-  }
 
-  function buildLocalEvents(map){
-    DB.tickets.forEach(function(t){ if(t.due_date) addEv(map, t.due_date.slice(0,10), typeIcon(t.type)+' '+t.title+' due', 'Deadline'); });
-    DB.projects.forEach(function(p){ if(p.target_date) addEv(map, p.target_date.slice(0,10), 'Project: '+p.name+' target', 'Milestone'); });
-    DB.meetings.forEach(function(m){ if(m.date) addEv(map, m.date.slice(0,10), 'Meeting: '+m.title, 'Meeting', m.meeting_link); });
-  }
-
-  function paintGrid(eventsByDate){
-    CAL_EVENTS_BY_DATE = eventsByDate;
-    var month = STATE.calendarMonth;
-    wrap.querySelector('#calMonthLabel').textContent = month.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-    var y = month.getFullYear(), m = month.getMonth();
-    var startOffset = new Date(y,m,1).getDay();
-    var daysInMonth = new Date(y,m+1,0).getDate();
-    var todayStr = new Date().toISOString().slice(0,10);
-
-    var html = '<div class="cal-dow-row">' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('') + '</div><div class="cal-cells">';
-    for(var i=0;i<startOffset;i++) html += '<div class="cal-cell cal-cell-empty"></div>';
-    for(var d=1; d<=daysInMonth; d++){
-      var dateStr = y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-      var evs = eventsByDate[dateStr] || [];
-      html += `<div class="cal-cell${dateStr===todayStr?' cal-cell-today':''}" id="cal-${dateStr}" onclick="showCalDay('${dateStr}')">
-        <div class="cal-daynum">${d}</div>
-        ${evs.slice(0,3).map(function(e){return '<div class="cal-ev">'+e.label+'</div>';}).join('')}
-        ${evs.length>3 ? '<div class="cal-more">+'+(evs.length-3)+' more</div>' : ''}
-      </div>`;
-    }
-    html += '</div>';
-    wrap.querySelector('#calGridCard').innerHTML = html;
-    showCalDay(todayStr);
-  }
-
-  var eventsByDate = {};
-  buildLocalEvents(eventsByDate);
-
-  if (WORKSPACE_MODE) {
-    api('getCalendarEvents', {}).then(function(res){
-      var note = wrap.querySelector('#calSyncNote');
-      if(res.ok){
-        note.innerHTML = 'Synced with ' + res.calendarUsed + ' - ' + res.events.length + ' event(s) pulled in.';
-        res.events.forEach(function(e){
-          if(!e.start) return;
-          addEv(eventsByDate, e.start.slice(0,10), 'Calendar: '+e.title, 'Calendar', e.htmlLink);
-        });
-      } else {
-        note.innerHTML = '<span style="color:var(--red)">Not synced with Google Calendar: '+res.error+'</span>';
-      }
-      paintGrid(eventsByDate);
-    });
-  } else {
-    wrap.querySelector('#calSyncNote').textContent = 'Calendar sync only applies once this is running through Apps Script.';
-    paintGrid(eventsByDate);
-  }
-  return wrap;
-}
-
-function shiftCalMonth(dir){
-  var d = STATE.calendarMonth || new Date();
-  STATE.calendarMonth = (dir === 0) ? new Date() : new Date(d.getFullYear(), d.getMonth()+dir, 1);
-  render();
-}
-
-function showCalDay(dateStr){
-  document.querySelectorAll('.cal-cell').forEach(function(c){ c.classList.remove('cal-cell-selected'); });
-  var cell = document.getElementById('cal-'+dateStr);
-  if(cell) cell.classList.add('cal-cell-selected');
-  var box = document.getElementById('calAgenda');
-  if(!box) return;
-  var evs = CAL_EVENTS_BY_DATE[dateStr] || [];
-  box.innerHTML = '<div class="thin-tag" style="margin-bottom:8px;">'+fmtDate(dateStr)+'</div>' +
-    (evs.length ? evs.map(function(e){
-      var linkHtml = e.link ? ` <a href="${e.link}" target="_blank" style="color:var(--blue);">Open</a>` : '';
-      return `<div class="thin-row"><span class="thin-title">${e.label}</span><span class="thin-tag">${e.type}${linkHtml}</span></div>`;
-    }).join('') : '<div class="empty">Nothing scheduled.</div>');
-}
 
 function departmentPills(departmentsStr){
   return (departmentsStr||'').split(',').filter(Boolean).map(function(d){
@@ -1773,6 +1721,10 @@ function reviewMeetingProposals(meetingId){
     return `<div class="proposal">
       <div class="field" style="margin-bottom:6px;"><label>Action item</label><input value="${(item.description||'').replace(/"/g,'&quot;')}" oninput="updateProposalItem('${meetingId}',${i},'description',this.value)"></div>
       <div class="thin-tag" style="margin-bottom:6px;">${matchLabel}</div>
+      ${item.match_ticket_id ? '' : `<div class="row2">
+        <div class="field"><label>Type</label><select onchange="updateProposalItem('${meetingId}',${i},'suggested_type',this.value)">${ENGINEERING_TYPES.map(function(ty){return `<option ${ty===(ENGINEERING_TYPES.indexOf(item.suggested_type)>-1?item.suggested_type:'Task')?'selected':''}>${ty}</option>`;}).join('')}</select></div>
+        <div class="field"><label>System (Engineering Board)</label><select onchange="updateProposalItem('${meetingId}',${i},'system',this.value)"><option value="">None</option>${ENGINEERING_SYSTEMS.map(function(sy){return `<option ${sy===item.system?'selected':''}>${sy}</option>`;}).join('')}</select></div>
+      </div>`}
       <div class="row2">
         <div class="field"><label>Owner</label>
           <select onchange="updateProposalItem('${meetingId}',${i},'owner',this.value)">
@@ -1815,8 +1767,14 @@ function removeProposalDecision(meetingId, idx){
 
 function approveMeeting(meetingId){
   var p = MEETING_PROPOSALS[meetingId];
-  api('approveMeetingTickets', {meeting_id:meetingId, decisions:p.decisions, action_items:p.action_items}).then(function(res){
-    render();
+  var items = (p.action_items||[]).map(function(it){ var c = Object.assign({}, it); if(!c.match_ticket_id && ENGINEERING_TYPES.indexOf(c.suggested_type)===-1) c.suggested_type = 'Task'; return c; });
+  api('approveMeetingTickets', {meeting_id:meetingId, decisions:p.decisions, action_items:items}).then(function(res){
+    if(!res.ok){ alert('Could not create the tickets: '+(res.error||'Unknown error')); return; }
+    var made = ((res.result||{}).created_tickets||[]).length, upd = ((res.result||{}).updated_tickets||[]).length;
+    refreshData(false, true).then(function(){
+      alert(made+' ticket'+(made===1?'':'s')+' created on the Engineering Board'+(upd?' and '+upd+' updated':'')+'.');
+      goTo('board');
+    });
   });
 }
 
@@ -1840,44 +1798,6 @@ function saveMeeting(){
   });
 }
 
-function renderStandup(){
-  var wrap = el('<div></div>');
-  var depts = ['Engineering','Operations','Growth'];
-  var norm = function(s){ return (s||'').trim().toLowerCase(); };
-  var html = '<div class="section-title">Daily Stand-up  -  Yesterday / Today / Blockers</div>';
-  if(!DB.team.length){
-    html += '<div class="card"><div class="empty">No team members yet. Add people from the Team Spaces page (or ask an admin to) - Stand-up will populate automatically once they are added.</div></div>';
-    wrap.innerHTML = html;
-    return wrap;
-  }
-  var unmatched = DB.team.filter(function(p){ return depts.indexOf(p.department) === -1 && depts.map(norm).indexOf(norm(p.department)) === -1; });
-  depts.forEach(function(dept){
-    var people = DB.team.filter(function(p){return norm(p.department)===norm(dept);});
-    var block = `<div class="dept-block"><div class="dept-h">${dept}</div>`;
-    if(!people.length){ block += '<div class="empty">No one on this team yet.</div>'; }
-    people.forEach(function(person){
-      var mine = DB.tickets.filter(function(t){return t.owner===person.name;});
-      var done = mine.filter(function(t){return t.status==='Done';});
-      var inprog = mine.filter(function(t){return ['In Progress','Assigned','Triaged'].indexOf(t.status)>-1;});
-      var blocked = mine.filter(function(t){return t.status==='Blocked';});
-      block += `<div class="standup-person">
-        <div class="su-name">${person.name}</div>
-        <div class="su-fields">
-          <div><span class="su-label">Yesterday</span>${done.length ? done.map(t=>t.title).join(', ') : ' - '}</div>
-          <div><span class="su-label">Today</span>${inprog.length ? inprog.map(t=>t.title).join(', ') : ' - '}</div>
-          <div class="${blocked.length?'su-blocked':''}"><span class="su-label">Blocked</span>${blocked.length ? blocked.map(t=>t.title).join(', ') : 'None'}</div>
-        </div>
-      </div>`;
-    });
-    block += '</div>';
-    html += block;
-  });
-  if(unmatched.length){
-    html += '<div class="thin-tag" style="margin-top:6px;">Not shown: '+unmatched.map(p=>p.name+' (department: "'+(p.department||'blank')+'")').join(', ')+' - department must be exactly Engineering, Operations, or Growth.</div>';
-  }
-  wrap.innerHTML = html;
-  return wrap;
-}
 
 function renderFeed(){
   var wrap = el('<div></div>');
@@ -1895,19 +1815,6 @@ function renderFeed(){
   return wrap;
 }
 
-function renderWorkload(){
-  var wrap = el('<div></div>');
-  var counts = {};
-  DB.tickets.forEach(function(t){ if(t.owner && t.status!=='Done'){ counts[t.owner] = (counts[t.owner]||0)+1; } });
-  var max = Math.max.apply(null, Object.values(counts).concat([1]));
-  wrap.innerHTML = '<div class="section-title">Workload  -  Open Tickets per Person</div><div class="card" id="wlList"></div>';
-  var box = wrap.querySelector('#wlList');
-  box.innerHTML = Object.keys(counts).length ? Object.keys(counts).map(function(name){
-    var n = counts[name];
-    return `<div class="wl-row"><div class="wl-name">${name}</div><div class="wl-bar-track"><div class="wl-bar-fill" style="width:${(n/max*100)}%"></div></div><div class="wl-count">${n}</div></div>`;
-  }).join('') : '<div class="empty">No assigned tickets yet.</div>';
-  return wrap;
-}
 
 
 function openAddMemberModal(){
@@ -3489,8 +3396,8 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.10.14-2';
-var APP_BUILD = '20261013-165152';
+var EXPECTED_BACKEND = '2026.11.02-1';
+var APP_BUILD = '20261102-160646';
 
 var DESIGN_CSS = `
 :root{--paper:#F7F8FC;--surface:#FFFFFF;--surface2:#F3F4FA;--line:#E3E5EE;--text:#14161F;--text-dim:#5B5F73;--text-faint:#9397AC;
@@ -3703,7 +3610,7 @@ function applyAll(d){
   var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','clients','documents','contentMetrics','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories','slackSuggestions','notableDates'];
   keys.forEach(function(k){ DB[k] = d[k] || []; });
   DB.config = d.config || {};
-  DB.contentGuidelines = d.contentGuidelines || ''; DB.contentGuidelinesIsDefault = !!d.contentGuidelinesIsDefault;
+  DB.contentGuidelines = d.contentGuidelines || ''; DB.contentStrategy = d.contentStrategy || ''; DB.contentGuidelinesIsDefault = !!d.contentGuidelinesIsDefault;
   DB.access = d.access || null;
   DB.backend_version = d.backend_version || '';
   checkBackendVersion();
@@ -4491,7 +4398,9 @@ function renderPayroll(){
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><select class="wc-sel" style="width:auto" onchange="setPayrollMonth(this.value)">'+optionsHtml(months, m)+'</select>'+
     '<button class="btn btn-primary" onclick="pullPayroll()">Pull from directory</button>'+
     '<button class="btn btn-ghost" onclick="syncPayroll()">Re-sync'+(inSync.length?' ('+inSync.length+' changed)':'')+'</button>'+
-    '<button class="btn btn-ghost" onclick="exportPayrollCsvClick()">Export bulk payment file</button></div>';
+    '<button class="btn btn-ghost" onclick="exportPayrollCsvClick()">1. Export bulk payment file</button>'+
+    '<button class="btn btn-good" onclick="openMonthPaid()"'+(items.some(function(p){ return p.status!=='Paid' && Number(p.salary_amount)>0; })?'':' disabled')+'>2. I have paid — record it</button></div>'+
+    payrollFinanceNote(m);
   h += '<div class="card wc-scroll" style="padding:0"><table class="wc-table"><thead><tr><th>Team member</th><th>Bank</th><th>Account</th><th>Check</th><th style="text-align:right">Salary</th><th>Status</th><th></th></tr></thead><tbody>'+
     (items.map(function(p){ return '<tr><td><b>'+esc(p.team_member_name)+'</b></td><td>'+esc(p.bank_name||'—')+'</td><td>'+esc(p.account_number||'—')+'</td><td>'+(payrollIssue(p)?pill(payrollIssue(p),'warn'):pill('Ready','good'))+'</td>'+
       '<td style="text-align:right">'+(p.status==='Paid'?money(p.salary_amount):'<input class="wc-input" type="number" style="width:120px;text-align:right;padding:4px 8px" value="'+(Number(p.salary_amount)||0)+'" onchange="savePayrollField(\''+p.payroll_id+'\',\'salary_amount\',this.value)">')+'</td>'+
@@ -4546,9 +4455,33 @@ function savePayrollField(id, field, value){
   var payload = {payroll_id:id}; payload[field] = field==='salary_amount' ? Number(value)||0 : value;
   api('updatePayrollEntry', payload).then(function(res){ if(!res.ok) return wcFail('Could not save', res); var p = DB.payroll.filter(function(x){ return x.payroll_id===id; })[0]; if(p) p[field] = payload[field]; render(); });
 }
+function payrollFinanceLine(m){ return (DB.financeEntries||[]).filter(function(f){ return String(f.description||'').indexOf('[payroll:'+m+']')>-1; })[0]; }
+function payrollFinanceNote(m){
+  var f = payrollFinanceLine(m); if(!f) return '<div class="wc-help" style="margin:-4px 0 12px">Steps: export the file, upload it on your bank platform and pay, then press <b>I have paid — record it</b>. That marks everyone paid and adds one “Salaries” expense line to Finance.</div>';
+  return '<div class="wc-note" style="margin-bottom:12px">✅ Recorded in Finance as an expense: <b>'+money(f.amount)+'</b> on '+esc(fmtDate(f.entry_date))+' · <a href="#" style="color:var(--brand)" onclick="goTo(\'finance\');return false">open Finance</a></div>';
+}
+function openMonthPaid(){
+  var m = STATE.payrollMonth, items = DB.payroll.filter(function(p){ return p.month===m && p.status!=='Paid' && Number(p.salary_amount)>0 && !payrollIssue(p); });
+  var skipped = DB.payroll.filter(function(p){ return p.month===m && p.status!=='Paid' && Number(p.salary_amount)>0 && payrollIssue(p); });
+  if(!items.length) return wcToast('Nobody is waiting to be paid for '+m+'.', true);
+  var total = items.reduce(function(s,p){ return s+(Number(p.salary_amount)||0); },0);
+  wcModal('mpaid', 'Record the '+esc(m)+' payroll as paid',
+    '<div class="wc-note" style="margin-bottom:10px">Only do this <b>after</b> the payment has gone through on your bank platform. This will mark <b>'+items.length+' people</b> as paid ('+money(total)+') and add <b>one Salaries expense line</b> of that amount to Finance.</div>'+
+    (skipped.length?'<div class="wc-note warn" style="margin-bottom:10px">Not included (bank details incomplete): '+esc(skipped.map(function(p){ return p.team_member_name; }).join(', '))+'</div>':'')+
+    '<div class="wc-grid g2">'+fld('Date paid', inp('mp_date', today10(), 'date'))+fld('Bank reference / batch name (optional)', inp('mp_ref', '', 'text', 'e.g. BULK-NOV-2026'))+'</div>'+
+    '<div style="margin-top:12px"><button class="btn btn-good" id="mp_go" onclick="doMonthPaid()">Record payment</button></div>');
+}
+function doMonthPaid(){
+  var b = document.getElementById('mp_go'); if(b) b.disabled = true;
+  api('markPayrollMonthPaid', {month:STATE.payrollMonth, paid_on:val('mp_date'), reference:val('mp_ref').trim(), actor:CURRENT_USER}).then(function(res){
+    if(b) b.disabled = false;
+    if(!res.ok) return wcFail('Could not record it', res);
+    wcClose('mpaid'); refreshData().then(function(){ wcToast(res.paid+' people marked paid · '+money(res.finance&&res.finance.amount)+' added to Finance as Salaries.'+((res.skipped||[]).length?' Skipped: '+res.skipped.join(', ')+'.':'')); });
+  });
+}
 function markPayrollPaidClick(id){
   if(!confirm('Mark this as paid? Only do this after you have actually paid the salary on your payment platform.')) return;
-  api('markPayrollPaid', {payroll_id:id, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData(); });
+  api('markPayrollPaid', {payroll_id:id, paid_on:today10(), actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not update', res); refreshData().then(function(){ wcToast('Marked paid and the month’s Salaries line in Finance was updated.'); }); });
 }
 function exportPayrollCsvClick(){
   api('exportPayrollCsv', {month:STATE.payrollMonth}).then(function(res){
@@ -4784,6 +4717,23 @@ function saveLeaveRequest(){
     refreshData().then(function(){ wcToast('Request sent — admins have been notified.'); if(STATE.module!=='leave') goTo('leave'); });
   });
 }
+
+(function(){
+  if(typeof mockApi==='undefined') return;
+  var prev = mockApi;
+  mockApi = function(action, payload){
+    if(action==='markPayrollMonthPaid'){
+      var items = DB.payroll.filter(function(p){ return p.month===payload.month && p.status!=='Paid' && Number(p.salary_amount)>0 && !payrollIssue(p); });
+      if(!items.length) return {ok:false, error:'Nobody is waiting to be paid.'};
+      items.forEach(function(p){ p.status = 'Paid'; p.paid_at = new Date().toISOString(); });
+      var total = DB.payroll.filter(function(p){ return p.month===payload.month && p.status==='Paid'; }).reduce(function(s,p){ return s+(Number(p.salary_amount)||0); },0);
+      var f = payrollFinanceLine(payload.month);
+      if(f){ f.amount = total; } else { DB.financeEntries = DB.financeEntries||[]; DB.financeEntries.push({entry_id:'f'+Date.now(), type:'Expense', category:'Salaries', amount:total, description:'Salaries for '+payload.month+' [payroll:'+payload.month+']', entry_date:payload.paid_on, status:'Paid'}); }
+      return {ok:true, paid:items.length, skipped:[], finance:{amount:total, count:items.length}};
+    }
+    return prev(action, payload);
+  };
+})();
 
 // ═══════════════════════════════════════════════════════════════════════
 //  UAT — guided runs: walk every check; a Fail becomes an engineering bug
@@ -5025,6 +4975,12 @@ function openLeadDetail(id){
     h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="wc-lbl" style="margin:0">Follow-ups</div><div class="wc-bar" style="flex:1;max-width:160px"><i style="width:'+fc*20+'%"></i></div><span class="wc-muted">'+fc+' of 5'+(l.next_follow_up_due?' · next due '+esc(fmtDate(l.next_follow_up_due)):'')+'</span></div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap">'+sel('fu_ch',['Email','Call','WhatsApp','LinkedIn','In person'],'Email')+inp('fu_note','', 'text', 'What did you say / hear?')+'</div>'+
       '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="logFollowUp(\''+id+'\',false)">Log follow-up (no reply yet)</button><button class="btn btn-good btn-sm" onclick="logFollowUp(\''+id+'\',true)">They replied</button></div></div>';
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="wc-lbl">Write the follow-up email <span class="wc-muted" style="font-weight:400">— drafted from the stage, call notes and earlier messages, in the team’s voice</span></div>'+
+      '<textarea class="wc-ta" id="fe_reply" style="min-height:50px" placeholder="If they replied, paste their message here so the email answers it (optional)"></textarea>'+
+      '<input class="wc-input" id="fe_extra" style="margin-top:6px" placeholder="Anything specific to mention? (optional, e.g. offer a Thursday call)">'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-primary btn-sm" id="fe_go" onclick="draftFollowUpEmail(\''+id+'\',\'followup\')">Draft follow-up '+(fc+1)+'</button><button class="btn btn-ghost btn-sm" onclick="draftFollowUpEmail(\''+id+'\',\'breakup\')">Draft break-up email</button></div>'+
+      (l.email?'':'<div class="wc-help" style="color:var(--bad)">No email address on this prospect, so you can draft and copy, but not send from here.</div>')+
+      '<div id="fe_out"></div></div>';
   }
   h += '<div class="card-h">Notes & history</div>'+(notes.length ? notes.map(function(n,ni){ return {n:n,ni:ni}; }).reverse().map(function(x){ return leadNoteHtml(id, x.n, x.ni); }).join('') : '<div class="wc-muted">No notes yet.</div>')+
     '<div style="display:flex;gap:8px;margin-top:10px"><input class="wc-input" id="ld_note_text" placeholder="Add a note…"><button class="btn btn-ghost btn-sm" onclick="addLeadNote(\''+id+'\')">Save note</button></div>'+
@@ -5287,7 +5243,7 @@ function settingsHtml(s){
 
   h += '<div class="wc-grid g2" style="margin-bottom:16px"><div class="card" style="padding:18px 20px"><div class="card-h">CRM</div>'+
     fld('Brochure link — Data Collection / Research', '<input class="wc-input sv" data-k="crm_brochure_url_data" value="'+esc(c.crm_brochure_url_data||'')+'" placeholder="https://drive.google.com/…">')+fld('Brochure link — Field Operation', '<input class="wc-input sv" data-k="crm_brochure_url_field" value="'+esc(c.crm_brochure_url_field||'')+'" placeholder="https://…">')+fld('Fallback brochure link', '<input class="wc-input sv" data-k="crm_brochure_url" value="'+esc(c.crm_brochure_url||'')+'">')+
-    fld('Booking / calendar link (added to follow-up emails)', '<input class="wc-input sv" data-k="crm_calendar_link" value="'+esc(c.crm_calendar_link||'')+'">')+fld('Sender name', '<input class="wc-input sv" data-k="crm_sender_name" value="'+esc(c.crm_sender_name||'')+'" placeholder="WeCollect">')+fld('Reply-to (sales email)', '<input class="wc-input sv" data-k="crm_sales_email" value="'+esc(c.crm_sales_email||'')+'">')+fld('Team CC on discovery calls & brochures', '<input class="wc-input sv" data-k="crm_team_cc" value="'+esc(c.crm_team_cc||'')+'" placeholder="a@wecollect.co, b@wecollect.co">')+'</div>'+
+    fld('Booking / calendar link (added to follow-up emails)', '<input class="wc-input sv" data-k="crm_calendar_link" value="'+esc(c.crm_calendar_link||'')+'">')+fld('Sender name', '<input class="wc-input sv" data-k="crm_sender_name" value="'+esc(c.crm_sender_name||'')+'" placeholder="WeCollect">')+fld('Reply-to (sales email)', '<input class="wc-input sv" data-k="crm_sales_email" value="'+esc(c.crm_sales_email||'')+'">')+fld('Follow-up email style (optional: paste your own example emails, separated by a line with -----. Leave empty to use the built-in style)', '<textarea class="wc-ta sv" data-k="crm_followup_style" style="min-height:90px">'+esc(c.crm_followup_style||'')+'</textarea>')+fld('Team CC on discovery calls & brochures', '<input class="wc-input sv" data-k="crm_team_cc" value="'+esc(c.crm_team_cc||'')+'" placeholder="a@wecollect.co, b@wecollect.co">')+'</div>'+
     '<div class="card" style="padding:18px 20px"><div class="card-h">Company, leave & payroll</div>'+
     fld('Company name', '<input class="wc-input sv" data-k="company_name" value="'+esc(c.company_name||'WeCollect')+'">')+fld('Company profile (used by Claude to judge grant fit)', '<textarea class="wc-ta sv" data-k="company_profile" style="min-height:110px" placeholder="Stage, country, what we do, team size, sectors, what funding we are looking for…">'+esc(c.company_profile||'')+'</textarea>')+
     '<div class="wc-grid g2">'+fld('Annual leave (days)', '<input class="wc-input sv" type="number" data-k="leave_annual_days" value="'+esc(c.leave_annual_days||20)+'">')+fld('Pay day of month', '<input class="wc-input sv" type="number" data-k="payroll_pay_day" value="'+esc(c.payroll_pay_day||25)+'">')+'</div>'+fld('Opportunities to surface per week', '<input class="wc-input sv" type="number" data-k="opp_weekly_target" value="'+esc(c.opp_weekly_target||'')+'">')+'</div></div>';
@@ -5333,6 +5289,40 @@ function installTriggers(){
   api('setupTriggersFromApp', {}).then(function(res){
     if(!res.ok){ o.innerHTML = '<div class="wc-note bad">'+esc(res.error||'Failed — you may need to re-authorise the script from the Apps Script editor once.')+'</div>'; return; }
     o.innerHTML = '<div class="wc-note good">Installed '+esc(res.created)+' automations'+(res.replaced?' (replaced '+esc(res.replaced)+' old ones)':'')+': '+(res.triggers||[]).map(function(t){ return esc(t.fn)+' — '+esc(t.when); }).join('; ')+'</div>'; setTimeout(render, 900);
+  });
+}
+
+// ── Follow-up email drafting (CRM) ──
+function draftFollowUpEmail(id, kind){
+  var out = document.getElementById('fe_out');
+  out.innerHTML = '<div class="wc-muted" style="margin-top:10px">Writing…</div>';
+  api('leadFollowUpDraft', {lead_id:id, kind:kind, their_reply:val('fe_reply'), extra:val('fe_extra'), actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ out.innerHTML = ''; return wcFail('Could not draft the email', res); }
+    out.innerHTML = '<div style="margin-top:10px">'+(res.angle?'<div class="wc-note" style="margin-bottom:8px">'+esc(res.angle)+'</div>':'')+
+      '<div class="wc-lbl">To</div><div style="margin-bottom:6px">'+esc(res.to||'(no email on file)')+'</div>'+
+      '<div class="wc-lbl">Subject</div><input class="wc-input" id="fe_subj" value="'+esc(res.subject)+'" style="margin-bottom:6px">'+
+      '<div class="wc-lbl">Message</div><textarea class="wc-ta" id="fe_body" style="min-height:190px">'+esc(res.body)+'</textarea>'+
+      (kind==='breakup'?'<label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="fe_cold" checked> Move to Declined / Cold Leads after sending</label>':'')+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+
+      (res.can_send?'<button class="btn btn-primary btn-sm" onclick="sendFollowUpEmail(\''+id+'\',\''+kind+'\',true)">Send now</button>':'')+
+      '<button class="btn btn-ghost btn-sm" onclick="sendFollowUpEmail(\''+id+'\',\''+kind+'\',false)">I sent it myself — log it</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="copyFollowUpEmail()">Copy</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="draftFollowUpEmail(\''+id+'\',\''+kind+'\')">Write another version</button></div></div>';
+  });
+}
+function copyFollowUpEmail(){
+  var txt = 'Subject: '+val('fe_subj')+'\n\n'+val('fe_body');
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ wcToast('Copied.'); }, function(){ wcToast('Could not copy. Select the text and copy it.', true); });
+  else wcToast('Select the text and copy it.', true);
+}
+function sendFollowUpEmail(id, kind, sendNow){
+  var subject = val('fe_subj').trim(), body = val('fe_body').trim();
+  if(!subject || !body) return wcToast('The subject and message cannot be empty.', true);
+  if(sendNow && !confirm('Send this email to the prospect now?')) return;
+  var cold = document.getElementById('fe_cold');
+  api('sendLeadFollowUp', {lead_id:id, kind:kind, subject:subject, body:body, send_now:!!sendNow, move_cold:!!(cold && cold.checked), actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return wcFail('Could not send', res);
+    wcToast(res.message || 'Done.'); refreshLead(id);
   });
 }
 
@@ -6428,6 +6418,9 @@ var CAL_STAGE_COLOR = {'Idea':'#8E90A3','Drafting':'#3B6FD4','Design':'#D9A62E',
 var CAL_CH_COLOR = {'LinkedIn':'#0A66C2','Instagram':'#C13584','Facebook':'#1877F2','Twitter/X':'#222','Newsletter':'#E07B39','Webinar':'#7C5CBF','Blog':'#2E9B5F'};
 var CAL_CHANNELS = ['LinkedIn','Instagram','Facebook','Twitter/X','Newsletter','Webinar'];
 var CAL_FORMATS = ['Post','Carousel','Motion Video','Video','Story','Thread','Poll','Article','Newsletter','Webinar'];
+var CAL_AUDIENCES = ['A: Research agencies','B: M&E and development','C: AI data buyers','D: Researchers and students'];
+var CAL_AWARENESS = ['1 Unaware','2 Problem aware','3 Solution aware','4 Product aware','5 Most aware'];
+var CAL_PILLARS = ['Field data quality','Product proof','African AI data','Community and calendar','Founder voice'];
 var CAL_STYLES = ['Research insight','Field story','Product in practice','Myth or pain point','Learning and community'];
 function calState(){ var mk = mkState(); if(!mk.cal) mk.cal = {view:'month', anchor:today10(), ch:'', stage:''}; return mk.cal; }
 function calYmd(d){ return d.toISOString().slice(0,10); }
@@ -6477,13 +6470,55 @@ function calendarHtml(){
   h += '<div class="cal-bar"><button class="btn btn-ghost btn-sm" onclick="calNav(-1)">‹</button><button class="btn btn-ghost btn-sm" onclick="calNav(0)">Today</button><button class="btn btn-ghost btn-sm" onclick="calNav(1)">›</button><b class="cal-title">'+esc(title)+'</b>'+
     '<span style="flex:1"></span><div class="wc-tabs" style="margin:0"><div class="wc-tab'+(st.view==='month'?' on':'')+'" onclick="calSet(\'view\',\'month\')">Month</div><div class="wc-tab'+(st.view==='week'?' on':'')+'" onclick="calSet(\'view\',\'week\')">Week</div></div></div>';
   h += '<div class="cal-bar" style="margin-top:8px">'+sel('cal_ch', CAL_CHANNELS, st.ch, 'All channels', ' onchange="calSet(\'ch\',this.value)"')+sel('cal_stage', CAL_STAGES, st.stage, 'All stages', ' onchange="calSet(\'stage\',this.value)"')+
-    '<span style="flex:1"></span>'+(writer ? '<button class="btn btn-ghost btn-sm" id="cal_plan" onclick="calPlan(false)">Plan next 4 weeks</button><button class="btn btn-primary btn-sm" id="cal_draft" onclick="calPlan(true)">Draft topics with Claude</button>' : '')+'</div>';
+    '<span style="flex:1"></span>'+(writer ? '<button class="btn btn-ghost btn-sm" id="cal_plan" onclick="calPlan(false)">Create slots for 4 weeks</button>'+sel('cal_wk', calWeekOptions(), calDefaultWeek(), '', ' onchange="calWeekPick(this.value)"')+'<button class="btn btn-primary btn-sm" id="cal_draft" onclick="calDraftWeek()">Draft this week with Claude</button>' : '')+'</div>'+
+    (writer ? '<div class="wc-help" id="cal_wkstat" style="margin-top:6px">'+calWeekStatText(calDefaultWeek())+'</div>' : '');
   h += '<div class="cal-legend">'+CAL_STAGES.map(function(s){ return '<span><i class="cal-dot" style="background:'+CAL_STAGE_COLOR[s]+'"></i>'+s+'</span>'; }).join('')+'<span style="color:#D9A62E">★ notable date</span></div>';
   h += '<div class="cal-scroll"><div class="cal-grid"><div class="cal-hd">Mon</div><div class="cal-hd">Tue</div><div class="cal-hd">Wed</div><div class="cal-hd">Thu</div><div class="cal-hd">Fri</div><div class="cal-hd">Sat</div><div class="cal-hd">Sun</div>'+
     days.map(function(d){ return calDayCell(d[0], d[1], st.view==='week'); }).join('')+'</div></div>';
   var all = (DB.contentCalendar||[]), noSlots = !all.some(function(c){ return c.slot_key; });
   if(noSlots) h += '<div class="wc-note" style="margin-top:12px">No calendar slots yet. '+(writer ? 'Press <b>Plan next 4 weeks</b> to create Monday to Friday slots for every channel, plus the monthly newsletter and webinar.' : 'The marketing team will plan them.')+'</div>';
   return h;
+}
+function calWeekOptions(){
+  var mon = calMonday(today10()), out = [];
+  for(var i=0;i<5;i++){ var m = calAdd(mon, 7*i), d = calDate(m); out.push({value:m, label:(i===0?'This week · ':(i===1?'Next week · ':''))+d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}); }
+  return out;
+}
+function calDefaultWeek(){
+  if(STATE.calWeek) return STATE.calWeek;
+  var opts = calWeekOptions();
+  for(var i=0;i<opts.length;i++){ var s = calWeekStat(opts[i].value); if(s.slots && s.topics < s.slots) return opts[i].value; }
+  return opts[1] ? opts[1].value : opts[0].value;
+}
+function calWeekStat(mon){
+  var end = calAdd(mon,4), sl = (DB.contentCalendar||[]).filter(function(c){ return c.slot_key && String(c.scheduled_date).slice(0,10)>=mon && String(c.scheduled_date).slice(0,10)<=end; });
+  return {slots:sl.length, topics:sl.filter(function(c){ return String(c.notes||'').trim(); }).length, copy:sl.filter(function(c){ return String(c.caption||'').trim(); }).length, visual:sl.filter(function(c){ return String(c.visual_prompt||'').trim(); }).length};
+}
+function calWeekStatText(mon){
+  var s = calWeekStat(mon);
+  if(!s.slots) return 'No slots for that week yet. Press <b>Create slots for 4 weeks</b> first.';
+  return 'Week of '+esc(fmtDate(mon))+': <b>'+s.topics+'</b> of '+s.slots+' topics · <b>'+s.copy+'</b> captions saved · <b>'+s.visual+'</b> poster/video prompts saved. Claude drafts one week at a time (about 3 minutes) and only fills posts that are still empty.';
+}
+function calWeekPick(v){ STATE.calWeek = v; var e = document.getElementById('cal_wkstat'); if(e) e.innerHTML = calWeekStatText(v); }
+function calDraftWeek(){
+  var wk = val('cal_wk') || calDefaultWeek(), b = document.getElementById('cal_draft'), chans = ['LinkedIn','Instagram','Facebook','Twitter/X'];
+  if(b) b.disabled = true;
+  var say = function(t){ if(b) b.textContent = t; var e = document.getElementById('cal_wkstat'); if(e) e.textContent = t; };
+  var fail = function(res){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } refreshData(true).then(function(){}); wcFail('Drafting stopped', res); };
+  say('Planning the week’s topics…');
+  api('draftContentWeek', {week:wk, step:'plan', actor:CURRENT_USER}).then(function(res){
+    if(!res.ok) return fail(res);
+    var theme = res.theme || '', written = 0, i = 0;
+    var next = function(){
+      if(i >= chans.length){
+        return refreshData().then(function(){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } wcToast('Week drafted: '+written+' captions and prompts saved'+(theme?' · theme: '+theme:'')+'.'); });
+      }
+      var ch = chans[i++];
+      say('Writing '+ch+' captions and prompts… ('+i+' of '+chans.length+')');
+      api('draftContentWeek', {week:wk, step:'copy', platform:ch, actor:CURRENT_USER}).then(function(r){ if(!r.ok) return fail(r); written += r.written||0; next(); });
+    };
+    next();
+  });
 }
 function calPlan(ai){
   var b = document.getElementById(ai?'cal_draft':'cal_plan'); if(b){ b.disabled = true; b.textContent = ai?'Claude is drafting… (can take a minute)':'Planning…'; }
@@ -6508,6 +6543,7 @@ function openContentPanel(id){
     fld('Owner', sel('cp_owner', teamNames(), c.owner||'', 'Unassigned', dis))+fld('Format', sel('cp_format', CAL_FORMATS, c.format||c.type||'', '', dis))+'</div>';
   h += fld('Style of the day', sel('cp_style', CAL_STYLES, c.style||'', 'None', dis));
   h += fld('Brief / angle', '<textarea class="wc-ta" id="cp_notes" rows="3"'+dis+'>'+esc(c.notes||'')+'</textarea>');
+  h += '<div class="wc-grid g2">'+fld('Audience', sel('cp_aud', CAL_AUDIENCES, c.audience||'', 'Not set', dis))+fld('Awareness stage', sel('cp_aw', CAL_AWARENESS, c.awareness||'', 'Not set', dis))+fld('Pillar', sel('cp_pil', CAL_PILLARS, c.pillar||'', 'Not set', dis))+fld('Primary keyword', inp('cp_kw', c.keyword, 'text', '', dis))+'</div>';
   h += '<div class="card-h" style="margin:14px 0 6px">Copy</div>'+
     fld('Caption', '<textarea class="wc-ta" id="cp_caption" rows="7"'+dis+'>'+esc(c.caption||'')+'</textarea>')+
     '<div class="wc-grid g2">'+fld('Hashtags', inp('cp_hashtags', c.hashtags, 'text', '', dis))+fld('CTA', inp('cp_cta', c.cta, 'text', '', dis))+fld('On-image headline', inp('cp_headline', c.headline, 'text', '', dis))+fld('Alt text', inp('cp_alt', c.alt_text, 'text', '', dis))+'</div>'+
@@ -6525,11 +6561,11 @@ function openContentPanel(id){
     STATE.cpPrompts = res;
     box.innerHTML = '<div class="wc-note" style="margin-bottom:8px">'+esc(res.channel)+' · '+esc(res.format)+' · <b>'+esc(res.size)+'</b> ('+esc(res.kind)+'). Paste into Claude, ChatGPT, Canva or your video tool.</div>'+
       '<div class="cp-pr"><div class="cp-prh"><b>Caption prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'caption_prompt\',this)">Copy</button></div><pre id="cp_p1">'+esc(res.caption_prompt)+'</pre></div>'+
-      '<div class="cp-pr"><div class="cp-prh"><b>'+(/video/i.test(res.format)?'Video':'Poster / design')+' prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'visual_prompt\',this)">Copy</button></div><pre id="cp_p2">'+esc(res.visual_prompt)+'</pre></div>';
+      '<div class="cp-pr"><div class="cp-prh"><b>'+(/video/i.test(res.format)?'Video':'Poster / design')+' prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'visual_prompt\',this)">Copy</button></div>'+(canWriteMarketing()?'<textarea class="wc-ta" id="cp_p2" style="min-height:200px;font-family:ui-monospace,Menlo,monospace;font-size:12px">'+esc(res.visual_prompt)+'</textarea><div class="wc-help">'+(res.saved?'Saved with this post. Edit it and press Save above to keep your changes.':'Generic template. Press “Write caption with Claude” to generate a prompt specific to this post.')+'</div>':'<pre id="cp_p2">'+esc(res.visual_prompt)+'</pre>')+'</div>';
   });
 }
 function cpCopy(k, btn){
-  var t = (STATE.cpPrompts||{})[k]||'';
+  var t = (STATE.cpPrompts||{})[k]||''; if(k==='visual_prompt' && document.getElementById('cp_p2')) t = val('cp_p2') || t;
   var done = function(){ if(btn){ btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1500); } };
   try{ navigator.clipboard.writeText(t).then(done, function(){ cpCopyFallback(t); done(); }); }catch(e){ cpCopyFallback(t); done(); }
 }
@@ -6538,7 +6574,7 @@ function cpStage(id, stage){
   api('updateContentStage', {content_id:id, stage:stage, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Could not move it', res); refreshData().then(function(){ openContentPanel(id); }); });
 }
 function cpSave(id){
-  var p = {content_id:id, actor:CURRENT_USER, title:val('cp_title').trim(), scheduled_date:val('cp_date'), owner:val('cp_owner'), format:val('cp_format'), style:val('cp_style'), notes:val('cp_notes'), caption:val('cp_caption'), hashtags:val('cp_hashtags'), cta:val('cp_cta'), headline:val('cp_headline'), alt_text:val('cp_alt'), asset_url:val('cp_asset').trim()};
+  var p = {content_id:id, actor:CURRENT_USER, title:val('cp_title').trim(), scheduled_date:val('cp_date'), owner:val('cp_owner'), format:val('cp_format'), style:val('cp_style'), notes:val('cp_notes'), caption:val('cp_caption'), hashtags:val('cp_hashtags'), cta:val('cp_cta'), headline:val('cp_headline'), alt_text:val('cp_alt'), audience:val('cp_aud'), awareness:val('cp_aw'), pillar:val('cp_pil'), keyword:val('cp_kw').trim(), visual_prompt:(document.getElementById('cp_p2') ? val('cp_p2') : undefined), asset_url:val('cp_asset').trim()};
   if(!p.title) return wcToast('Give it a title.', true);
   var b = document.getElementById('cp_save'); if(b) b.disabled = true;
   api('updateContentStage', p).then(function(res){ if(b) b.disabled = false; if(!res.ok) return wcFail('Could not save', res); refreshData().then(function(){ wcToast('Saved.'); openContentPanel(id); }); });
@@ -6584,6 +6620,7 @@ function contentSettingsHtml(s){
   return '<div class="card" style="padding:18px 20px;margin-bottom:16px"><div class="card-h">Marketing — content guidelines &amp; notable dates</div>'+
     '<div class="wc-muted" style="margin-bottom:10px">Every caption and poster/video prompt is built from these guidelines. '+(DB.contentGuidelinesIsDefault && !c.content_guidelines ? 'Showing the built-in starter version. ' : '')+'Paste your content engine documents here (positioning, keywords, voice, banned phrases, visual brand) and save.</div>'+
     fld('Brand and content guidelines', '<textarea class="wc-ta sv" data-k="content_guidelines" style="min-height:220px">'+esc(g)+'</textarea>')+
+    fld('Content strategy (audiences, awareness stages, pillars, real topic territory) — used when Claude plans the week', '<textarea class="wc-ta sv" data-k="content_strategy" style="min-height:220px">'+esc(c.content_strategy||DB.contentStrategy||'')+'</textarea>', 'Clear a box and save to go back to the built-in version, which is distilled from the WeCollect Brand DNA document.')+
     fld('Extra notable dates', '<textarea class="wc-ta sv" data-k="content_extra_dates" style="min-height:80px" placeholder="03-15 | World Consumer Rights Day | angle for the post">'+esc(c.content_extra_dates||'')+'</textarea>', 'One per line: MM-DD | name | angle. Added to the built-in list of field, research and development dates.')+'</div>';
 }
 function openContentDetail(id){ openContentPanel(id); }
@@ -6600,6 +6637,388 @@ function openContentDetail(id){ openContentPanel(id); }
   '.cp-step.done i{background:var(--c);color:#fff}.cp-step.cur i{background:var(--c);color:#fff;box-shadow:0 0 0 3px rgba(75,68,217,.18)}.cp-step.cur span{color:var(--text);font-weight:700}'+
   '.cp-pr{border:1px solid var(--line);border-radius:8px;margin-bottom:10px}.cp-prh{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface2);border-radius:8px 8px 0 0}.cp-pr pre{margin:0;padding:10px;white-space:pre-wrap;font-size:11.5px;max-height:220px;overflow:auto;font-family:inherit}';
   document.head.appendChild(st);
+})();
+
+(function(){
+  if(typeof mockApi==='undefined') return;
+  var prev = mockApi;
+  mockApi = function(action, payload){
+    if(action==='draftContentWeek'){
+      var wk = payload.week, end = calAdd(wk,4), sl = (DB.contentCalendar||[]).filter(function(c){ return c.slot_key && String(c.scheduled_date).slice(0,10)>=wk && String(c.scheduled_date).slice(0,10)<=end; }), n = 0;
+      if(payload.step==='copy'){ sl.filter(function(c){ return c.platform===payload.platform && c.notes && !c.caption; }).forEach(function(c){ c.caption = 'Preview caption for '+c.title; c.hashtags = '#FieldData'; c.cta = 'Book a demo'; c.visual_prompt = 'Preview poster prompt for '+c.title; if(c.stage==='Idea') c.stage = 'Drafting'; n++; }); return {ok:true, written:n, week:wk};}
+      sl.filter(function(c){ return !c.notes; }).forEach(function(c){ c.title = 'Preview topic · '+c.platform+' '+c.scheduled_date.slice(5,10); c.notes = 'Preview brief.'; c.audience = 'A: Research agencies'; c.awareness = '2 Problem aware'; c.pillar = 'Field data quality'; c.keyword = 'field data collection Nigeria'; n++; });
+      return {ok:true, planned:n, theme:'Preview theme', week:wk, channels:['LinkedIn','Instagram','Facebook','Twitter/X']};
+    }
+    return prev(action, payload);
+  };
+})();
+
+
+// ═══ CALENDAR: colour-coded, clickable, editable ═══════════════════════
+var CV_TYPES = {
+  event:   {label:'Calendar invite', color:'#2563EB'},
+  meeting: {label:'Meeting', color:'#16A34A'},
+  oneone:  {label:'1:1', color:'#0D9488'},
+  ticket:  {label:'Ticket due', color:'#EA580C'},
+  project: {label:'Project milestone', color:'#7C3AED'},
+  crm:     {label:'CRM call / demo', color:'#4B44D9'},
+  content: {label:'Content', color:'#DB2777'},
+  notable: {label:'Notable date', color:'#C8922A'},
+  leave:   {label:'Leave', color:'#64748B'}
+};
+function cvState(){ return STATE.cv || (STATE.cv = {view:'month', anchor:today10(), off:{}, sel:today10(), remote:null, remoteAt:0, loading:false, err:''}); }
+function cvTime(iso){ if(!iso || iso.length<=10) return ''; var d = new Date(iso); if(isNaN(d)) return ''; return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+function cvDay(iso){ if(!iso) return ''; if(iso.length<=10) return iso; var d = new Date(iso); if(isNaN(d)) return iso.slice(0,10); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function cvClock(t){ var m = /(\d{1,2}):(\d{2})/.exec(String(t||'')); return m ? String(m[1]).padStart(2,'0')+':'+m[2] : ''; }
+function cvEsc(s){ return esc(s==null?'':s); }
+
+function cvBuild(){
+  var st = cvState(), out = [], seenLinks = {}, seenKeys = {};
+  var remote = st.remote || [];
+  remote.forEach(function(e){
+    var day = cvDay(e.start); if(!day) return;
+    var ev = {key:'e:'+e.id, type:'event', title:e.title, date:day, time:e.all_day?'':cvTime(e.start), endTime:e.all_day?'':cvTime(e.end), allDay:!!e.all_day, data:e};
+    out.push(ev); if(e.meet_link) seenLinks[e.meet_link] = true; seenKeys[day+'|'+String(e.title).toLowerCase()] = true;
+  });
+  (DB.meetings||[]).forEach(function(m){
+    if(!m.date) return; var day = String(m.date).slice(0,10);
+    if(m.meeting_link && seenLinks[m.meeting_link]) return;
+    if(seenKeys[day+'|'+String(m.title||'').toLowerCase()]) return;
+    out.push({key:'m:'+m.meeting_id, type:'meeting', title:m.title, date:day, time:cvClock(m.time), data:m});
+  });
+  (DB.oneOnOnes||[]).forEach(function(o){
+    if(!o.date) return; var day = String(o.date).slice(0,10);
+    if(o.meeting_link && seenLinks[o.meeting_link]) return;
+    out.push({key:'o:'+o.session_id, type:'oneone', title:'1:1 with '+o.team_member_name, date:day, time:cvClock(String(o.date).slice(11)), data:o});
+  });
+  (DB.tickets||[]).forEach(function(t){ if(t.due_date) out.push({key:'t:'+t.ticket_id, type:'ticket', title:t.title, date:String(t.due_date).slice(0,10), time:'', done:t.status==='Done'||t.status==='Approved', data:t}); });
+  (DB.projects||[]).forEach(function(p){ if(p.target_date) out.push({key:'p:'+p.project_id, type:'project', title:p.name+' target', date:String(p.target_date).slice(0,10), time:'', data:p}); });
+  (DB.leads||[]).forEach(function(l){
+    [['meeting_date','Discovery call'],['demo_date','Demo']].forEach(function(f){
+      if(l[f[0]]){ var d = String(l[f[0]]); out.push({key:'l:'+l.lead_id+f[0], type:'crm', title:f[1]+': '+l.name, date:d.slice(0,10), time:cvClock(d.slice(11)), data:l}); }
+    });
+  });
+  if(typeof canSee==='function' ? canSee('content') : false) (DB.contentCalendar||[]).forEach(function(c){ if(c.scheduled_date && c.stage!=='Idea') out.push({key:'c:'+c.content_id, type:'content', title:(c.platform||'')+': '+c.title, date:String(c.scheduled_date).slice(0,10), time:'', data:c}); });
+  (DB.notableDates||[]).forEach(function(n){ out.push({key:'n:'+n.date+n.name, type:'notable', title:'★ '+n.name, date:n.date, time:'', data:n}); });
+  (DB.leave||[]).forEach(function(l){
+    if(l.status!=='Approved' || !l.start_date) return;
+    var s = String(l.start_date).slice(0,10), e = String(l.end_date||l.start_date).slice(0,10), d = s, guard = 0;
+    while(d<=e && guard++<40){ out.push({key:'v:'+l.leave_id+d, type:'leave', title:l.team_member_name+' on leave', date:d, time:'', data:l}); d = calAdd(d,1); }
+  });
+  return out.filter(function(e){ return !st.off[e.type]; });
+}
+function cvByDate(list){
+  var map = {};
+  list.forEach(function(e){ (map[e.date] = map[e.date] || []).push(e); });
+  Object.keys(map).forEach(function(k){ map[k].sort(function(a,b){ return (a.time||'99:99').localeCompare(b.time||'99:99') || a.title.localeCompare(b.title); }); });
+  return map;
+}
+function cvChip(e){
+  var c = CV_TYPES[e.type].color, bad = e.type==='ticket' && !e.done && e.date<today10();
+  if(bad) c = '#DC2626';
+  return '<div class="cv-chip'+(e.done?' done':'')+'" style="--c:'+c+'" onclick="event.stopPropagation();cvOpen(\''+cvEsc(e.key).replace(/'/g,"\\'")+'\')" title="'+cvEsc(CV_TYPES[e.type].label+' · '+e.title)+'">'+(e.time?'<b>'+e.time+'</b> ':'')+cvEsc(e.title)+'</div>';
+}
+function cvLoad(force){
+  var st = cvState();
+  if(!WORKSPACE_MODE && typeof mockApi==='undefined') return;
+  if(st.loading) return;
+  if(!force && st.remote && Date.now()-st.remoteAt < 60000) return;
+  st.loading = true;
+  api('getCalendarEvents', {}).then(function(res){
+    st.loading = false; st.remoteAt = Date.now();
+    if(res && res.ok){ st.remote = res.events || []; st.err = ''; st.cal = res.calendarUsed || ''; } else { st.remote = st.remote || []; st.err = (res && res.error) || 'Could not reach Google Calendar.'; }
+    cvRepaint();
+  });
+}
+function cvRepaint(){ var host = document.getElementById('cvHost'); if(host) host.innerHTML = cvHtml(); }
+
+function renderCalendar(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = '<div id="cvHost"></div>';
+  wrap.querySelector('#cvHost').innerHTML = cvHtml();
+  setTimeout(function(){ cvLoad(false); }, 0);
+  return wrap;
+}
+function cvHtml(){
+  var st = cvState(), list = cvBuild(), map = cvByDate(list), today = today10();
+  var days = [], title;
+  if(st.view==='week'){
+    var mon = calMonday(st.anchor); for(var i=0;i<7;i++) days.push([calAdd(mon,i), true]);
+    title = 'Week of '+calDate(mon).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
+  } else {
+    var first = st.anchor.slice(0,7)+'-01', mm = first.slice(0,7), start = calMonday(first);
+    title = calDate(first).toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'});
+    for(var j=0;j<42;j++){ var dd = calAdd(start,j); if(j>=35 && dd.slice(0,7)!==mm) break; days.push([dd, dd.slice(0,7)===mm]); }
+  }
+  var h = wcHead('Calendar', 'Everything with a date: invites, meetings, 1:1s, tickets, projects, CRM calls, content and leave. Click anything to open it.', '<button class="btn btn-ghost btn-sm" onclick="cvLoad(true);wcToast(\'Refreshing…\')">Refresh</button>');
+  h += '<div class="cv-bar"><button class="btn btn-ghost btn-sm" onclick="cvNav(-1)">‹</button><button class="btn btn-ghost btn-sm" onclick="cvNav(0)">Today</button><button class="btn btn-ghost btn-sm" onclick="cvNav(1)">›</button><b class="cv-title">'+cvEsc(title)+'</b><span style="flex:1"></span>'+
+    '<div class="wc-tabs" style="margin:0"><div class="wc-tab'+(st.view==='month'?' on':'')+'" onclick="cvSet(\'view\',\'month\')">Month</div><div class="wc-tab'+(st.view==='week'?' on':'')+'" onclick="cvSet(\'view\',\'week\')">Week</div></div></div>';
+  h += '<div class="cv-legend">'+Object.keys(CV_TYPES).map(function(k){ return '<span class="cv-key'+(st.off[k]?' off':'')+'" style="--c:'+CV_TYPES[k].color+'" onclick="cvToggle(\''+k+'\')"><i></i>'+CV_TYPES[k].label+'</span>'; }).join('')+'</div>';
+  h += '<div class="wc-muted" style="margin:0 0 8px;font-size:12px">'+(st.err ? '<span style="color:var(--red)">Google Calendar not synced: '+cvEsc(st.err)+'</span>' : (st.remote ? 'Synced with Google Calendar ('+cvEsc(st.cal||'')+') · '+st.remote.length+' invite'+(st.remote.length===1?'':'s') : 'Loading Google Calendar…'))+'</div>';
+  h += '<div class="cv-scroll"><div class="cv-grid'+(st.view==='week'?' week':'')+'">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(d){ return '<div class="cv-hd">'+d+'</div>'; }).join('')+
+    days.map(function(d){
+      var ev = map[d[0]] || [], max = st.view==='week' ? 99 : 3;
+      return '<div class="cv-day'+(d[1]?'':' out')+(d[0]===today?' today':'')+(d[0]===st.sel?' sel':'')+'" onclick="cvPick(\''+d[0]+'\')"><div class="cv-dn">'+Number(d[0].slice(8))+'</div>'+ev.slice(0,max).map(cvChip).join('')+(ev.length>max?'<div class="cv-more" onclick="event.stopPropagation();cvSet(\'view\',\'week\',\''+d[0]+'\')">+'+(ev.length-max)+' more</div>':'')+'</div>';
+    }).join('')+'</div></div>';
+  var sel = map[st.sel] || [];
+  h += '<div class="card" style="padding:14px 16px;margin-top:14px"><div class="card-h">'+cvEsc(calDate(st.sel).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'UTC'}))+'</div>'+
+    (sel.length ? sel.map(function(e){ var c = CV_TYPES[e.type]; return '<div class="cv-row" onclick="cvOpen(\''+cvEsc(e.key).replace(/'/g,"\\'")+'\')"><span class="cv-dot" style="background:'+c.color+'"></span><span class="cv-time">'+(e.time ? e.time+(e.endTime?'–'+e.endTime:'') : 'All day')+'</span><span style="flex:1">'+cvEsc(e.title)+'</span><span class="wc-muted">'+c.label+'</span></div>'; }).join('') : '<div class="wc-muted">Nothing on this day.</div>')+'</div>';
+  return h;
+}
+function cvNav(dir){
+  var st = cvState();
+  if(dir===0){ st.anchor = today10(); st.sel = today10(); }
+  else if(st.view==='week') st.anchor = calAdd(st.anchor, 7*dir);
+  else { var d = calDate(st.anchor.slice(0,7)+'-01'); d.setUTCMonth(d.getUTCMonth()+dir); st.anchor = calYmd(d); }
+  cvRepaint();
+}
+function cvSet(k, v, anchor){ var st = cvState(); st[k] = v; if(anchor){ st.anchor = anchor; st.sel = anchor; } cvRepaint(); }
+function cvPick(d){ cvState().sel = d; cvRepaint(); }
+function cvToggle(k){ var st = cvState(); st.off[k] = !st.off[k]; cvRepaint(); }
+function cvFind(key){ return cvBuild().filter(function(e){ return e.key===key; })[0]; }
+
+function cvOpen(key){
+  var e = cvFind(key); if(!e) return;
+  var c = CV_TYPES[e.type], d = e.data, h = '', when = calDate(e.date).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:'UTC'})+(e.time?' · '+e.time+(e.endTime?'–'+e.endTime:''):' · all day');
+  h += '<div class="cv-pill" style="--c:'+c.color+'">'+c.label+'</div><div style="font-weight:700;font-size:15px;margin:8px 0 2px">'+cvEsc(e.title)+'</div><div class="wc-muted" style="margin-bottom:10px">'+cvEsc(when)+'</div>';
+  var btn = '';
+  if(e.type==='event'){
+    var guests = (d.guests||[]).map(function(g){ var ic = ({accepted:'✓',declined:'✗',tentative:'?'})[g.status]||'·'; return '<div class="wc-row" style="padding:3px 0"><span style="width:18px">'+ic+'</span><span style="flex:1">'+cvEsc(g.name||g.email)+(g.name?' <span class="wc-muted">'+cvEsc(g.email)+'</span>':'')+'</span></div>'; }).join('');
+    if(d.location) h += '<div style="margin-bottom:8px"><b>Where:</b> '+cvEsc(d.location)+'</div>';
+    if(d.description) h += '<div style="white-space:pre-wrap;margin-bottom:10px">'+cvEsc(d.description)+'</div>';
+    h += '<div class="card-h" style="margin:10px 0 4px">Guests ('+(d.guests||[]).length+')</div>'+(guests||'<div class="wc-muted">No guests.</div>');
+    if(d.meet_link) btn += '<a class="btn btn-primary" target="_blank" rel="noopener" href="'+cvEsc(d.meet_link)+'">Join Meet</a>';
+    btn += '<button class="btn btn-ghost" onclick="cvEdit(\''+cvEsc(key)+'\')">Edit invite</button>';
+    if(d.htmlLink) btn += '<a class="btn btn-ghost" target="_blank" rel="noopener" href="'+cvEsc(d.htmlLink)+'">Open in Google Calendar</a>';
+  } else if(e.type==='ticket'){
+    h += '<div class="wc-grid g2"><div><span class="wc-muted">Status</span><br><b>'+cvEsc(d.status)+'</b></div><div><span class="wc-muted">Priority</span><br><b>'+cvEsc(d.priority||'')+'</b></div><div><span class="wc-muted">Owner</span><br><b>'+cvEsc(d.owner||'Unassigned')+'</b></div><div><span class="wc-muted">Type</span><br><b>'+cvEsc(d.type||'')+(d.system?' · '+cvEsc(d.system):'')+'</b></div></div>'+(d.description?'<div style="white-space:pre-wrap;margin-top:10px">'+cvEsc(d.description)+'</div>':'');
+    btn += '<button class="btn btn-primary" onclick="wcClose(\'cv\');openTicketDetail(\''+cvEsc(d.ticket_id)+'\')">Open ticket</button>';
+  } else if(e.type==='meeting'){
+    h += '<div>'+cvEsc(d.participants||'')+'</div>'+(d.description?'<div style="white-space:pre-wrap;margin-top:8px">'+cvEsc(d.description)+'</div>':'')+(d.agenda?'<div class="card-h" style="margin:10px 0 4px">Agenda</div><div style="white-space:pre-wrap">'+cvEsc(d.agenda)+'</div>':'');
+    if(d.meeting_link) btn += '<a class="btn btn-primary" target="_blank" rel="noopener" href="'+cvEsc(d.meeting_link)+'">Join / open link</a>';
+    btn += '<button class="btn btn-ghost" onclick="wcClose(\'cv\');goTo(\'meetings\')">Open Meetings</button>';
+  } else if(e.type==='oneone'){
+    h += (d.agenda?'<div class="card-h" style="margin:4px 0">Agenda</div><div style="white-space:pre-wrap">'+cvEsc(d.agenda)+'</div>':'<div class="wc-muted">No agenda yet.</div>');
+    if(d.meeting_link) btn += '<a class="btn btn-primary" target="_blank" rel="noopener" href="'+cvEsc(d.meeting_link)+'">Join Meet</a>';
+    btn += '<button class="btn btn-ghost" onclick="wcClose(\'cv\');goTo(\'oneonones\')">Open 1:1s</button>';
+  } else if(e.type==='project'){
+    h += '<div class="wc-muted">'+cvEsc(d.status||'')+(d.phase?' · '+cvEsc(d.phase):'')+'</div>';
+    btn += '<button class="btn btn-primary" onclick="wcClose(\'cv\');openProjectDetail(\''+cvEsc(d.project_id)+'\')">Open project</button>';
+  } else if(e.type==='crm'){
+    h += '<div>'+cvEsc(d.organization||'')+' · stage: <b>'+cvEsc(d.stage||'')+'</b> · owner: '+cvEsc(d.owner||'')+'</div>';
+    btn += '<button class="btn btn-primary" onclick="wcClose(\'cv\');openLeadDetail(\''+cvEsc(d.lead_id)+'\')">Open lead</button>';
+  } else if(e.type==='content'){
+    h += '<div class="wc-muted">'+cvEsc(d.format||d.type||'')+' · stage: '+cvEsc(d.stage)+' · owner: '+cvEsc(d.owner||'unassigned')+'</div>'+(d.caption?'<div style="white-space:pre-wrap;margin-top:8px">'+cvEsc(d.caption)+'</div>':'');
+    btn += '<button class="btn btn-primary" onclick="wcClose(\'cv\');openContentPanel(\''+cvEsc(d.content_id)+'\')">Open post</button>';
+  } else if(e.type==='notable'){
+    h += '<div>'+cvEsc(d.angle||'')+'</div>'; btn += '<button class="btn btn-ghost" onclick="wcClose(\'cv\');goTo(\'content\')">Open Marketing</button>';
+  } else if(e.type==='leave'){
+    h += '<div>'+cvEsc(d.type||'Leave')+': '+cvEsc(fmtDate(d.start_date))+(d.end_date&&d.end_date!==d.start_date?' to '+cvEsc(fmtDate(d.end_date)):'')+'</div>'+(d.reason?'<div class="wc-muted">'+cvEsc(d.reason)+'</div>':'');
+  }
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'+btn+'</div>';
+  wcModal('cv', 'Details', h);
+}
+function cvEdit(key){
+  var e = cvFind(key); if(!e || e.type!=='event') return;
+  var d = e.data, dur = 30;
+  if(!e.allDay && d.start && d.end){ dur = Math.max(5, Math.round((new Date(d.end)-new Date(d.start))/60000)); }
+  var h = fld('Title', inp('cve_title', d.title))+'<div class="wc-grid g3">'+fld('Date', inp('cve_date', e.date, 'date'))+(e.allDay?'':fld('Starts', inp('cve_time', e.time, 'time'))+fld('Minutes', inp('cve_dur', dur, 'number', '', ' min="5" step="5"')))+'</div>'+
+    fld('Location', inp('cve_loc', d.location||''))+fld('Description', '<textarea class="wc-ta" id="cve_desc" rows="4">'+cvEsc(d.description||'')+'</textarea>')+
+    '<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="cve_notify" checked> Email the guests about the change</label>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-primary" id="cve_go" onclick="cvSave(\''+cvEsc(key)+'\')">Save changes</button><button class="btn btn-ghost" onclick="cvOpen(\''+cvEsc(key)+'\')">Cancel</button></div>';
+  wcModal('cv', 'Edit invite', h);
+}
+function cvSave(key){
+  var e = cvFind(key); if(!e) return;
+  var p = {event_id:e.data.id, title:val('cve_title').trim(), date:val('cve_date'), time:val('cve_time'), duration_minutes:Number(val('cve_dur'))||30, location:val('cve_loc'), description:val('cve_desc'), notify:!!(document.getElementById('cve_notify')||{}).checked, actor:CURRENT_USER};
+  if(!p.title) return wcToast('Give it a title.', true);
+  var b = document.getElementById('cve_go'); if(b) b.disabled = true;
+  api('updateCalendarEvent', p).then(function(res){
+    if(b) b.disabled = false;
+    if(!res.ok) return wcFail('Could not save', res);
+    wcClose('cv'); wcToast('Invite updated.'); cvState().remote = null; cvLoad(true);
+  });
+}
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '.cv-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.cv-title{font-size:16px;margin-left:6px}'+
+  '.cv-legend{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px}.cv-key{display:inline-flex;gap:6px;align-items:center;font-size:11.5px;padding:3px 9px;border-radius:999px;background:var(--surface2);cursor:pointer;user-select:none}.cv-key i{width:9px;height:9px;border-radius:3px;background:var(--c)}.cv-key.off{opacity:.4;text-decoration:line-through}'+
+  '.cv-scroll{overflow-x:auto}.cv-grid{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:920px}'+
+  '.cv-hd{background:var(--surface2);padding:6px 8px;font-size:11.5px;font-weight:700;color:var(--text-dim)}.cv-day{background:#fff;min-height:108px;padding:4px;display:flex;flex-direction:column;gap:3px;cursor:pointer}.cv-grid.week .cv-day{min-height:260px}'+
+  '.cv-day.out{background:#FAFAFC}.cv-day.out .cv-dn{opacity:.4}.cv-day.sel{box-shadow:inset 0 0 0 2px var(--brand)}.cv-day.today .cv-dn{background:var(--brand);color:#fff}.cv-dn{font-size:11.5px;font-weight:700;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%}'+
+  '.cv-chip{font-size:10.8px;line-height:1.3;padding:3px 6px;border-radius:5px;background:color-mix(in srgb,var(--c) 14%,#fff);border-left:3px solid var(--c);color:#1A1A2E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.cv-chip:hover{background:color-mix(in srgb,var(--c) 26%,#fff)}.cv-chip.done{opacity:.55;text-decoration:line-through}.cv-chip b{color:var(--c)}'+
+  '.cv-more{font-size:10.5px;color:var(--brand);padding:0 4px}.cv-row{display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line);cursor:pointer}.cv-row:hover{background:var(--surface2)}.cv-dot{width:9px;height:9px;border-radius:50%;flex:none}.cv-time{width:96px;font-size:12px;color:var(--text-dim);flex:none}'+
+  '.cv-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;background:color-mix(in srgb,var(--c) 15%,#fff);color:var(--c)}';
+  document.head.appendChild(st);
+  if(typeof mockApi!=='undefined'){
+    var prev = mockApi;
+    mockApi = function(action, payload){
+      if(action==='getCalendarEvents'){
+        var d1 = today10(), d2 = calAdd(d1,2);
+        return {ok:true, calendarUsed:'team@example.com', events:[
+          {id:'ev1', title:'Weekly planning', start:d1+'T10:00:00+01:00', end:d1+'T10:45:00+01:00', all_day:false, htmlLink:'https://calendar.google.com/x', description:'Plan the week', location:'', meet_link:'https://meet.google.com/abc-defg-hij', organizer:'a@x.com', attendees:['a@x.com'], guests:[{email:'a@x.com', name:'Ada', status:'accepted'},{email:'b@x.com', name:'', status:'needsAction'}]},
+          {id:'ev2', title:'Client workshop', start:d2+'T14:00:00+01:00', end:d2+'T15:30:00+01:00', all_day:false, htmlLink:'', description:'', location:'Lagos office', meet_link:'', organizer:'a@x.com', attendees:[], guests:[]}]};
+      }
+      if(action==='updateCalendarEvent') return {ok:true};
+      return prev(action, payload);
+    };
+  }
+})();
+
+
+// ═══ STAND-UP and WORKLOAD LEADERBOARD (one backend call: teamActivity) ═══
+var TA_MODS = {tickets:{label:'Tickets',color:'#4C50E3'}, projects:{label:'Projects',color:'#7C3AED'}, uat:{label:'UAT',color:'#0D9488'}, crm:{label:'CRM',color:'#4B44D9'}, content:{label:'Marketing',color:'#DB2777'}, meetings:{label:'Meetings',color:'#16A34A'}};
+function taState(){ return STATE.ta || (STATE.ta = {from:calMonday(today10()), to:calAdd(calMonday(today10()),6), dept:'', q:'', data:null, loading:false, err:'', key:'', period:'week', open:{}}); }
+function taLoad(force){
+  var st = taState(), key = st.from+'|'+st.to;
+  if(st.loading) return;
+  if(!force && st.data && st.key===key && Date.now()-(st.at||0) < 45000) return;
+  st.loading = true;
+  api('teamActivity', {from:st.from, to:st.to}).then(function(res){
+    st.loading = false; st.at = Date.now(); st.key = key;
+    if(res && res.ok){ st.data = res; st.err = ''; } else { st.err = (res && res.error) || 'Could not load activity.'; }
+    var host = document.getElementById('taHost'); if(host) host.innerHTML = (STATE.module==='workload' ? wlHtml() : suHtml());
+  });
+}
+function taDepts(){ var s = {}; (DB.team||[]).forEach(function(p){ if(p.department) s[p.department] = 1; }); return Object.keys(s).sort(); }
+function taFilter(list){
+  var st = taState(), q = st.q.trim().toLowerCase();
+  return list.filter(function(p){ return (!st.dept || p.department===st.dept) && (!q || (p.name+' '+p.sop_role).toLowerCase().indexOf(q)>-1); });
+}
+function taSetDept(v){ taState().dept = v; taRepaint(); }
+function taSetQ(v){ taState().q = v; taRepaint(true); }
+function taRepaint(keepFocus){
+  var host = document.getElementById('taHost'); if(!host) return;
+  var f = keepFocus ? document.getElementById('taQ') : null, pos = f ? f.selectionStart : 0;
+  host.innerHTML = (STATE.module==='workload' ? wlHtml() : suHtml());
+  if(f){ var n = document.getElementById('taQ'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(e){} } }
+}
+function taToggle(name){ var st = taState(); st.open[name] = !st.open[name]; taRepaint(); }
+function taFilterBar(extra){
+  var st = taState();
+  return '<div class="ta-bar">'+extra+sel('taDept', taDepts(), st.dept, 'All teams', ' onchange="taSetDept(this.value)"')+'<input class="wc-input" id="taQ" style="max-width:220px" placeholder="Find a person…" value="'+esc(st.q)+'" oninput="taSetQ(this.value)"></div>';
+}
+function taLabel(from, to){
+  var f = calDate(from), t = calDate(to), o = {month:'short', day:'numeric', timeZone:'UTC'};
+  return f.toLocaleDateString('en-US',o)+' – '+t.toLocaleDateString('en-US',Object.assign({year:'numeric'},o));
+}
+
+// ── Stand-up ──
+function renderStandup(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = '<div id="taHost">'+suHtml()+'</div>';
+  setTimeout(function(){ taLoad(false); }, 0);
+  return wrap;
+}
+function suWeek(dir){
+  var st = taState();
+  if(dir===0){ st.from = calMonday(today10()); } else st.from = calAdd(st.from, 7*dir);
+  st.to = calAdd(st.from, 6); st.data = null; taRepaint(); taLoad(true);
+}
+function suHtml(){
+  var st = taState(), d = st.data, h = wcHead('Stand-up', 'What each person did this week across tickets, projects, UAT, CRM and marketing, and what they have open now.', '<button class="btn btn-ghost btn-sm" onclick="taLoad(true)">Refresh</button>');
+  var thisWeek = st.from===calMonday(today10());
+  h += taFilterBar('<button class="btn btn-ghost btn-sm" onclick="suWeek(-1)">‹</button><button class="btn btn-ghost btn-sm" onclick="suWeek(0)">This week</button><button class="btn btn-ghost btn-sm" onclick="suWeek(1)">›</button><b style="margin:0 8px">'+(thisWeek?'This week · ':'')+esc(taLabel(st.from, st.to))+'</b><span style="flex:1"></span>');
+  if(st.err) return h+'<div class="wc-note" style="color:var(--red)">'+esc(st.err)+'</div>';
+  if(!d) return h+'<div class="empty">Loading the team’s week…</div>';
+  var ppl = taFilter(d.people).slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
+  var tot = {done:0, blocked:0, overdue:0, quiet:0};
+  ppl.forEach(function(p){ tot.done += p.c.tickets_done+p.c.tasks_done+p.c.uat_tested; tot.blocked += (p.open.tickets_blocked||0); tot.overdue += (p.open.tickets_overdue||0)+(p.open.tasks_overdue||0); if(!p.points && !p.on_leave) tot.quiet++; });
+  h += '<div class="wc-grid g4" style="margin-bottom:14px">'+[['People',ppl.length,''],['Items finished',tot.done,'good'],['Blocked now',tot.blocked,tot.blocked?'bad':''],['Overdue now',tot.overdue,tot.overdue?'bad':'']].map(function(x){ return '<div class="card" style="padding:12px 14px"><div class="wc-muted">'+x[0]+'</div><div style="font-size:22px;font-weight:800" class="'+x[2]+'">'+x[1]+'</div></div>'; }).join('')+'</div>';
+  if(!ppl.length) return h+'<div class="empty">No one matches.</div>';
+  var byDept = {}; ppl.forEach(function(p){ (byDept[p.department||'No team'] = byDept[p.department||'No team'] || []).push(p); });
+  Object.keys(byDept).sort().forEach(function(dep){
+    h += '<div class="dept-h" style="margin:14px 0 8px">'+esc(dep)+'</div><div class="ta-cards">'+byDept[dep].map(suCard).join('')+'</div>';
+  });
+  if(tot.quiet) h += '<div class="wc-note" style="margin-top:12px">'+tot.quiet+' '+(tot.quiet===1?'person has':'people have')+' no recorded activity in this period. Work done outside the system will not show here.</div>';
+  return h;
+}
+function suCard(p){
+  var st = taState(), c = p.c, open = !!st.open[p.name];
+  var chips = [['tickets', c.tickets_done, 'tickets done'], ['projects', c.tasks_done, 'tasks done'], ['uat', c.uat_tested, 'tests run'], ['crm', c.crm_moves+c.crm_followups+c.crm_notes+c.crm_new, 'CRM actions'], ['content', c.content_moves, 'content moves'], ['meetings', c.meetings_booked, 'meetings booked']]
+    .filter(function(x){ return x[1]>0; }).map(function(x){ return '<span class="ta-chip" style="--c:'+TA_MODS[x[0]].color+'"><b>'+x[1]+'</b> '+x[2]+'</span>'; }).join('');
+  var items = p.items, shown = open ? items : items.slice(0,5);
+  var doneH = items.length ? shown.map(function(i){ var m = TA_MODS[i.m]||{color:'#888',label:i.m}; return '<div class="ta-item"><span class="ta-m" style="--c:'+m.color+'">'+m.label+'</span><span style="flex:1">'+esc(i.t)+'</span><span class="wc-muted">'+(i.at?esc(fmtDate(i.at)):'')+'</span></div>'; }).join('') + (items.length>5 ? '<div class="cv-more" style="cursor:pointer" onclick="taToggle(\''+esc(p.name).replace(/'/g,"\\'")+'\')">'+(open?'Show less':'+ '+(items.length-5)+' more')+'</div>' : '') : '<div class="wc-muted">Nothing recorded.</div>';
+  var nextH = (p.next||[]).length ? p.next.map(function(t){ var late = t.due && t.due<today10(); return '<div class="ta-item" style="cursor:pointer" onclick="openTicketDetail(\''+esc(t.id)+'\')"><span class="ta-m" style="--c:'+(t.status==='Blocked'?'#DC2626':'#4C50E3')+'">'+esc(t.status)+'</span><span style="flex:1">'+esc(t.title)+'</span><span class="'+(late?'bad':'wc-muted')+'">'+(t.due?esc(fmtDate(t.due)):'')+'</span></div>'; }).join('') : '<div class="wc-muted">Nothing open.</div>';
+  var ol = [];
+  ol.push('<b>'+(p.open.tickets||0)+'</b> open tickets');
+  if(p.open.tickets_blocked) ol.push('<span class="bad"><b>'+p.open.tickets_blocked+'</b> blocked</span>');
+  if(p.open.tickets_overdue) ol.push('<span class="bad"><b>'+p.open.tickets_overdue+'</b> overdue</span>');
+  if(p.open.tasks!=null) ol.push('<b>'+p.open.tasks+'</b> project tasks'+(p.open.tasks_overdue?' (<span class="bad">'+p.open.tasks_overdue+' overdue</span>)':''));
+  if(p.open.leads!=null) ol.push('<b>'+p.open.leads+'</b> active leads'+(p.open.leads_due?' (<span class="bad">'+p.open.leads_due+' follow-ups due</span>)':''));
+  if(p.open.content!=null) ol.push('<b>'+p.open.content+'</b> content items');
+  return '<div class="card ta-card'+(p.on_leave?' leave':'')+'"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:14px">'+esc(p.name)+'</b><span class="wc-muted">'+esc(p.sop_role||p.role||'')+'</span>'+(p.on_leave?pill('On leave','mute'):'')+(!p.points && !p.on_leave?pill('No activity','warn'):'')+'</div>'+
+    '<div style="margin:8px 0">'+(chips||'<span class="wc-muted">No finished work recorded in this period.</span>')+'</div>'+
+    '<div class="su-label">Done</div>'+doneH+'<div class="su-label" style="margin-top:10px">Open and next up</div>'+nextH+'<div class="wc-muted" style="margin-top:8px;font-size:12px">'+ol.join(' · ')+'</div></div>';
+}
+
+// ── Workload leaderboard ──
+function renderWorkload(){
+  var wrap = el('<div></div>');
+  wrap.innerHTML = '<div id="taHost">'+wlHtml()+'</div>';
+  setTimeout(function(){ taLoad(false); }, 0);
+  return wrap;
+}
+function wlPeriod(k){
+  var st = taState(), t = today10();
+  st.period = k;
+  if(k==='week'){ st.from = calMonday(t); st.to = calAdd(st.from,6); }
+  else if(k==='last'){ st.from = calAdd(calMonday(t),-7); st.to = calAdd(st.from,6); }
+  else if(k==='30'){ st.from = calAdd(t,-29); st.to = t; }
+  else { st.from = t.slice(0,8)+'01'; var e = calDate(st.from); e.setUTCMonth(e.getUTCMonth()+1); e.setUTCDate(0); st.to = calYmd(e); }
+  st.data = null; taRepaint(); taLoad(true);
+}
+function wlHtml(){
+  var st = taState(), d = st.data;
+  var h = wcHead('Workload', 'A leaderboard of finished work across the whole system, with what each person still has open.', '<button class="btn btn-ghost btn-sm" onclick="taLoad(true)">Refresh</button>');
+  h += taFilterBar('<div class="wc-tabs" style="margin:0">'+[['week','This week'],['last','Last week'],['30','Last 30 days'],['month','This month']].map(function(x){ return '<div class="wc-tab'+(st.period===x[0]?' on':'')+'" onclick="wlPeriod(\''+x[0]+'\')">'+x[1]+'</div>'; }).join('')+'</div><span style="flex:1"></span>');
+  if(st.err) return h+'<div class="wc-note" style="color:var(--red)">'+esc(st.err)+'</div>';
+  if(!d) return h+'<div class="empty">Loading the leaderboard…</div>';
+  var ppl = taFilter(d.people).slice().sort(function(a,b){ return b.points-a.points || a.name.localeCompare(b.name); });
+  var maxPts = Math.max.apply(null, ppl.map(function(p){ return p.points; }).concat([1])), maxOpen = Math.max.apply(null, ppl.map(function(p){ return (p.open.tickets||0)+(p.open.tasks||0); }).concat([1]));
+  var medal = ['🥇','🥈','🥉'];
+  h += '<div class="wc-muted" style="margin-bottom:10px">'+esc(taLabel(st.from, st.to))+'. Points: ticket done '+d.points.tickets_done+', project task done '+d.points.tasks_done+', CRM stage move / follow-up / note '+d.points.crm_moves+', content move '+d.points.content_moves+' (published +'+d.points.content_published+'), ticket raised or test run or meeting booked '+d.points.tickets_created+'.</div>';
+  var rank = 0, last = null, shown = 0;
+  h += '<div class="card" style="padding:0;overflow:hidden">'+ppl.map(function(p, i){
+    if(p.points!==last){ rank = i+1; last = p.points; }
+    var seg = Object.keys(TA_MODS).map(function(m){ var v = (p.breakdown||{})[m]||0; return v ? '<i style="flex:'+v+';background:'+TA_MODS[m].color+'" title="'+TA_MODS[m].label+': '+v+' pts"></i>' : ''; }).join('');
+    var openN = (p.open.tickets||0)+(p.open.tasks||0), flags = [];
+    if(p.open.tickets_blocked) flags.push('<span class="bad">'+p.open.tickets_blocked+' blocked</span>');
+    var od = (p.open.tickets_overdue||0)+(p.open.tasks_overdue||0); if(od) flags.push('<span class="bad">'+od+' overdue</span>');
+    var open = !!st.open[p.name];
+    return '<div class="wl-lrow'+(p.points?'':' zero')+'" onclick="taToggle(\''+esc(p.name).replace(/'/g,"\\'")+'\')"><div class="wl-rank">'+(p.points && rank<=3 ? medal[rank-1] : rank)+'</div><div style="flex:1;min-width:0"><b>'+esc(p.name)+'</b> <span class="wc-muted">'+esc(p.department||'')+'</span>'+(p.on_leave?' '+pill('On leave','mute'):'')+
+      '<div class="wl-seg" style="width:'+Math.max(4, Math.round(p.points/maxPts*100))+'%">'+seg+'</div></div>'+
+      '<div class="wl-pts"><b>'+p.points+'</b><span class="wc-muted"> pts</span></div>'+
+      '<div class="wl-open"><div class="wl-ob"><i style="width:'+Math.round(openN/maxOpen*100)+'%"></i></div><span class="wc-muted">'+openN+' open'+(flags.length?' · ':'')+flags.join(' · ')+'</span></div></div>'+
+      (open ? '<div class="wl-detail">'+Object.keys(TA_MODS).map(function(m){ var v = (p.breakdown||{})[m]; return v ? '<span class="ta-chip" style="--c:'+TA_MODS[m].color+'"><b>'+v+'</b> pts · '+TA_MODS[m].label+'</span>' : ''; }).join('')+
+        '<div class="wc-muted" style="margin-top:6px">'+[['tickets done',p.c.tickets_done],['tickets raised',p.c.tickets_created],['project tasks done',p.c.tasks_done],['tests run',p.c.uat_tested],['CRM moves',p.c.crm_moves],['follow-ups',p.c.crm_followups],['call notes',p.c.crm_notes],['new leads',p.c.crm_new],['content moves',p.c.content_moves],['published',p.c.content_published],['meetings booked',p.c.meetings_booked]].filter(function(x){ return x[1]; }).map(function(x){ return x[1]+' '+x[0]; }).join(' · ')+'</div></div>' : '');
+  }).join('')+'</div>';
+  h += '<div class="cv-legend" style="margin-top:10px">'+Object.keys(TA_MODS).map(function(m){ return '<span class="cv-key" style="--c:'+TA_MODS[m].color+'"><i></i>'+TA_MODS[m].label+'</span>'; }).join('')+'</div>';
+  return h;
+}
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '.ta-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.ta-bar select{width:auto;min-width:140px}'+
+  '.ta-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}.ta-card{padding:14px 16px}.ta-card.leave{opacity:.75}'+
+  '.ta-chip{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;margin:0 4px 4px 0;background:color-mix(in srgb,var(--c) 14%,#fff);color:#1A1A2E}.ta-chip b{color:var(--c)}'+
+  '.ta-item{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:12.5px}.ta-m{font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px;background:color-mix(in srgb,var(--c) 14%,#fff);color:var(--c);flex:none;min-width:58px;text-align:center}'+
+  '.wl-lrow{display:flex;gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer}.wl-lrow:hover{background:var(--surface2)}.wl-lrow.zero{opacity:.6}.wl-rank{width:34px;text-align:center;font-size:18px;font-weight:800;flex:none}'+
+  '.wl-seg{display:flex;height:9px;border-radius:5px;overflow:hidden;margin-top:6px;background:var(--surface2)}.wl-seg i{display:block}.wl-pts{width:70px;text-align:right;font-size:18px;flex:none}.wl-open{width:200px;flex:none}.wl-ob{height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:3px}.wl-ob i{display:block;height:100%;background:#94A3B8}'+
+  '.wl-detail{padding:8px 16px 12px 64px;border-bottom:1px solid var(--line);background:#FAFAFC}@media(max-width:700px){.wl-open{display:none}.ta-cards{grid-template-columns:1fr}}';
+  document.head.appendChild(st);
+  if(typeof mockApi!=='undefined'){
+    var prev = mockApi;
+    mockApi = function(action, payload){
+      if(action==='teamActivity'){
+        var t = (DB.tickets||[]), people = (DB.team||[]).map(function(p){
+          var mine = t.filter(function(x){ return x.owner===p.name && x.status!=='Done'; }), done = t.filter(function(x){ return x.owner===p.name && x.status==='Done'; }).length;
+          return {name:p.name, department:p.department||'', sop_role:p.sop_role||'', role:p.role||'', items:done?[{m:'tickets',k:'done',t:'Done: sample ticket',at:payload.from}]:[], c:{tickets_done:done,tickets_created:0,ticket_updates:0,tasks_done:0,uat_tested:0,crm_moves:0,crm_followups:0,crm_notes:0,crm_new:0,content_moves:0,content_published:0,meetings_booked:0}, open:{tickets:mine.length,tickets_blocked:0,tickets_overdue:0}, next:mine.slice(0,3).map(function(x){ return {id:x.ticket_id,title:x.title,status:x.status,due:x.due_date||'',priority:x.priority}; }), on_leave:false, points:done*3, breakdown:{tickets:done*3}};
+        });
+        return {ok:true, from:payload.from, to:payload.to, today:today10(), people:people, points:{tickets_done:3,tickets_created:1,tasks_done:2,uat_tested:1,crm_moves:2,crm_followups:2,crm_notes:2,crm_new:1,content_moves:2,content_published:3,meetings_booked:1}, can:{}};
+      }
+      return prev(action, payload);
+    };
+  }
 })();
 
 document.getElementById('globalSearch').addEventListener('input', function(e){
