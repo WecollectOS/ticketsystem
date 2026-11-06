@@ -3396,7 +3396,7 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.11.02-1';
+var EXPECTED_BACKEND = '2026.11.06-2';
 var APP_BUILD = '20261102-160646';
 
 var DESIGN_CSS = `
@@ -3610,7 +3610,7 @@ function applyAll(d){
   var keys = ['tickets','activities','meetings','decisions','projects','projectTasks','projectAgents','team','templates','oneOnOnes','testCases','uatRuns','uatRunItems','leads','clients','documents','contentMetrics','contentCalendar','opportunities','payroll','financeEntries','leave','timeOff','slackCategories','slackSuggestions','notableDates'];
   keys.forEach(function(k){ DB[k] = d[k] || []; });
   DB.config = d.config || {};
-  DB.contentGuidelines = d.contentGuidelines || ''; DB.contentStrategy = d.contentStrategy || ''; DB.contentGuidelinesIsDefault = !!d.contentGuidelinesIsDefault;
+  DB.contentGuidelines = d.contentGuidelines || ''; DB.contentStrategy = d.contentStrategy || ''; DB.articleGuide = d.articleGuide || ''; DB.contentGuidelinesIsDefault = !!d.contentGuidelinesIsDefault;
   DB.access = d.access || null;
   DB.backend_version = d.backend_version || '';
   checkBackendVersion();
@@ -7189,5 +7189,366 @@ calDraftWeek = function(){
     prevOpen(id);
     var c = (DB.contentCalendar||[]).filter(function(x){ return x.content_id===id; })[0], el = document.querySelector('#wcm_cpanel .wc-muted');
     if(c && c.intent && el) el.innerHTML += ' · <b>'+esc(c.intent)+'</b>';
+  };
+})();
+
+
+// ── Friday direction drives the week (replaces the always-open focus card) ──
+STATE.focusEdit = STATE.focusEdit || '';
+function focusLoad(){
+  var box = document.getElementById('cal_focus'); if(!box) return;
+  var wk = focusWeek();
+  api('contentWeekStatus', {week:wk}).then(function(res){
+    box = document.getElementById('cal_focus'); if(!box || !res.ok) return;
+    STATE.focus = res; var f = res.focus || {audiences:[],stages:[]}, r = res.research;
+    var saved = !f.is_default;
+    if(saved && STATE.focusEdit !== wk){
+      box.className = ''; box.removeAttribute('style'); box.style.margin = '6px 0';
+      box.innerHTML = '<span class="wc-muted" style="font-size:12.5px">Direction saved for the week of '+esc(fmtDate(wk))+' · <a href="#" onclick="focusEdit(\''+wk+'\');return false" style="color:var(--brand)">Edit</a></span>';
+      return;
+    }
+    box.className = 'card'; box.setAttribute('style','padding:12px 14px;margin:10px 0');
+    var chk = function(cls, list, on){ return list.map(function(x){ return '<label style="display:inline-flex;gap:5px;align-items:center;margin:0 12px 6px 0;font-size:13px"><input type="checkbox" class="'+cls+'" value="'+esc(x)+'"'+((on||[]).indexOf(x)>-1?' checked':'')+'> '+esc(x)+'</label>'; }).join(''); };
+    var tickA = (f.auto_mix || f.is_default) ? [] : f.audiences, tickS = (f.auto_mix || f.is_default) ? [] : f.stages;
+    var rh = '';
+    if(r && r.found) rh = '<div class="wc-note"><b>Research anchor:</b> '+esc(r.title)+' · <a href="'+esc(safeUrl(r.source_url))+'" target="_blank" rel="noopener" style="color:var(--brand)">'+esc(r.source_name||'source')+'</a> ('+esc(r.published_date)+')<br>'+esc(r.key_finding)+'</div>';
+    else if(r && !r.found) rh = '<div class="wc-note warn">No verifiable research piece was found for this week. The content will use a labelled illustration and no statistics.</div>';
+    var hasPosts = res.topics > 0;
+    box.innerHTML = '<div class="card-h" style="margin-bottom:6px">Direction for the week of '+esc(fmtDate(wk))+'</div>'+
+      '<textarea class="wc-ta" id="fc_dir" rows="7" style="width:100%;resize:vertical" placeholder="Paste Friday’s themes and direction here. For example: Monday, why agencies lose weeks to dirty data. Tuesday, a story about a supervisor in Kano. Push the demo on Wednesday and Friday. Webinar on Thursday.">'+esc(f.direction||'')+'</textarea>'+
+      '<div class="wc-help" style="margin:4px 0 8px">Optional. Leave it empty and Claude proposes the week’s ideas itself (the same ones the Friday Slack message lists) and drafts everything from them. Write here only to override.</div>'+
+      '<details'+((tickA.length||f.research_hint||f.note)?' open':'')+'><summary style="cursor:pointer;font-size:13px;color:var(--brand)">Fine-tune (optional)</summary><div style="margin-top:8px">'+
+      '<div style="margin-bottom:6px">'+FOCUS_PRESETS.map(function(p,i){ return '<span class="wc-chip" onclick="focusPreset('+i+')">'+esc(p.l)+'</span>'; }).join('')+'</div>'+
+      '<div class="wc-lbl">Audiences (leave empty to let the direction decide)</div><div>'+chk('fc-a', res.audiences, tickA)+'</div>'+
+      '<div class="wc-lbl">Awareness stages</div><div>'+chk('fc-s', res.stages, tickS)+'</div>'+
+      '<div class="wc-grid g2"><div>'+fld('Research topic or angle', inp('fc_hint', f.research_hint||'', 'text', 'e.g. cost of fake interviews in household surveys'))+'</div><div>'+fld('Extra note for Claude', inp('fc_note', f.note||'', 'text', 'e.g. avoid mentioning pricing'))+'</div></div>'+rh+
+      '<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" onclick="focusNewResearch()">Find a different research piece</button></div></div></details>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-primary btn-sm" id="fc_go" onclick="focusSaveAndDraft()">Draft the week</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="focusSave(true)">Save only</button>'+(saved?'<button class="btn btn-ghost btn-sm" onclick="focusEdit(\'\')">Cancel</button>':'')+'</div>'+
+      (hasPosts?'<div class="wc-help" style="margin-top:6px">This week already has '+res.topics+' drafted posts. Saving &amp; drafting replaces the ones still at Idea or Drafting. Posts in Design, Review, Scheduled or Published are kept.</div>':'');
+  });
+}
+function focusEdit(wk){ STATE.focusEdit = wk; focusLoad(); }
+function focusCollect(){
+  var pick = function(c){ return Array.prototype.slice.call(document.querySelectorAll(c+':checked')).map(function(e){ return e.value; }); };
+  return {week:focusWeek(), direction:val('fc_dir').trim(), audiences:pick('.fc-a'), stages:pick('.fc-s'), research_hint:val('fc_hint').trim(), note:val('fc_note').trim(), actor:CURRENT_USER};
+}
+function focusSave(reload, extra){
+  var body = Object.assign(focusCollect(), extra||{});
+  return api('saveContentFocus', body).then(function(res){
+    if(!res.ok){ wcFail('Could not save the direction', res); return res; }
+    STATE.focusEdit = '';
+    if(reload){ wcToast('Direction saved.'); focusLoad(); }
+    return res;
+  });
+}
+function focusSaveAndDraft(){
+  var c = focusCollect();
+  var auto = !c.direction && !c.audiences.length;
+  var posts = (STATE.focus && STATE.focus.topics) || 0;
+  if(posts && !confirm('This week already has '+posts+' drafted posts.\n\nReplace the ones still at Idea or Drafting with new posts from this direction? Anything in Design, Review, Scheduled or Published stays as it is.')) return;
+  var go = document.getElementById('fc_go'); if(go) go.disabled = true;
+  var started = function(res){
+    if(!res.ok){ if(go) go.disabled = false; return; }
+    STATE.focusEdit = ''; focusLoad();
+    runWeekPipeline(focusWeek());
+  };
+  if(auto){
+    wcToast('Claude is proposing the week’s ideas… about a minute.');
+    var bb = document.getElementById('cal_draft'); if(bb){ bb.disabled = true; bb.textContent = 'Proposing the week’s ideas…'; }
+    return api('autoWeekDirection', {week:focusWeek(), force:true, redraft:posts>0, actor:CURRENT_USER}).then(function(res){ if(!res.ok){ if(bb){ bb.disabled=false; bb.textContent='Draft this week with Claude'; } if(go) go.disabled=false; return wcFail('Could not propose ideas', res); } started(res); });
+  }
+  focusSave(false, {redraft: posts>0}).then(started);
+}
+function runWeekPipeline(wk){
+  var b = document.getElementById('cal_draft'), chans = ['LinkedIn','Instagram','Facebook','Twitter/X'];
+  if(b) b.disabled = true;
+  var say = function(t){ if(b) b.textContent = t; var e = document.getElementById('cal_wkstat'); if(e) e.textContent = t; };
+  var reset = function(){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } };
+  var fail = function(res){ reset(); refreshData(true).then(function(){}); wcFail('Drafting stopped', res); };
+  say('Finding a real research piece for the week…');
+  api('draftContentWeek', {week:wk, step:'research', actor:CURRENT_USER}).then(function(rs){
+    if(!rs.ok) return fail(rs);
+    say('Planning the week’s posts from your direction…');
+    api('draftContentWeek', {week:wk, step:'plan', actor:CURRENT_USER}).then(function(res){
+      if(!res.ok) return fail(res);
+      var theme = res.theme || '', written = 0, i = 0;
+      var next = function(){
+        if(i >= chans.length) return refreshData().then(function(){ reset(); wcToast('Week drafted: '+written+' captions and prompts saved'+(theme?' · theme: '+theme:'')+'.'); });
+        var ch = chans[i++]; say('Writing '+ch+' captions and prompts… ('+i+' of '+chans.length+')');
+        api('draftContentWeek', {week:wk, step:'copy', platform:ch, actor:CURRENT_USER}).then(function(r){ if(!r.ok) return fail(r); written += r.written||0; next(); });
+      };
+      next();
+    });
+  });
+}
+// The main button: if the direction card is open, save + draft from it; otherwise draft from the saved direction.
+calDraftWeek = function(){
+  if(document.getElementById('fc_dir')) return focusSaveAndDraft();
+  runWeekPipeline(focusWeek());
+};
+
+function focusNewResearch(){
+  focusSave(false).then(function(r){ if(!r.ok) return;
+    STATE.focusEdit = focusWeek();
+    wcToast('Searching for a research piece… about a minute.');
+    api('draftContentWeek', {week:focusWeek(), step:'research', force:true, actor:CURRENT_USER}).then(function(res){ if(!res.ok) return wcFail('Research stopped', res); focusLoad(); if(res.note) wcToast(res.note, true); });
+  });
+}
+
+// ── Weekly article (charts, preview, export) and newsletter drafting ──
+function artFmt(v, unit){
+  var n = Number(v); var t = isFinite(n) ? n.toLocaleString('en-US', {maximumFractionDigits:2}) : String(v);
+  unit = String(unit||'').trim();
+  if(!unit) return t;
+  if(unit === '%') return t+'%';
+  return /^[₦$€£]/.test(unit) ? unit+t : t+' '+unit;
+}
+function artWrap(s, n){
+  var words = String(s||'').split(/\s+/), lines = [], cur = '';
+  words.forEach(function(w){ if((cur+' '+w).trim().length > n && cur){ lines.push(cur); cur = w; } else cur = (cur+' '+w).trim(); });
+  if(cur) lines.push(cur);
+  return lines.slice(0,3);
+}
+function artChartSvg(ch){
+  var vals = (ch.values||[]).map(Number), labs = (ch.labels||[]).map(String), n = vals.length;
+  if(n < 2) return '';
+  var W = 680, font = 'font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"', ink = '#1f2937', soft = '#6b7280', grid = '#e5e7eb', fill = '#0F766E';
+  var tl = artWrap(ch.title, 62), tH = 24 + tl.length*20;
+  var title = tl.map(function(t,i){ return '<text x="24" y="'+(28+i*20)+'" '+font+' font-size="16" font-weight="700" fill="'+ink+'">'+esc(t)+'</text>'; }).join('');
+  var out = '', H;
+  var max = Math.max.apply(null, vals), min = Math.min(0, Math.min.apply(null, vals)); if(max === min) max = min+1;
+  var top = max + (max-min)*0.12;
+  if(ch.kind === 'hbar'){
+    var maxLen = 0; vals.forEach(function(v){ maxLen = Math.max(maxLen, artFmt(v, ch.unit).length); });
+    var rowH = 34, left = 200, right = Math.min(300, 24 + maxLen*7.6); H = tH + n*rowH + 30;
+    vals.forEach(function(v,i){
+      var y = tH + 10 + i*rowH, w = Math.max(2, (v-min)/(top-min)*(W-left-right));
+      var lab = labs[i].length > 30 ? labs[i].slice(0,29)+'…' : labs[i];
+      out += '<text x="'+(left-10)+'" y="'+(y+19)+'" text-anchor="end" '+font+' font-size="13" fill="'+ink+'">'+esc(lab)+'</text>'+
+        '<rect x="'+left+'" y="'+y+'" width="'+w.toFixed(1)+'" height="24" rx="3" fill="'+fill+'"/>'+
+        '<text x="'+(left+w+8).toFixed(1)+'" y="'+(y+17)+'" '+font+' font-size="13" font-weight="600" fill="'+ink+'">'+esc(artFmt(v, ch.unit))+'</text>';
+    });
+  } else {
+    var L = 56, R = 24, T = tH + 20, B = 56; H = T + 220 + B;
+    var plotW = W-L-R, plotH = 220;
+    var yOf = function(v){ return T + plotH - (v-min)/(top-min)*plotH; };
+    for(var g=0; g<=4; g++){
+      var gv = min + (top-min)*g/4, gy = yOf(gv);
+      out += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" stroke="'+grid+'"/>'+
+        '<text x="'+(L-8)+'" y="'+(gy+4).toFixed(1)+'" text-anchor="end" '+font+' font-size="11" fill="'+soft+'">'+esc(Number(gv.toFixed(1)).toLocaleString('en-US'))+'</text>';
+    }
+    var step = plotW/n;
+    if(ch.kind === 'line'){
+      var pts = vals.map(function(v,i){ return (L+step*i+step/2).toFixed(1)+','+yOf(v).toFixed(1); });
+      out += '<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+fill+'" stroke-width="3" stroke-linejoin="round"/>';
+      vals.forEach(function(v,i){
+        var x = L+step*i+step/2, y = yOf(v);
+        out += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="5" fill="'+fill+'"/><text x="'+x.toFixed(1)+'" y="'+(y-12).toFixed(1)+'" text-anchor="middle" '+font+' font-size="12" font-weight="600" fill="'+ink+'">'+esc(artFmt(v, ch.unit))+'</text>';
+      });
+    } else {
+      var bw = Math.min(64, step*0.62);
+      vals.forEach(function(v,i){
+        var x = L+step*i+(step-bw)/2, y = yOf(Math.max(v,0)), h = Math.max(2, yOf(Math.min(min,0)) - y);
+        out += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="'+fill+'"/>'+
+          '<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-7).toFixed(1)+'" text-anchor="middle" '+font+' font-size="12" font-weight="600" fill="'+ink+'">'+esc(artFmt(v, ch.unit))+'</text>';
+      });
+    }
+    var maxChars = Math.max(6, Math.floor(step/6.2));
+    labs.forEach(function(l,i){
+      var x = L+step*i+step/2, parts = artWrap(l, maxChars);
+      out += parts.map(function(t,k){ return '<text x="'+x.toFixed(1)+'" y="'+(T+plotH+18+k*14)+'" text-anchor="middle" '+font+' font-size="12" fill="'+soft+'">'+esc(t)+'</text>'; }).join('');
+    });
+  }
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="'+esc(ch.title)+'" style="max-width:'+W+'px;background:#fff">'+title+out+'</svg>';
+}
+function artInline(t){
+  t = esc(String(t||''));
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(m,a,u){ u = u.replace(/&amp;/g,'&'); if(u.charAt(0)==='/') u = 'https://wecollect.tech'+u; return /^https?:\/\//i.test(u) ? '<a href="'+esc(u)+'">'+a+'</a>' : a; });
+  return t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g,'$1<em>$2</em>');
+}
+function artMd(md){
+  return String(md||'').split(/\n\s*\n/).map(function(b){
+    b = b.trim(); if(!b) return '';
+    var lines = b.split('\n');
+    if(lines.every(function(l){ return /^\s*[-*•]\s+/.test(l); })) return '<ul>'+lines.map(function(l){ return '<li>'+artInline(l.replace(/^\s*[-*•]\s+/,''))+'</li>'; }).join('')+'</ul>';
+    if(lines.every(function(l){ return /^\s*\d+[.)]\s+/.test(l); })) return '<ol>'+lines.map(function(l){ return '<li>'+artInline(l.replace(/^\s*\d+[.)]\s+/,''))+'</li>'; }).join('')+'</ol>';
+    return '<p>'+lines.map(artInline).join('<br>')+'</p>';
+  }).join('\n');
+}
+function artBodyHtml(rec){
+  var a = rec.article || {}, h = '<article>\n<h1>'+esc(a.title)+'</h1>\n'+artMd(a.intro_md)+'\n';
+  var charts = {}; (a.charts||[]).forEach(function(c){ charts[c.id] = c; });
+  if((a.at_a_glance||[]).length) h += '<h2>At a glance</h2>\n<ul>'+a.at_a_glance.map(function(g){ return '<li>'+artInline(g.text)+'</li>'; }).join('')+'</ul>\n';
+  (a.sections||[]).forEach(function(s){
+    h += '<h2>'+esc(s.h2)+'</h2>\n'+artMd(s.body_md)+'\n';
+    (s.chart_ids||[]).forEach(function(id){ var c = charts[id]; if(!c) return; h += '<figure style="margin:20px 0">'+artChartSvg(c)+'<figcaption style="font-size:13px;color:#6b7280">'+(c.reading?esc(c.reading)+' ':'')+'Source: '+esc(c.source_line)+'.</figcaption></figure>\n'; });
+  });
+  var placed = {}; (a.sections||[]).forEach(function(s){ (s.chart_ids||[]).forEach(function(id){ placed[id] = 1; }); });
+  (a.charts||[]).filter(function(c){ return !placed[c.id]; }).forEach(function(c){ h += '<figure style="margin:20px 0">'+artChartSvg(c)+'<figcaption style="font-size:13px;color:#6b7280">'+(c.reading?esc(c.reading)+' ':'')+'Source: '+esc(c.source_line)+'.</figcaption></figure>\n'; });
+  if(a.field_steps_md) h += '<h2>What this means for field teams</h2>\n'+artMd(a.field_steps_md)+'\n';
+  if(a.limits_md) h += '<h2>What the data does not show</h2>\n'+artMd(a.limits_md)+'\n';
+  if((a.faq||[]).length) h += '<h2>Questions people ask</h2>\n'+a.faq.map(function(f){ return '<h3>'+esc(f.q)+'</h3>\n<p>'+artInline(f.a)+'</p>'; }).join('\n')+'\n';
+  if(a.cta_text) h += '<p>'+artInline(a.cta_text)+'</p>\n';
+  if((a.internal_links||[]).length) h += '<p>'+a.internal_links.map(function(l){ return '<a href="https://wecollect.tech'+esc(l.path)+'">'+esc(l.anchor)+'</a>'; }).join(' · ')+'</p>\n';
+  var seen = {}, src = (rec.facts||[]).filter(function(f){ if(seen[f.source_url]) return false; seen[f.source_url] = 1; return true; });
+  if(src.length) h += '<h2>Sources</h2>\n<ol>'+src.map(function(f){ return '<li>'+esc(f.source_name)+(f.published_date?' ('+esc(f.published_date)+')':'')+'. <a href="'+esc(f.source_url)+'">'+esc(f.source_url)+'</a></li>'; }).join('')+'</ol>\n';
+  return h+'</article>';
+}
+function artFullHtml(rec){
+  var a = rec.article || {}, ld = {'@context':'https://schema.org','@type':'Article',headline:a.title,description:a.meta_description,author:{'@type':'Organization',name:'WeCollect'}};
+  return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n<title>'+esc(a.meta_title||a.title)+'</title>\n<meta name="description" content="'+esc(a.meta_description||'')+'">\n<link rel="canonical" href="https://wecollect.tech/blog/'+esc(a.slug||'')+'">\n<script type="application/ld+json">'+JSON.stringify(ld).replace(/</g,'\\u003c')+'</script>\n<style>body{font:17px/1.65 system-ui,sans-serif;max-width:720px;margin:32px auto;padding:0 16px;color:#1f2937}h1{line-height:1.2}h2{margin-top:32px}a{color:#0F766E}</style></head><body>\n'+artBodyHtml(rec)+'\n</body></html>';
+}
+function artMarkdown(rec){
+  var a = rec.article || {}, charts = {}; (a.charts||[]).forEach(function(c){ charts[c.id] = c; });
+  var m = '# '+a.title+'\n\n'+a.intro_md+'\n\n';
+  if((a.at_a_glance||[]).length) m += '## At a glance\n\n'+a.at_a_glance.map(function(g){ return '- '+g.text; }).join('\n')+'\n\n';
+  (a.sections||[]).forEach(function(s){
+    m += '## '+s.h2+'\n\n'+s.body_md+'\n\n';
+    (s.chart_ids||[]).forEach(function(id){ var c = charts[id]; if(!c) return; m += '[Chart] '+c.title+' ('+c.unit+')\n'+c.labels.map(function(l,i){ return '- '+l+': '+c.values[i]; }).join('\n')+'\nSource: '+c.source_line+'\n\n'; });
+  });
+  if(a.field_steps_md) m += '## What this means for field teams\n\n'+a.field_steps_md+'\n\n';
+  if(a.limits_md) m += '## What the data does not show\n\n'+a.limits_md+'\n\n';
+  if((a.faq||[]).length) m += '## Questions people ask\n\n'+a.faq.map(function(f){ return '### '+f.q+'\n\n'+f.a; }).join('\n\n')+'\n\n';
+  if(a.cta_text) m += a.cta_text+'\n\n';
+  var seen = {}; m += '## Sources\n\n'+(rec.facts||[]).filter(function(f){ if(seen[f.source_url]) return false; seen[f.source_url] = 1; return true; }).map(function(f,i){ return (i+1)+'. '+f.source_name+(f.published_date?' ('+f.published_date+')':'')+'. '+f.source_url; }).join('\n')+'\n';
+  return m;
+}
+function artRec(id){ var c = (DB.contentCalendar||[]).filter(function(x){ return x.content_id===id; })[0]; return c ? parseJson(c.article_json, null) : null; }
+function artCopy(id, kind, btn){
+  var rec = artRec(id); if(!rec || !rec.article) return;
+  var t = kind==='md' ? artMarkdown(rec) : artBodyHtml(rec);
+  var done = function(){ if(btn){ var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = o; }, 1500); } };
+  try{ navigator.clipboard.writeText(t).then(done, function(){ cpCopyFallback(t); done(); }); }catch(e){ cpCopyFallback(t); done(); }
+}
+function artDownload(id){
+  var rec = artRec(id); if(!rec || !rec.article) return;
+  var blob = new Blob([artFullHtml(rec)], {type:'text/html'}), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = ((rec.article.slug||'article')+'.html'); document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+}
+function artPreview(id){
+  var rec = artRec(id); if(!rec || !rec.article) return;
+  wcModal('artprev', 'Article preview', '<div style="max-width:720px;font:16px/1.65 system-ui,sans-serif">'+artBodyHtml(rec)+'</div>', true);
+}
+function artCopySvg(id, chartId, btn){
+  var rec = artRec(id); if(!rec) return;
+  var ch = ((rec.article||{}).charts||[]).filter(function(c){ return c.id===chartId; })[0]; if(!ch) return;
+  var t = artChartSvg(ch);
+  try{ navigator.clipboard.writeText(t).then(function(){ btn.textContent = 'Copied'; }, function(){ cpCopyFallback(t); btn.textContent = 'Copied'; }); }catch(e){ cpCopyFallback(t); btn.textContent = 'Copied'; }
+}
+function artPanelHtml(c){
+  var w = canWriteMarketing(), id = c.content_id, rec = parseJson(c.article_json, null);
+  var h = '<div class="card" style="padding:12px 14px;margin:10px 0"><div class="card-h" style="margin-bottom:6px">Weekly article</div>';
+  if(!rec || (!rec.facts && !rec.article)){
+    h += '<div class="wc-muted">Not drafted yet. Claude picks the topic from this week’s direction, finds real figures with source links, then writes 1,200–1,800 words with charts. Takes about 4 minutes.</div>'+
+      (w?'<div style="margin-top:8px"><button class="btn btn-primary btn-sm" id="art_go" onclick="artDraft(\''+id+'\',false)">Draft the article with Claude</button></div>':'');
+  } else if(!rec.article){
+    h += '<div class="wc-muted">Research done: <b>'+(rec.facts||[]).length+'</b> sourced figures for “'+esc(c.title)+'”. The article has not been written yet.</div>'+
+      (w?'<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" id="art_go" onclick="artDraft(\''+id+'\',false)">Write the article</button><button class="btn btn-ghost btn-sm" onclick="artDraft(\''+id+'\',true)">Research again</button></div>':'');
+  } else {
+    var a = rec.article, matched = (rec.facts||[]).filter(function(f){ return f.check==='matched'; }).length;
+    h += '<div style="margin-bottom:6px"><b>'+esc(a.title)+'</b></div><div class="wc-muted">'+rec.word_count+' words · '+(a.charts||[]).length+' charts · '+(rec.facts||[]).length+' sourced figures ('+matched+' found word for word on the source page) · keyword: '+esc(c.keyword||'')+'</div>'+
+      '<div class="wc-muted">Meta title: '+esc(a.meta_title||'')+' · /blog/'+esc(a.slug||'')+'</div>';
+    if((rec.warnings||[]).length) h += '<div class="wc-note warn" style="margin:8px 0"><b>Check before publishing</b><ul style="margin:4px 0 0 18px;padding:0">'+rec.warnings.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul></div>';
+    var weak = (rec.facts||[]).filter(function(f){ return f.check!=='matched'; });
+    if(weak.length) h += '<details style="margin:6px 0"><summary style="cursor:pointer;font-size:13px">Figures to confirm on the source page ('+weak.length+')</summary><ul style="margin:6px 0 0 18px;padding:0;font-size:13px">'+weak.map(function(f){ return '<li><b>'+esc(f.value)+'</b> '+esc(f.claim||'')+' <a href="'+esc(safeUrl(f.source_url))+'" target="_blank" rel="noopener" style="color:var(--brand)">'+esc(f.source_name)+'</a></li>'; }).join('')+'</ul></details>';
+    if((a.charts||[]).length) h += '<details style="margin:6px 0"><summary style="cursor:pointer;font-size:13px">Copy a chart as SVG ('+a.charts.length+')</summary><div style="margin-top:6px">'+a.charts.map(function(ch){ return '<button class="btn btn-ghost btn-sm" style="margin:0 6px 6px 0" onclick="artCopySvg(\''+id+'\',\''+esc(ch.id)+'\',this)">'+esc(ch.title.slice(0,48))+'</button>'; }).join('')+'</div></details>';
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="artPreview(\''+id+'\')">Preview with charts</button><button class="btn btn-ghost btn-sm" onclick="artCopy(\''+id+'\',\'html\',this)">Copy HTML</button><button class="btn btn-ghost btn-sm" onclick="artDownload(\''+id+'\')">Download .html</button><button class="btn btn-ghost btn-sm" onclick="artCopy(\''+id+'\',\'md\',this)">Copy Markdown</button>'+(w?'<button class="btn btn-ghost btn-sm" id="art_go" onclick="if(confirm(\'Redraft the whole article? The current text is replaced.\'))artDraft(\''+id+'\',true)">Redraft</button>':'')+'</div>';
+  }
+  return h+'</div>';
+}
+function newsletterPanelHtml(c){
+  var w = canWriteMarketing();
+  if(String(c.caption||'').trim() || !w) return '';
+  return '<div class="card" style="padding:12px 14px;margin:10px 0"><div class="card-h" style="margin-bottom:6px">Newsletter draft</div><div class="wc-muted">Claude writes it from this month’s articles and posts.</div><div style="margin-top:8px"><button class="btn btn-primary btn-sm" id="nl_go" onclick="nlDraft(\''+c.content_id+'\')">Draft the newsletter with Claude</button></div></div>';
+}
+function artDraft(id, force){
+  var b = document.getElementById('art_go'); if(b) b.disabled = true;
+  var say = function(t){ if(b) b.textContent = t; };
+  var stop = function(res){ if(b){ b.disabled = false; b.textContent = 'Try again'; } wcFail('Article stopped', res); };
+  var rec = artRec(id), needResearch = force || !rec || !rec.facts;
+  var step2 = function(){
+    say('Writing the article… (about 2 minutes)');
+    api('draftContentWeek', {content_id:id, step:'article_write', actor:CURRENT_USER}).then(function(r2){
+      if(!r2.ok) return stop(r2);
+      refreshData().then(function(){ wcToast('Article drafted: '+r2.words+' words, '+r2.charts+' charts'+(r2.warnings?' · '+r2.warnings+' things to check':'')+'.'); openContentPanel(id); });
+    });
+  };
+  if(!needResearch) return step2();
+  say('Choosing the topic and finding sourced figures… (about 2 minutes)');
+  api('draftContentWeek', {content_id:id, step:'article_research', force:true, actor:CURRENT_USER}).then(function(r1){
+    if(!r1.ok) return stop(r1);
+    if(r1.note) wcToast(r1.note, true);
+    refreshData().then(step2);
+  });
+}
+function nlDraft(id){
+  var b = document.getElementById('nl_go'); if(b){ b.disabled = true; b.textContent = 'Claude is writing…'; }
+  api('draftContentWeek', {content_id:id, step:'newsletter', force:true, actor:CURRENT_USER}).then(function(res){
+    if(!res.ok){ if(b){ b.disabled = false; b.textContent = 'Draft the newsletter with Claude'; } return wcFail('Newsletter stopped', res); }
+    refreshData().then(function(){ wcToast(res.skipped || 'Newsletter drafted.'); openContentPanel(id); });
+  });
+}
+(function(){
+  var prevOpen2 = openContentPanel;
+  openContentPanel = function(id){
+    prevOpen2(id);
+    var c = (DB.contentCalendar||[]).filter(function(x){ return x.content_id===id; })[0], steps = document.querySelector('#wcm_cpanel .cp-steps');
+    if(!c || !steps) return;
+    if(c.platform === 'Blog') steps.insertAdjacentHTML('afterend', artPanelHtml(c));
+    else if(c.platform === 'Newsletter') steps.insertAdjacentHTML('afterend', newsletterPanelHtml(c));
+  };
+})();
+// The week run: social copy, then the article, then the newsletter if one falls in the week.
+runWeekPipeline = function(wk){
+  var b = document.getElementById('cal_draft'), chans = ['LinkedIn','Instagram','Facebook','Twitter/X'];
+  if(b) b.disabled = true;
+  var say = function(t){ if(b) b.textContent = t; var e = document.getElementById('cal_wkstat'); if(e) e.textContent = t; };
+  var reset = function(){ if(b){ b.disabled = false; b.textContent = 'Draft this week with Claude'; } };
+  var fail = function(res){ reset(); refreshData(true).then(function(){}); wcFail('Drafting stopped', res); };
+  var notes = [];
+  say('Finding a real research piece for the week…');
+  api('draftContentWeek', {week:wk, step:'research', actor:CURRENT_USER}).then(function(rs){
+    if(!rs.ok) return fail(rs);
+    say('Planning the week’s posts from your direction…');
+    api('draftContentWeek', {week:wk, step:'plan', actor:CURRENT_USER}).then(function(res){
+      if(!res.ok) return fail(res);
+      var theme = res.theme || '', written = 0, i = 0;
+      var finish = function(){ refreshData().then(function(){ reset(); wcToast('Week drafted: '+written+' captions and prompts saved'+(theme?' · theme: '+theme:'')+'.'+(notes.length?' '+notes.join(' '):''), notes.length>0); }); };
+      var extras = function(){
+        say('Choosing the article topic and finding sourced figures… (about 2 minutes)');
+        api('draftContentWeek', {week:wk, step:'article_research', actor:CURRENT_USER}).then(function(a1){
+          if(!a1.ok){ notes.push('The article stopped: '+(a1.error||'')+' Open it on the calendar to retry.'); return news(); }
+          say('Writing the article… (about 2 minutes)');
+          api('draftContentWeek', {week:wk, step:'article_write', actor:CURRENT_USER}).then(function(a2){
+            if(!a2.ok) notes.push('The article stopped: '+(a2.error||'')+' Open it on the calendar to retry.');
+            news();
+          });
+        });
+      };
+      var news = function(){
+        say('Drafting the newsletter if one is due this week…');
+        api('draftContentWeek', {week:wk, step:'newsletter', actor:CURRENT_USER}).then(function(n){
+          if(!n.ok) notes.push('The newsletter stopped: '+(n.error||''));
+          finish();
+        });
+      };
+      var next = function(){
+        if(i >= chans.length) return extras();
+        var ch = chans[i++]; say('Writing '+ch+' captions and prompts… ('+i+' of '+chans.length+')');
+        api('draftContentWeek', {week:wk, step:'copy', platform:ch, actor:CURRENT_USER}).then(function(r){ if(!r.ok) return fail(r); written += r.written||0; next(); });
+      };
+      next();
+    });
+  });
+};
+// Settings: the article guide
+(function(){
+  var prevSet = contentSettingsHtml;
+  contentSettingsHtml = function(s){
+    var h = prevSet(s), c = (s && s.config) || {}, end = h.lastIndexOf('</div>');
+    if(end < 0) return h;
+    return h.slice(0,end)+fld('Weekly article guide (structure, evidence rules, voice, banned words) — used when Claude writes the article and the newsletter', '<textarea class="wc-ta sv" data-k="content_article_guide" style="min-height:220px">'+esc(c.content_article_guide||DB.articleGuide||'')+'</textarea>', 'Clear the box and save to go back to the built-in version, distilled from the Content Engine project docs.')+h.slice(end);
   };
 })();
