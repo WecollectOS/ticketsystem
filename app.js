@@ -3396,7 +3396,7 @@ function closeSearch(){
 //  indigo), shared helpers, navigation, stale-backend banner, dashboard.
 //  Everything below overrides same-named earlier functions on purpose.
 // ═══════════════════════════════════════════════════════════════════════
-var EXPECTED_BACKEND = '2026.11.06-2';
+var EXPECTED_BACKEND = '2026.11.06-4';
 var APP_BUILD = '20261102-160646';
 
 var DESIGN_CSS = `
@@ -6548,13 +6548,27 @@ function openContentPanel(id){
     fld('Caption', '<textarea class="wc-ta" id="cp_caption" rows="7"'+dis+'>'+esc(c.caption||'')+'</textarea>')+
     '<div class="wc-grid g2">'+fld('Hashtags', inp('cp_hashtags', c.hashtags, 'text', '', dis))+fld('CTA', inp('cp_cta', c.cta, 'text', '', dis))+fld('On-image headline', inp('cp_headline', c.headline, 'text', '', dis))+fld('Alt text', inp('cp_alt', c.alt_text, 'text', '', dis))+'</div>'+
     fld('Finished asset link (Drive, Canva…)', inp('cp_asset', c.asset_url, 'text', 'https://…', dis));
-  if(w) h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn btn-primary" id="cp_save" onclick="cpSave(\''+id+'\')">Save</button><button class="btn btn-ghost" id="cp_ai" onclick="cpWrite(\''+id+'\')">Write caption with Claude</button></div>';
+  if(w) h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn btn-primary" id="cp_save" onclick="cpSave(\''+id+'\')">Save</button>'+(c.locked==='yes'
+      ? '<button class="btn btn-ghost" onclick="cpLock(\''+id+'\',false)">Unlock to edit with Claude</button>'
+      : '<button class="btn btn-ghost" onclick="cpLock(\''+id+'\',true)">Save as final</button><button class="btn btn-ghost" id="cp_ai" onclick="cpWrite(\''+id+'\')">Write caption with Claude</button>')+'</div>'+
+      (c.locked==='yes'?'<div class="wc-note" style="margin-bottom:8px">✓ Saved as final. Claude will not rewrite this post’s caption or prompts, even if you draft the week again. You can still edit by hand and press Save.</div>':'');
   var list = parseJson(c.checklist_json, []);
   if(list.length) h += '<div class="card-h" style="margin:14px 0 6px">Checklist</div>'+list.map(function(x,i){ return '<div class="wc-task'+(x.done?' done':'')+'"><span class="wc-check'+(x.done?' on':'')+(w?'':' lock')+'" onclick="'+(w?'cpTick(\''+id+'\','+i+','+(x.done?'false':'true')+')':'')+'">'+(x.done?'✓':'')+'</span><div style="flex:1">'+esc(x.text)+'</div></div>'; }).join('');
   h += '<div class="card-h" style="margin:14px 0 6px">Prompts for caption and '+(/video/i.test(c.format||c.type||'')?'video':'poster')+'</div><div id="cp_prompts" class="wc-muted">Loading prompts…</div>';
   var log = parseJson(c.stage_log_json, []);
   if(log.length) h += '<div class="card-h" style="margin:14px 0 6px">History</div>'+log.slice().reverse().map(function(l){ return '<div class="wc-muted">'+esc(l.from||'')+' → <b>'+esc(l.stage)+'</b> · '+esc(l.by||'')+' · '+esc(String(l.at||'').slice(0,10))+'</div>'; }).join('');
   wcModal('cpanel', esc(c.title), h, true);
+  if(String(c.visual_prompt||'').trim()){
+    var vbox = document.getElementById('cp_prompts');
+    if(vbox){
+      var isVid = /video/i.test(c.format||c.type||'');
+      STATE.cpPrompts = {visual_prompt:c.visual_prompt, saved:true};
+      vbox.className = '';
+      vbox.innerHTML = '<div class="cp-pr"><div class="cp-prh"><b>'+(isVid?'Video':'Poster / design')+' prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'visual_prompt\',this)">Copy</button></div>'+(canWriteMarketing()?'<textarea class="wc-ta" id="cp_p2" style="min-height:200px;font-family:ui-monospace,Menlo,monospace;font-size:12px">'+esc(c.visual_prompt)+'</textarea><div class="wc-help">Saved with this post. Edit it and press Save to keep your changes.</div>':'<pre id="cp_p2">'+esc(c.visual_prompt)+'</pre>')+'</div>'+
+        '<div id="cp_capwrap" style="margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="cpLoadCaptionPrompt(\''+id+'\')">Show the caption prompt (to paste into another tool)</button></div>';
+    }
+    return;
+  }
   api('contentPrompts', {content_id:id}).then(function(res){
     var box = document.getElementById('cp_prompts'); if(!box) return;
     if(!res.ok){ box.textContent = res.error||'Could not load prompts.'; return; }
@@ -6578,6 +6592,26 @@ function cpSave(id){
   if(!p.title) return wcToast('Give it a title.', true);
   var b = document.getElementById('cp_save'); if(b) b.disabled = true;
   api('updateContentStage', p).then(function(res){ if(b) b.disabled = false; if(!res.ok) return wcFail('Could not save', res); refreshData().then(function(){ wcToast('Saved.'); openContentPanel(id); }); });
+}
+function cpLoadCaptionPrompt(id){
+  var box = document.getElementById('cp_capwrap'); if(!box) return; box.textContent = 'Loading…';
+  api('contentPrompts', {content_id:id}).then(function(res){
+    if(!res.ok){ box.textContent = res.error||'Could not load.'; return; }
+    STATE.cpPrompts = Object.assign({}, STATE.cpPrompts||{}, {caption_prompt:res.caption_prompt});
+    box.innerHTML = '<div class="cp-pr"><div class="cp-prh"><b>Caption prompt</b><button class="btn btn-ghost btn-sm" onclick="cpCopy(\'caption_prompt\',this)">Copy</button></div><pre id="cp_p1">'+esc(res.caption_prompt)+'</pre></div>';
+  });
+}
+function cpLock(id, on){
+  var c = (DB.contentCalendar||[]).filter(function(x){ return x.content_id===id; })[0] || {};
+  var p = {content_id:id, actor:CURRENT_USER, locked:on?'yes':''};
+  if(on){
+    // keep whatever is on screen: the same fields Save would write
+    p.title = val('cp_title').trim() || c.title; p.caption = val('cp_caption'); p.hashtags = val('cp_hashtags'); p.cta = val('cp_cta'); p.headline = val('cp_headline'); p.alt_text = val('cp_alt'); p.notes = val('cp_notes');
+    if(document.getElementById('cp_p2')) p.visual_prompt = val('cp_p2');
+    if(!String(p.caption||'').trim()) return wcToast('Write or paste the caption first.', true);
+    if(!c.stage || c.stage==='Idea' || c.stage==='Drafting') p.stage = 'Design';
+  }
+  api('updateContentStage', p).then(function(res){ if(!res.ok) return wcFail('Could not save', res); refreshData().then(function(){ wcToast(on?'Saved as final. Claude will not change it.':'Unlocked.'); openContentPanel(id); }); });
 }
 function cpWrite(id){
   var b = document.getElementById('cp_ai'); if(b){ b.disabled = true; b.textContent = 'Claude is writing…'; }
